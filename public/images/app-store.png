@@ -1,0 +1,5 @@
+<svg width="150" height="50" viewBox="0 0 150 50" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="150" height="50" rx="6" fill="black" stroke="white" stroke-width="1"/>
+  <path d="M30 20C28.9 20 28 20.9 28 22V28C28 29.1 28.9 30 30 30H32C33.1 30 34 29.1 34 28V22C34 20.9 33.1 20 32 20H30Z" fill="white"/>
+  <text x="40" y="32" font-family="Arial" font-size="12" font-weight="bold" fill="white" text-anchor="start">App Store</text>
+</svg>
