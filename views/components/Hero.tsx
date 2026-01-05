@@ -6,11 +6,11 @@ export default function Hero() {
   ];
 
   return (
-    <section className="min-h-screen flex items-center justify-center relative overflow-hidden pt-0 md:pt-0 pb-10">
+    <section className="min-h-[75vh] md:min-h-screen flex items-center justify-center relative overflow-hidden pt-4 md:pt-0 pb-8 md:pb-10 bg-[#0a0a1a]">
       {/* Animated background elements */}
       <div className="absolute inset-0 overflow-hidden">
         <div
-          className="absolute inset-0 bg-[url('/images/rollingcoin.gif')] bg-[length:55%] bg-center bg-no-repeat opacity-10 md:opacity-20"
+          className="absolute inset-0 bg-[url('/images/rollingcoin.gif')] bg-[length:140%] md:bg-[length:55%] bg-center bg-no-repeat opacity-10 md:opacity-20"
           aria-hidden
         />
         <div className="absolute inset-0 starfield opacity-100 z-0" aria-hidden />
@@ -30,7 +30,7 @@ export default function Hero() {
         <div className="absolute top-10 right-1/4 w-[36rem] h-[36rem] bg-[radial-gradient(circle_at_center,_rgba(0,38,255,0.24),_rgba(0,38,255,0)_68%)] blur-3xl -z-20"></div>
       </div>
 
-      <div className="relative z-30 max-w-4xl mx-auto px-6 text-center -mt-28 md:-mt-12">
+      <div className="relative z-30 max-w-4xl mx-auto px-6 text-center -mt-24 md:-mt-12">
         {/* Main heading */}
         <h1
           className="text-3xl sm:text-4xl md:text-6xl lg:text-7xl font-medium text-white mb-6 tracking-tight leading-tight mix-blend-normal drop-shadow-[0_3px_16px_rgba(255,255,255,0.5)] relative z-40"

@@ -27,12 +27,26 @@
   --background: #0a0a1a;
   --foreground: #ffffff;
   --primary: #4f46e5;
+  color-scheme: dark;
+}
+
+html {
+  background: var(--background);
+  min-height: 100%;
+  overscroll-behavior: none;
 }
 
 body {
   color: var(--foreground);
   background: var(--background);
+  min-height: 100vh;
   font-family: 'Satoshi', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  overscroll-behavior-y: none;
+}
+
+#__next {
+  min-height: 100vh;
+  background: var(--background);
 }
 
 @layer utilities {
