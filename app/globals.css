@@ -41,3 +41,27 @@ body {
   }
 }
 
+.starfield {
+  pointer-events: none;
+  mix-blend-mode: screen;
+  background-image:
+    radial-gradient(3px 3px at 12% 18%, rgba(255, 255, 255, 1), transparent 45%),
+    radial-gradient(3px 3px at 42% 62%, rgba(255, 255, 255, 0.95), transparent 45%),
+    radial-gradient(3px 3px at 78% 24%, rgba(255, 255, 255, 0.95), transparent 45%),
+    radial-gradient(3px 3px at 26% 76%, rgba(255, 255, 255, 0.9), transparent 45%),
+    radial-gradient(3px 3px at 68% 12%, rgba(255, 255, 255, 1), transparent 45%),
+    radial-gradient(3px 3px at 90% 70%, rgba(255, 255, 255, 0.95), transparent 45%);
+  background-size: 160px 160px, 200px 200px, 240px 240px, 300px 300px, 360px 360px, 440px 440px;
+  background-repeat: repeat;
+  animation: starfield 60s linear infinite;
+}
+
+@keyframes starfield {
+  from {
+    background-position: 0 0, 0 0, 0 0, 0 0, 0 0, 0 0;
+  }
+  to {
+    background-position: -700px 700px, -600px 600px, -500px 500px, -800px 800px, -900px 900px, -1000px 1000px;
+  }
+}
+
