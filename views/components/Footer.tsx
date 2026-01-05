@@ -25,12 +25,22 @@ export default function Footer() {
           <div>
             <h3 className="text-sm uppercase tracking-[0.18em] text-white/70 mb-4">Follow Us</h3>
             <div className="flex gap-3 justify-start items-center">
-              <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-transparent">
+              <a
+                href="https://x.com/senseifi_?s=21"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-transparent"
+              >
                 <Image src="/images/x.svg" alt="X" width={20} height={20} />
-              </span>
-              <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-transparent">
+              </a>
+              <a
+                href="https://www.instagram.com/senseifi?igsh=a3ExcGwyc2hpY211"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-transparent"
+              >
                 <Image src="/images/instagram-white.svg" alt="Instagram" width={20} height={20} />
-              </span>
+              </a>
               <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-transparent">
                 <Image src="/images/linkedin-white.svg" alt="LinkedIn" width={20} height={20} />
               </span>
