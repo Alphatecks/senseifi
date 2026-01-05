@@ -41,9 +41,14 @@ export default function Footer() {
               >
                 <Image src="/images/instagram-white.svg" alt="Instagram" width={20} height={20} />
               </a>
-              <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-transparent">
+              <a
+                href="https://www.linkedin.com/company/senseifi/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-transparent"
+              >
                 <Image src="/images/linkedin-white.svg" alt="LinkedIn" width={20} height={20} />
-              </span>
+              </a>
             </div>
           </div>
 
