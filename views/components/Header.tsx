@@ -54,20 +54,44 @@ export default function Header() {
       </nav>
 
       {/* Mobile menu */}
-      {open && (
-        <div className="md:hidden absolute top-full left-0 right-0 bg-[#0a0a1a] border-t border-white/5 px-6 py-5 shadow-lg">
-          <ul className="space-y-4 text-white/90 text-base">
-            <li><a href="#" className="hover:text-white transition">Home</a></li>
-            <li><a href="#" className="hover:text-white transition">About</a></li>
-            <li><a href="#" className="hover:text-white transition">Pricing</a></li>
-            <li><a href="#" className="hover:text-white transition">Features</a></li>
-            <li><a href="#" className="hover:text-white transition">Contact</a></li>
-          </ul>
-          <button className="mt-6 w-full bg-gradient-radial from-[#0026FF] to-blue-400 hover:from-[#0026FF] hover:to-blue-500 text-white px-4 py-3 rounded-2xl font-medium transition shadow-lg border-2 border-white">
+      <div
+        className={`md:hidden fixed inset-y-0 left-0 right-auto w-[86%] max-w-xs z-40 bg-[#05070f] px-5 pt-6 pb-10 overflow-y-auto shadow-2xl transition-[transform,opacity] duration-300 ease-out ${open ? 'translate-x-0 opacity-100 pointer-events-auto' : '-translate-x-full opacity-0 pointer-events-none'}`}
+        aria-hidden={!open}
+      >
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-2">
+            <Image src="/images/logo.png" alt="SenseiFi" width={32} height={32} />
+            <span className="text-white font-medium text-lg">SenseiFi</span>
+          </div>
+          <button
+            onClick={() => setOpen(false)}
+            className="h-9 w-9 inline-flex items-center justify-center rounded-md bg-white/10 border border-white/15 text-white hover:bg-white/15 transition"
+            aria-label="Close menu"
+          >
+            <span className="sr-only">Close</span>
+            <span className="inline-block rotate-180 text-lg leading-none">➜</span>
+          </button>
+        </div>
+
+        <ul className="text-white/90 text-base divide-y divide-white/10 border-t border-b border-white/10">
+          {[
+            'Home',
+            'About us',
+            'Pricing',
+            'Contact us',
+          ].map((item) => (
+            <li key={item} className="py-4">
+              <a href="#" className="block hover:text-white transition">{item}</a>
+            </li>
+          ))}
+        </ul>
+
+        <div className="mt-8">
+          <button className="w-auto px-6 bg-gradient-radial from-[#0026FF] to-blue-400 hover:from-[#0026FF] hover:to-blue-500 text-white py-3 rounded-2xl font-medium transition shadow-lg border-2 border-white whitespace-nowrap">
             Get started
           </button>
         </div>
-      )}
+      </div>
     </header>
   );
 }
