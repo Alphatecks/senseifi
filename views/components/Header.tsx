@@ -9,8 +9,6 @@ export default function Header() {
   return (
     <header className="fixed w-full top-0 z-50 bg-gradient-to-b from-[#0a0a1a] via-[#0a0a1a] to-transparent">
       <nav className="relative flex items-center justify-between w-full px-4 md:px-8 py-6">
-        <div className="pointer-events-none absolute -left-16 top-0 h-[36rem] w-[36rem] bg-[radial-gradient(circle_at_center,_rgba(0,38,255,0.45),_rgba(0,38,255,0)_70%)] blur-3xl hidden md:block" />
-        <div className="pointer-events-none absolute right-0 -top-12 h-[30rem] w-[30rem] bg-[radial-gradient(circle_at_center,_rgba(0,38,255,0.5),_rgba(0,38,255,0)_70%)] blur-3xl hidden md:block" />
         <div className="flex items-center gap-2 ml-9 md:ml-40">
           <Image 
             src="/images/logo.png" 
@@ -22,7 +20,7 @@ export default function Header() {
         </div>
         
         <ul className="hidden md:flex flex-1 items-center justify-center gap-10 text-gray-300">
-          <li><a href="#" className="hover:text-white transition">Home</a></li>
+          <li><a href="/" className="hover:text-white transition">Home</a></li>
           <li><a href="#" className="hover:text-white transition">About</a></li>
           <li><a href="#" className="hover:text-white transition">Pricing</a></li>
           <li><a href="#" className="hover:text-white transition">Features</a></li>
@@ -75,13 +73,13 @@ export default function Header() {
 
         <ul className="text-white/90 text-base divide-y divide-white/10 border-t border-b border-white/10">
           {[
-            'Home',
-            'About us',
-            'Pricing',
-            'Contact us',
+            { label: 'Home', href: '/' },
+            { label: 'About us', href: '#' },
+            { label: 'Pricing', href: '#' },
+            { label: 'Contact us', href: '#' },
           ].map((item) => (
-            <li key={item} className="py-4">
-              <a href="#" className="block hover:text-white transition">{item}</a>
+            <li key={item.label} className="py-4">
+              <a href={item.href} className="block hover:text-white transition">{item.label}</a>
             </li>
           ))}
         </ul>
