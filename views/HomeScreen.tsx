@@ -2,6 +2,7 @@
 import FAQSection from "./FAQSection";
 import React from "react";
 import Image from "next/image";
+import Link from "next/link";
 import HowItWorksSection from "./HowItWorksSection";
 import WhyTrustSection from "./WhyTrustSection";
 import CenteredAppDownload from "./CenteredAppDownload";
@@ -47,18 +48,18 @@ export default function HomeScreen() {
             Where Artificial Intelligence Meets Financial Precision.
           </p>
           <div className="flex flex-row flex-wrap gap-3 mb-12 z-10 relative w-full justify-center md:justify-start">
-            <a href="/waitlist" className="flex-1 min-w-[120px] max-w-[180px] md:flex-none md:min-w-0 md:max-w-none flex justify-center md:block">
+            <Link href="/waitlist" className="flex-1 min-w-[120px] max-w-[180px] md:flex-none md:min-w-0 md:max-w-none flex justify-center md:block" scroll={true}>
               <button className="w-full md:w-auto px-4 py-2 md:px-7 md:py-3 rounded-xl font-semibold text-sm md:text-base bg-gradient-to-r from-[#0026FF] to-[#0026FF] text-white shadow-lg border-2 border-white/20 hover:from-[#0026FF] hover:to-blue-500 transition">
                 Join Waitlist
               </button>
-            </a>
+            </Link>
             <button className="flex-1 min-w-[120px] max-w-[180px] md:flex-none md:min-w-0 md:max-w-none w-full md:w-auto px-4 py-2 md:px-7 md:py-3 rounded-xl font-semibold text-sm md:text-base bg-white/10 text-white border-2 border-white/20 hover:bg-white/20 transition flex items-center gap-2">
               Explore Products <span className="text-lg">›</span>
             </button>
           </div>
         </div>
         {/* Mobile rolling coin below hero content */}
-        <div className="block md:hidden relative" style={{ height: '400px', overflow: 'visible' }}>
+        <div className="block md:hidden relative pointer-events-none" style={{ height: '400px', overflow: 'visible' }}>
           <Image
             src="/images/rollingcoin.gif"
             alt="Rolling coin"
