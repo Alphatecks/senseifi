@@ -76,6 +76,7 @@ export default function Hero() {
               if (res.ok) {
                 form.reset();
                 setToast({ message: 'Successfully joined the waitlist!', type: 'success' });
+                window.open('https://t.me/senseifinance', '_blank');
               } else {
                 setToast({ message: 'Unable to submit right now. Please try again.', type: 'error' });
               }
@@ -102,6 +103,7 @@ export default function Hero() {
             Join wait list
           </button>
         </form>
+
 
         {toast && (
           <div className="fixed top-20 left-0 right-0 z-50 px-4 flex justify-center" role="status" aria-live="polite">
