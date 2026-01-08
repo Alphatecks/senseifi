@@ -1,17 +1,20 @@
 import React from "react";
+import { useInView } from "../utils/useInView";
 import Image from "next/image";
 
 export default function HowItWorksSection() {
+  const [mobileRef, mobileInView] = useInView<HTMLDivElement>({ threshold: 0.05 });
+  const [desktopRef, desktopInView] = useInView<HTMLDivElement>({ threshold: 0.05 });
   return (
     <>
       {/* Mobile How It Works Section */}
-      <section className="w-full py-12 bg-black text-white flex flex-col items-start px-4 block md:hidden">
+      <section ref={mobileRef} className="w-full py-12 bg-black text-white flex flex-col items-start px-4 block md:hidden">
         <span className="px-4 py-1 rounded-full border border-blue-400 text-blue-300 text-sm font-medium bg-transparent mb-6 inline-block">How it works</span>
-        <h2 className="text-3xl font-normal mb-4 leading-tight">From Secure to Smart to Seamless</h2>
-        <p className="text-white/70 text-base mb-6">Protect your crypto, trade with intelligence, and spend effortlessly.<br/>SenseiFi guides you every step of the way.</p>
+        <h2 className={`text-3xl font-normal mb-4 leading-tight ${mobileInView ? "animate-fade-slide-up" : "opacity-0"}`}>From Secure to Smart to Seamless</h2>
+        <p className={`text-white/70 text-base mb-6 ${mobileInView ? "animate-fade-slide-up delay-200" : "opacity-0"}`}>Protect your crypto, trade with intelligence, and spend effortlessly.<br/>SenseiFi guides you every step of the way.</p>
         <div className="flex flex-row gap-4 w-full overflow-x-auto pb-2 hide-scrollbar">
           {/* Card 1 */}
-          <div className="rounded-2xl bg-[#181c2a] p-6 flex-shrink-0 flex flex-col items-start justify-start shadow-lg min-h-80 border border-white/10 w-[85vw] max-w-[340px]">
+          <div className={`rounded-2xl bg-[#181c2a] p-6 flex-shrink-0 flex flex-col items-start justify-start shadow-lg min-h-80 border border-white/10 w-[85vw] max-w-[340px] ${mobileInView ? "animate-slide-in-left" : "opacity-0"}`}>
             <Image src="/images/why01.png" alt="Secure Wallet" width={320} height={210} className="mb-8" />
             <div className="flex items-center mb-2">
               <span className="text-base text-blue-300 font-medium mr-2">01</span>
@@ -20,7 +23,7 @@ export default function HowItWorksSection() {
             <p className="text-white/70 text-sm mt-2">Activate SenseiGuard to monitor your assets, detect threats, and protect your crypto in real time.</p>
           </div>
           {/* Card 2 */}
-          <div className="rounded-2xl bg-[#181c2a] p-6 flex-shrink-0 flex flex-col items-start justify-start shadow-lg min-h-80 border border-white/10 w-[85vw] max-w-[340px]">
+          <div className={`rounded-2xl bg-[#181c2a] p-6 flex-shrink-0 flex flex-col items-start justify-start shadow-lg min-h-80 border border-white/10 w-[85vw] max-w-[340px] ${mobileInView ? "animate-slide-in-left delay-200" : "opacity-0"}`}>
             <Image src="/images/why02.png" alt="Trade Smarter" width={320} height={210} className="mb-8" />
             <div className="flex items-center mb-2">
               <span className="text-base text-blue-300 font-medium mr-2">02</span>
@@ -29,7 +32,7 @@ export default function HowItWorksSection() {
             <p className="text-white/70 text-sm mt-2">Use SenseiTrade for AI-powered signals, trend alerts, and portfolio optimization tailored to your strategy.</p>
           </div>
           {/* Card 3 */}
-          <div className="rounded-2xl bg-[#181c2a] p-6 flex-shrink-0 flex flex-col items-start justify-start shadow-lg min-h-80 border border-white/10 w-[85vw] max-w-[340px]">
+          <div className={`rounded-2xl bg-[#181c2a] p-6 flex-shrink-0 flex flex-col items-start justify-start shadow-lg min-h-80 border border-white/10 w-[85vw] max-w-[340px] ${mobileInView ? "animate-slide-in-left delay-[400ms]" : "opacity-0"}`}>
             <Image src="/images/why03.png" alt="Spend & Manage" width={320} height={210} className="mb-8" />
             <div className="flex items-center mb-2">
               <span className="text-base text-blue-300 font-medium mr-2">03</span>
@@ -40,18 +43,18 @@ export default function HowItWorksSection() {
         </div>
       </section>
       {/* Desktop How It Works Section */}
-      <section className="w-full py-24 bg-black text-white flex-col items-center hidden md:flex">
+      <section ref={desktopRef} className="w-full py-24 bg-black text-white flex-col items-center hidden md:flex">
         <div className="w-full flex flex-row justify-between items-start mb-16">
           <div className="flex flex-col items-start ml-40">
             <span className="px-4 py-1 rounded-full border border-blue-400 text-blue-300 text-sm font-medium bg-transparent mb-8">How it works</span>
-            <h2 className="text-4xl md:text-5xl font-normal mb-4 leading-tight">From Secure to Smart<br />to Seamless</h2>
+            <h2 className={`text-4xl md:text-5xl font-normal mb-4 leading-tight ${desktopInView ? "animate-fade-slide-up" : "opacity-0"}`}>From Secure to Smart<br />to Seamless</h2>
           </div>
-          <div className="max-w-xl text-white/70 text-xl md:text-2xl mt-2 mr-20">
+          <div className={`max-w-xl text-white/70 text-xl md:text-2xl mt-2 mr-20 ${desktopInView ? "animate-fade-slide-up delay-200" : "opacity-0"}`}>
             Protect your crypto, trade with intelligence, and spend effortlessly.<br />SenseiFi guides you every step of the way.
           </div>
         </div>
         <div className="w-full max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
-          <div className="rounded-2xl bg-[#181c2a] p-8 flex flex-col items-start justify-start shadow-lg min-h-80 border border-white/10 w-full max-w-[420px]">
+          <div className={`rounded-2xl bg-[#181c2a] p-8 flex flex-col items-start justify-start shadow-lg min-h-80 border border-white/10 w-full max-w-[420px] ${desktopInView ? "animate-slide-in-left" : "opacity-0"}`}>
             <Image src="/images/why01.png" alt="Secure Wallet" width={320} height={210} className="mb-12" />
             <div className="flex items-center mb-2">
               <span className="text-base text-blue-300 font-medium mr-2">01</span>
@@ -59,7 +62,7 @@ export default function HowItWorksSection() {
             </div>
             <p className="text-white/70 text-base mt-2">Activate SenseiGuard to monitor your assets, detect threats, and protect your crypto in real time.</p>
           </div>
-          <div className="rounded-2xl bg-[#181c2a] p-8 flex flex-col items-start justify-start shadow-lg min-h-80 border border-white/10 w-full max-w-[420px]">
+          <div className={`rounded-2xl bg-[#181c2a] p-8 flex flex-col items-start justify-start shadow-lg min-h-80 border border-white/10 w-full max-w-[420px] ${desktopInView ? "animate-slide-in-left delay-200" : "opacity-0"}`}>
             <Image src="/images/why02.png" alt="Trade Smarter" width={320} height={210} className="mb-12" />
             <div className="flex items-center mb-2">
               <span className="text-base text-blue-300 font-medium mr-2">02</span>
@@ -67,7 +70,7 @@ export default function HowItWorksSection() {
             </div>
             <p className="text-white/70 text-base mt-2">Use SenseiTrade for AI-powered signals, trend alerts, and portfolio optimization tailored to your strategy.</p>
           </div>
-          <div className="rounded-2xl bg-[#181c2a] p-8 flex flex-col items-start justify-start shadow-lg min-h-80 border border-white/10 w-full max-w-[420px]">
+          <div className={`rounded-2xl bg-[#181c2a] p-8 flex flex-col items-start justify-start shadow-lg min-h-80 border border-white/10 w-full max-w-[420px] ${desktopInView ? "animate-slide-in-left delay-[400ms]" : "opacity-0"}`}>
             <Image src="/images/why03.png" alt="Spend & Manage" width={320} height={210} className="mb-12" />
             <div className="flex items-center mb-2">
               <span className="text-base text-blue-300 font-medium mr-2">03</span>

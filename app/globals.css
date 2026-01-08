@@ -1,3 +1,37 @@
+@layer utilities {
+  @keyframes zoom-in-out {
+    0% {
+      opacity: 0;
+      transform: scale(0.8);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1.05);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  .animate-zoom-in-out {
+    animation: zoom-in-out 1.2s cubic-bezier(0.4,0,0.2,1) both;
+  }
+}
+@layer utilities {
+  @keyframes slide-in-left {
+    0% {
+      opacity: 0;
+      transform: translateX(-48px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+  .animate-slide-in-left {
+    animation: slide-in-left 2s cubic-bezier(0.4,0,0.2,1) both;
+  }
+}
 /* Hide horizontal scrollbar utility */
 .hide-scrollbar {
   scrollbar-width: none; /* Firefox */
@@ -29,7 +63,27 @@
 
 @tailwind base;
 @tailwind components;
+
 @tailwind utilities;
+
+@layer utilities {
+  @keyframes fade-slide-up {
+    0% {
+      opacity: 0;
+      transform: translateY(32px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  .animate-fade-slide-up {
+    animation: fade-slide-up 2s cubic-bezier(0.4,0,0.2,1) both;
+  }
+  .delay-200 {
+    animation-delay: 0.2s;
+  }
+}
 
 :root {
   --background: #0a0a1a;

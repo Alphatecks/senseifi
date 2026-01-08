@@ -1,26 +1,33 @@
 import React from "react";
+import { useInView } from "../utils/useInView";
 import Image from "next/image";
 
+
 export default function WhyTrustSection() {
+  const [mobileRef, mobileInView] = useInView<HTMLDivElement>({ threshold: 0.05 });
+  const [desktopRef, desktopInView] = useInView<HTMLDivElement>({ threshold: 0.05 });
+  const [proRef, proInView] = useInView<HTMLDivElement>({ threshold: 0 });
+  const [proPlusRef, proPlusInView] = useInView<HTMLDivElement>({ threshold: 0 });
+  const [premiumRef, premiumInView] = useInView<HTMLDivElement>({ threshold: 0 });
   return (
     <section className="w-full py-24 bg-black text-white flex flex-col items-center">
       {/* Mobile Why Section Header - matches screenshot, does NOT affect desktop */}
-      <div className="block md:hidden w-full flex flex-col items-center justify-center mb-8 mt-2">
+      <div ref={mobileRef} className="block md:hidden w-full flex flex-col items-center justify-center mb-8 mt-2">
         <span className="px-4 py-1 rounded-full border border-blue-400 text-blue-300 text-sm font-medium bg-transparent mb-4 text-center">Why</span>
-        <h2 className="text-2xl font-normal text-center mb-3 leading-snug">Why Traders Trust<br/>SenseiFi</h2>
-        <p className="text-xs text-white/70 text-center max-w-xs mb-4">A complete DeFi platform designed to keep your assets secure, your trades smart, and your spending seamless.</p>
-        <Image src="/images/frame1.png" alt="Frame 1" width={320} height={160} className="mx-auto mb-4 w-full max-w-xs" />
-        <Image src="/images/frame2.png" alt="Frame 2" width={320} height={160} className="mx-auto mb-4 w-full max-w-xs" />
-        <Image src="/images/frame3.png" alt="Frame 3" width={320} height={160} className="mx-auto mb-4 w-full max-w-xs" />
-        <Image src="/images/frame4.png" alt="Frame 4" width={320} height={160} className="mx-auto mb-4 w-full max-w-xs" />
+        <h2 className={`text-2xl font-normal text-center mb-3 leading-snug ${mobileInView ? "animate-slide-in-left" : "opacity-0"}`}>Why Traders Trust<br/>SenseiFi</h2>
+        <p className={`text-xs text-white/70 text-center max-w-xs mb-4 ${mobileInView ? "animate-slide-in-left delay-200" : "opacity-0"}`}>A complete DeFi platform designed to keep your assets secure, your trades smart, and your spending seamless.</p>
+        <Image src="/images/frame1.png" alt="Frame 1" width={320} height={160} className={`mx-auto mb-4 w-full max-w-xs ${mobileInView ? "animate-zoom-in-out" : "opacity-0"}`} />
+        <Image src="/images/frame2.png" alt="Frame 2" width={320} height={160} className={`mx-auto mb-4 w-full max-w-xs ${mobileInView ? "animate-zoom-in-out delay-200" : "opacity-0"}`} />
+        <Image src="/images/frame3.png" alt="Frame 3" width={320} height={160} className={`mx-auto mb-4 w-full max-w-xs ${mobileInView ? "animate-zoom-in-out delay-[400ms]" : "opacity-0"}`} />
+        <Image src="/images/frame4.png" alt="Frame 4" width={320} height={160} className={`mx-auto mb-4 w-full max-w-xs ${mobileInView ? "animate-zoom-in-out delay-[600ms]" : "opacity-0"}`} />
       </div>
       {/* Desktop Why Section Header - untouched */}
-      <div className="hidden md:block w-full">
+      <div ref={desktopRef} className="hidden md:block w-full">
         <div className="flex justify-center w-full">
           <span className="px-6 py-2 rounded-full border border-blue-400 text-blue-300 text-lg font-medium bg-transparent mt-4 mb-2 text-center">Why</span>
         </div>
-        <h2 className="text-3xl md:text-5xl font-normal mb-6 text-center">Why Traders Trust SenseiFi</h2>
-        <p className="text-base md:text-lg text-white/70 mb-16 text-center max-w-3xl mx-auto">
+        <h2 className={`text-3xl md:text-5xl font-normal mb-6 text-center ${desktopInView ? "animate-slide-in-left" : "opacity-0"}`}>Why Traders Trust SenseiFi</h2>
+        <p className={`text-base md:text-lg text-white/70 mb-16 text-center max-w-3xl mx-auto ${desktopInView ? "animate-slide-in-left delay-200" : "opacity-0"}`}>
           A complete DeFi platform designed to keep your assets secure, your trades smart, and your spending seamless.
         </p>
       </div>
@@ -32,7 +39,7 @@ export default function WhyTrustSection() {
               <Image src="/images/icons/flash.png" alt="Flash" width={28} height={28} />
               <span>Unmatched Speed</span>
             </div>
-            <div className="text-white/70 text-base text-center max-w-xs">Quick transactions, instant insights, and rapid access to your assets.</div>
+            <div className="text-white/70 text-base text-center max-w-xs animate-zoom-in-out">Quick transactions, instant insights, and rapid access to your assets.</div>
           </div>
           {/* Bottom card inside cross */}
           <div className="absolute left-1/2 bottom-0 translate-x-[-50%] mb-4 md:mb-12 w-[220px] flex flex-col items-center">
@@ -40,7 +47,7 @@ export default function WhyTrustSection() {
               <Image src="/images/icons/flash.png" alt="Flash" width={24} height={24} />
               <span>Smart Automation</span>
             </div>
-            <div className="text-white/70 text-base text-center max-w-xs">Automated trading tools and portfolio management for smarter decisions.</div>
+            <div className="text-white/70 text-base text-center max-w-xs animate-zoom-in-out">Automated trading tools and portfolio management for smarter decisions.</div>
           </div>
           {/* Left side card inside cross */}
           <div className="absolute top-1/2 left-0 translate-y-1/4 ml-64 md:ml-96 w-[220px] flex flex-col items-center" style={{ marginRight: '120px' }}>
@@ -48,7 +55,7 @@ export default function WhyTrustSection() {
               <Image src="/images/icons/flash.png" alt="Flash" width={24} height={24} />
               <span>Seamless Spending</span>
             </div>
-            <div className="text-white/70 text-base text-center max-w-xs">Instant crypto payments and subscription management.</div>
+            <div className="text-white/70 text-base text-center max-w-xs animate-zoom-in-out">Instant crypto payments and subscription management.</div>
           </div>
           {/* Right side card inside cross */}
           <div className="absolute top-1/2 right-0 translate-y-1/4 mr-64 md:mr-96 w-[220px] flex flex-col items-center" style={{ marginLeft: '120px' }}>
@@ -56,7 +63,7 @@ export default function WhyTrustSection() {
               <Image src="/images/icons/flash.png" alt="Flash" width={24} height={24} />
               <span>Advanced Security</span>
             </div>
-            <div className="text-white/70 text-base text-center max-w-xs">Multi-layered wallet protection and real-time threat alerts.</div>
+            <div className="text-white/70 text-base text-center max-w-xs animate-zoom-in-out">Multi-layered wallet protection and real-time threat alerts.</div>
           </div>
         </div>
       </div>
@@ -169,12 +176,12 @@ export default function WhyTrustSection() {
         </div>
       </div>
     </section>
-    {/* Pricing Section */}
-    <section className="w-full py-24 bg-black text-white flex flex-col items-center">
-          <h2 className="text-4xl md:text-5xl font-normal mb-16 text-center">Pick your perfect plan</h2>
-          <div className="flex flex-col md:flex-row gap-y-6 md:gap-y-0 md:gap-8 w-full max-w-6xl justify-center">
-            {/* PRO PLAN */}
-            <div className="bg-[#181C23] rounded-xl flex flex-col max-w-sm w-10/12 md:min-w-[380px] md:max-w-[400px] min-h-[600px] md:w-full shadow-lg mx-auto">
+      {/* Pricing Section */}
+      <div className="w-full py-24 bg-black text-white flex flex-col items-center">
+        <h2 className="text-4xl md:text-5xl font-normal mb-16 text-center">Pick your perfect plan</h2>
+        <div className="flex flex-col md:flex-row gap-y-6 md:gap-y-0 md:gap-8 w-full max-w-6xl justify-center">
+          {/* PRO PLAN */}
+          <div ref={proRef} className={`bg-[#181C23] rounded-xl flex flex-col max-w-sm w-10/12 md:min-w-[380px] md:max-w-[400px] min-h-[600px] md:w-full shadow-lg mx-auto ${proInView ? "animate-zoom-in-out" : "opacity-0"}`}>
                   <div className="flex items-center justify-between mb-0 p-8 pb-0">
                 <span className="text-lg font-semibold">PRO PLAN</span>
                 <img src="/images/icons/pro.png" alt="Pro" className="w-16 h-16" />
@@ -199,7 +206,8 @@ export default function WhyTrustSection() {
               </div>
             </div>
             {/* PRO+ PLAN */}
-            <div className="bg-[#181C23] rounded-xl flex flex-col max-w-sm w-10/12 md:min-w-[380px] md:max-w-[400px] min-h-[600px] md:w-full shadow-lg border-2 border-blue-600 mx-auto">
+          {/* PRO+ PLAN */}
+          <div ref={proPlusRef} className={`bg-[#181C23] rounded-xl flex flex-col max-w-sm w-10/12 md:min-w-[380px] md:max-w-[400px] min-h-[600px] md:w-full shadow-lg border-2 border-blue-600 mx-auto ${proPlusInView ? "animate-zoom-in-out delay-200" : "opacity-0"}`}>
                   <div className="flex items-center justify-between mb-0 p-8 pb-0">
                 <span className="text-lg font-semibold">PRO+ PLAN <span className="text-xs text-blue-400 ml-2">(Recommended)</span></span>
                 <img src="/images/icons/proplus.png" alt="Pro+" className="w-16 h-16" />
@@ -234,7 +242,8 @@ export default function WhyTrustSection() {
               </div>
             </div>
             {/* PREMIUM PLAN */}
-            <div className="bg-[#181C23] rounded-xl flex flex-col max-w-sm w-10/12 md:min-w-[380px] md:max-w-[400px] min-h-[600px] md:w-full shadow-lg mx-auto">
+          {/* PREMIUM PLAN */}
+          <div ref={premiumRef} className={`bg-[#181C23] rounded-xl flex flex-col max-w-sm w-10/12 md:min-w-[380px] md:max-w-[400px] min-h-[600px] md:w-full shadow-lg mx-auto ${premiumInView ? "animate-zoom-in-out delay-[400ms]" : "opacity-0"}`}>
                   <div className="flex items-center justify-between mb-0 p-8 pb-0">
                 <span className="text-lg font-semibold">PREMIUM PLAN</span>
                 <img src="/images/icons/premium.png" alt="Premium" className="w-16 h-16" />
@@ -258,8 +267,8 @@ export default function WhyTrustSection() {
                 </div>
               </div>
             </div>
-          </div>
-        </section>
+        </div>
+      </div>
     </section>
   );
 }
