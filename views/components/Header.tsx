@@ -12,11 +12,12 @@ export default function Header() {
     <header className="fixed w-full top-0 z-50 bg-gradient-to-b from-[#0a0a1a] via-[#0a0a1a] to-transparent">
       <nav className="relative flex items-center justify-between w-full px-4 md:px-8 py-6">
         <div className="flex items-center gap-2 ml-9 md:ml-40">
-          <Image 
-            src="/images/logo.png" 
-            alt="SenseiFi Logo" 
-            width={32}
+          <Image
+            src="/images/scaled_logo.png"
+            alt="SenseiFi Logo"
+            width={120}
             height={32}
+            className="h-8 w-auto"
           />
           <span className="text-white font-medium text-lg">SenseiFi</span>
         </div>
@@ -63,7 +64,7 @@ export default function Header() {
       >
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-2">
-            <Image src="/images/logo.png" alt="SenseiFi" width={32} height={32} />
+            <Image src="/images/scaled_logo.png" alt="SenseiFi" width={120} height={32} className="h-8 w-auto" />
             <span className="text-white font-medium text-lg">SenseiFi</span>
           </div>
           <button
