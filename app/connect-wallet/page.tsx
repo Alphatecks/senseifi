@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import QRCodeBox from './QRCodeBox';
 
 export default function ConnectWalletPage() {
@@ -19,18 +20,18 @@ export default function ConnectWalletPage() {
     >
       {/* Page header: logo far left, button far right */}
       <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-4 md:px-10 py-6">
-        <div className="flex items-center gap-2">
+        <Link href="/" className="flex items-center gap-2 cursor-pointer group">
           <Image
             src="/images/scaled_logo.png"
             alt="SenseiFi Logo"
             width={140}
             height={36}
-            className="h-9 w-auto"
+            className="h-7 w-auto group-hover:opacity-80 transition md:h-9"
           />
-          <span className="text-white text-xl font-semibold tracking-tight">
+          <span className="text-white text-xl font-semibold tracking-tight group-hover:text-blue-300 transition">
             SenseiFi
           </span>
-        </div>
+        </Link>
         <button
           type="button"
           onClick={() => setOpen(true)}
@@ -89,22 +90,31 @@ export default function ConnectWalletPage() {
               }`}
             >
               <div className="flex items-center gap-4">
-                <div className="relative h-12 w-12 md:h-14 md:w-14 rounded-2xl bg-[#052E16] flex items-center justify-center shadow-[0_0_24px_rgba(34,197,94,0.75)]">
-                  <Image
-                    src="/images/icons/logo_green.png"
-                    alt="SenseiGuard"
-                    width={40}
-                    height={40}
-                    className="h-9 w-9 md:h-10 md:w-10"
-                  />
-                </div>
+                {/* Mobile: logo only, no container. Desktop: logo in styled container. */}
+                <>
+                  <span className="md:hidden flex items-center justify-center bg-[#052E16] rounded-xl shadow-[0_0_16px_rgba(34,197,94,0.45)] mr-2 p-1" style={{ minWidth: 40, minHeight: 40 }}>
+                    <Image
+                      src="/images/icons/logo_green.png"
+                      alt="SenseiGuard"
+                      width={32}
+                      height={32}
+                      className="h-8 w-8"
+                    />
+                  </span>
+                  <span className="hidden md:flex relative h-12 w-12 md:h-14 md:w-14 rounded-2xl bg-[#052E16] items-center justify-center shadow-[0_0_24px_rgba(34,197,94,0.75)]">
+                    <Image
+                      src="/images/icons/logo_green.png"
+                      alt="SenseiGuard"
+                      width={40}
+                      height={40}
+                      className="h-10 w-10"
+                    />
+                  </span>
+                </>
                 <div>
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-white font-medium text-base md:text-[17px]">
                       SenseiGuard
-                    </span>
-                    <span className="rounded-full bg-emerald-500/20 border border-emerald-400/50 px-2 py-0.5 text-[10px] uppercase tracking-wide text-emerald-200">
-                      Recommended
                     </span>
                   </div>
                   <p className="text-xs md:text-sm text-blue-100/80 max-w-xs">
@@ -113,14 +123,14 @@ export default function ConnectWalletPage() {
                 </div>
               </div>
               <span
-                className={`ml-4 inline-flex h-5 w-5 items-center justify-center rounded-full border ${
+                className={`ml-4 inline-flex h-5 w-5 items-center justify-center rounded-full md:rounded-[20px] border force-mobile-circle ${
                   selectedPath === 'guard'
                     ? 'border-blue-300 bg-blue-500/30'
                     : 'border-slate-500 bg-transparent'
                 }`}
               >
                 {selectedPath === 'guard' && (
-                  <span className="h-2.5 w-2.5 rounded-full bg-white" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-white aspect-square md:aspect-auto force-mobile-circle-inner" />
                 )}
               </span>
             </button>
@@ -136,18 +146,35 @@ export default function ConnectWalletPage() {
               }`}
             >
               <div className="flex items-center gap-4">
-                <div className="relative h-12 w-12 md:h-14 md:w-14 rounded-2xl bg-[#0B1120] flex items-center justify-center border border-sky-500/50">
-                  <Image
-                    src="/images/icons/logo_green.png"
-                    alt="SenseiTrade"
-                    width={40}
-                    height={40}
-                    className="h-9 w-9 md:h-10 md:w-10 saturate-150 hue-rotate-90"
-                  />
-                </div>
+                {/* Mobile: logo only, no container. Desktop: logo in styled container. */}
+                <>
+                  <span className="md:hidden flex items-center justify-center bg-[#0B1120] rounded-xl border border-sky-500/50 mr-2 p-1" style={{ minWidth: 40, minHeight: 40 }}>
+                    <Image
+                      src="/images/icons/logo_green.png"
+                      alt="SenseiTrade"
+                      width={32}
+                      height={32}
+                      className="h-8 w-8 saturate-150 hue-rotate-90"
+                    />
+                  </span>
+                  <span className="hidden md:flex relative h-12 w-12 md:h-14 md:w-14 rounded-2xl bg-[#0B1120] items-center justify-center border border-sky-500/50">
+                    <Image
+                      src="/images/icons/logo_green.png"
+                      alt="SenseiTrade"
+                      width={40}
+                      height={40}
+                      className="h-10 w-10 saturate-150 hue-rotate-90"
+                    />
+                  </span>
+                </>
                 <div>
-                  <span className="block text-white font-medium text-base md:text-[17px] mb-1">
-                    SenseiTrade
+                  <span className="flex items-center gap-2 mb-1">
+                    <span className="text-white font-medium text-base md:text-[17px]">
+                      SenseiTrade
+                    </span>
+                    <span className="rounded-full bg-blue-500/20 border border-blue-400/50 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-blue-200 whitespace-nowrap">
+                      Coming Soon
+                    </span>
                   </span>
                   <p className="text-xs md:text-sm text-blue-100/80 max-w-xs">
                     AI signals, market context, and execution in one trading command center.
@@ -155,14 +182,14 @@ export default function ConnectWalletPage() {
                 </div>
               </div>
               <span
-                className={`ml-4 inline-flex h-5 w-5 items-center justify-center rounded-full border ${
+                className={`ml-4 inline-flex h-5 w-5 items-center justify-center rounded-full md:rounded-[20px] border force-mobile-circle ${
                   selectedPath === 'trade'
                     ? 'border-blue-300 bg-blue-500/30'
                     : 'border-slate-500 bg-transparent'
                 }`}
               >
                 {selectedPath === 'trade' && (
-                  <span className="h-2.5 w-2.5 rounded-full bg-white" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-white aspect-square md:aspect-auto force-mobile-circle-inner" />
                 )}
               </span>
             </button>

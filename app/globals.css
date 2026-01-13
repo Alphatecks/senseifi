@@ -1,3 +1,23 @@
+@media (max-width: 767px) {
+  .force-mobile-circle {
+    width: 20px !important;
+    height: 20px !important;
+    border-radius: 50% !important;
+    min-width: 20px !important;
+    min-height: 20px !important;
+    aspect-ratio: 1 / 1 !important;
+    display: inline-block;
+  }
+  .force-mobile-circle-inner {
+    width: 10px !important;
+    height: 10px !important;
+    border-radius: 50% !important;
+    min-width: 10px !important;
+    min-height: 10px !important;
+    aspect-ratio: 1 / 1 !important;
+    display: inline-block;
+  }
+}
 @layer utilities {
   @keyframes zoom-in-out {
     0% {
