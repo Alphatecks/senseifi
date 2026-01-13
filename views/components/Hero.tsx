@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 export default function Hero() {
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [showSocialModal, setShowSocialModal] = useState(false);
 
   useEffect(() => {
     if (!toast) return;
@@ -42,23 +43,23 @@ export default function Hero() {
         <div className="absolute top-10 right-1/4 w-[36rem] h-[36rem] bg-[radial-gradient(circle_at_center,_rgba(0,38,255,0.24),_rgba(0,38,255,0)_68%)] blur-3xl -z-20"></div>
       </div>
 
-      <div className="relative z-30 max-w-4xl mx-auto px-6 text-center mt-6 md:-mt-12">
+      <div className="relative z-30 max-w-4xl mx-auto px-5 text-center mt-8 md:-mt-12">
         {/* Main heading */}
         <h1
-          className="text-3xl sm:text-4xl md:text-6xl lg:text-7xl font-medium text-white mb-6 tracking-tight leading-tight mix-blend-normal drop-shadow-[0_3px_16px_rgba(255,255,255,0.5)] relative z-40"
+          className="text-[26px] sm:text-4xl md:text-6xl lg:text-7xl font-medium text-white mb-4 sm:mb-6 tracking-tight leading-tight mix-blend-normal drop-shadow-[0_3px_16px_rgba(255,255,255,0.5)] relative z-40"
           style={{ color: '#ffffff' }}
         >
           Be First. <span className="text-white mix-blend-normal">Move Smarter.</span>
         </h1>
 
         {/* Description */}
-        <p className="text-white text-lg md:text-xl max-w-2xl mx-auto mb-8 leading-relaxed">
+        <p className="text-white text-base sm:text-lg md:text-xl max-w-2xl mx-auto mb-6 sm:mb-8 leading-relaxed">
           SenseiFi is launching in limited waves. Join the waiting list to unlock early access to AI-powered trading intelligence, security tools, and exclusive launch benefits.
         </p>
 
         {/* Email input and CTA */}
         <form
-          className="relative w-full max-w-2xl mx-auto mb-12"
+          className="relative w-full max-w-2xl mx-auto mb-8 sm:mb-12"
           onSubmit={async (e) => {
             e.preventDefault();
             const form = e.currentTarget;
@@ -66,6 +67,7 @@ export default function Hero() {
             const email = formData.get('email');
             if (!email || typeof email !== 'string') return;
             setLoading(true);
+            setShowSocialModal(true);
             setToast(null);
             try {
               const res = await fetch('https://formspree.io/f/mvzgnqge', {
@@ -75,13 +77,13 @@ export default function Hero() {
               });
               if (res.ok) {
                 form.reset();
-                setToast({ message: 'Successfully joined the waitlist!', type: 'success' });
-                window.open('https://t.me/senseifinance', '_blank');
               } else {
                 setToast({ message: 'Unable to submit right now. Please try again.', type: 'error' });
+                setShowSocialModal(false);
               }
             } catch (err) {
               setToast({ message: 'Network error. Please try again.', type: 'error' });
+              setShowSocialModal(false);
             } finally {
               setLoading(false);
             }
@@ -105,31 +107,126 @@ export default function Hero() {
         </form>
 
 
-        {toast && (
+        {toast && toast.type === 'error' && (
           <div className="fixed top-20 left-0 right-0 z-50 px-4 flex justify-center" role="status" aria-live="polite">
-            <div
-              className={`rounded-2xl px-4 py-3 text-sm font-medium text-white shadow-2xl border backdrop-blur-sm transition duration-500 ease-out ${toast.type === 'success' ? 'bg-blue-500/25 border-blue-300/50' : 'bg-blue-500/25 border-blue-300/50'}`}
-            >
+            <div className="rounded-2xl px-4 py-3 text-sm font-medium text-white shadow-2xl border backdrop-blur-sm transition duration-500 ease-out bg-blue-500/25 border-blue-300/50">
               {toast.message}
             </div>
           </div>
         )}
 
+        {/* Social follow modal after join */}
+        {showSocialModal && (
+          <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+            <div className="relative w-full max-w-md mx-4 rounded-3xl bg-[#020617] border border-blue-500/50 shadow-[0_24px_80px_rgba(15,23,42,0.95)] p-6 md:p-8">
+              {/* Close button */}
+              <button
+                type="button"
+                onClick={() => setShowSocialModal(false)}
+                className="absolute right-4 top-4 h-8 w-8 flex items-center justify-center rounded-full bg-white/5 text-white/70 hover:bg-white/10 hover:text-white transition"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+
+              <h2 className="text-xl md:text-2xl font-semibold text-white mb-2">
+                You&apos;re on the waitlist 🎉
+              </h2>
+              <p className="text-sm md:text-base text-blue-100/80 mb-6">
+                While we get your spot secured, stay close to the SenseiFi community:
+              </p>
+
+              <div className="space-y-3">
+                {/* Telegram */}
+                <button
+                  type="button"
+                  onClick={() => window.open('https://t.me/senseifinance', '_blank')}
+                  className="w-full flex items-center justify-between rounded-2xl bg-[#0f172a] hover:bg-[#020617] border border-sky-500/60 px-4 py-3 md:px-5 md:py-3.5 transition"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="h-9 w-9 rounded-full bg-sky-500/10 flex items-center justify-center overflow-hidden">
+                      <img
+                        src="https://upload.wikimedia.org/wikipedia/commons/8/82/Telegram_logo.svg"
+                        alt="Telegram"
+                        className="h-6 w-6"
+                      />
+                    </div>
+                    <div className="text-left">
+                      <p className="text-white text-sm md:text-base font-medium">Join our Telegram community</p>
+                      <p className="text-xs text-blue-200/80">Alpha drops, updates, and strategy chats.</p>
+                    </div>
+                  </div>
+                </button>
+
+                {/* Discord */}
+                <button
+                  type="button"
+                  onClick={() => window.open('https://discord.com', '_blank')}
+                  className="w-full flex items-center justify-between rounded-2xl bg-[#020617] hover:bg-[#020617]/80 border border-indigo-500/60 px-4 py-3 md:px-5 md:py-3.5 transition"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="h-9 w-9 rounded-full bg-[#5865F2] flex items-center justify-center">
+                      <img
+                        src="https://upload.wikimedia.org/wikipedia/commons/9/98/Discord_logo.svg"
+                        alt="Discord"
+                        className="h-6 w-6"
+                      />
+                    </div>
+                    <div className="text-left">
+                      <p className="text-white text-sm md:text-base font-medium">Join our Discord community</p>
+                      <p className="text-xs text-blue-200/80">Deep dives, feedback, and product channels.</p>
+                    </div>
+                  </div>
+                </button>
+
+                {/* X / Twitter */}
+                <button
+                  type="button"
+                  onClick={() => window.open('https://x.com', '_blank')}
+                  className="w-full flex items-center justify-between rounded-2xl bg-[#020617] hover:bg-[#020617]/80 border border-slate-500/70 px-4 py-3 md:px-5 md:py-3.5 transition"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="h-9 w-9 rounded-full bg-white flex items-center justify-center overflow-hidden">
+                      <img
+                        src="https://upload.wikimedia.org/wikipedia/commons/5/5a/X_icon_2.svg"
+                        alt="X (Twitter)"
+                        className="h-5 w-5"
+                      />
+                    </div>
+                    <div className="text-left">
+                      <p className="text-white text-sm md:text-base font-medium">Follow us on X</p>
+                      <p className="text-xs text-blue-200/80">Real-time updates, threads, and announcements.</p>
+                    </div>
+                  </div>
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowSocialModal(false)}
+                className="mt-5 w-full rounded-2xl bg-white/10 hover:bg-white/15 text-white text-sm md:text-base font-medium py-2.5 transition"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* User avatars and count */}
-        <div className="flex items-center justify-center gap-4">
-          <div className="flex -space-x-3">
+        <div className="flex items-center justify-center gap-2 sm:gap-3 md:gap-4 hide-avatars-2k">
+          <div className="flex -space-x-2 sm:-space-x-2.5 md:-space-x-3">
             {users.map((user) => (
               <img
                 key={user.id}
                 src={user.avatar}
                 alt="User avatar"
-                className="w-10 h-10 rounded-full border-2 border-[#0a0a1a]"
+                className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-full border-2 border-[#0a0a1a]"
               />
             ))}
           </div>
           <div className="text-left">
-            <p className="text-white font-semibold">2k+</p>
-            <p className="text-gray-400 text-sm">Registered Users</p>
+            <p className="text-white font-semibold text-sm sm:text-base md:text-lg">2k+</p>
+            <p className="text-gray-400 text-xs sm:text-sm md:text-base">Registered Users</p>
           </div>
         </div>
       </div>
