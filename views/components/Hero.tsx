@@ -6,6 +6,7 @@ export default function Hero() {
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [showSocialModal, setShowSocialModal] = useState(false);
+  const [showAlreadyOnWaitlistModal, setShowAlreadyOnWaitlistModal] = useState(false);
   const [submittedEmails, setSubmittedEmails] = useState<string[]>([]);
 
   useEffect(() => {
@@ -78,7 +79,8 @@ export default function Hero() {
               return;
             }
             setLoading(true);
-            setShowSocialModal(true);
+            setShowSocialModal(false);
+            setShowAlreadyOnWaitlistModal(false);
             setToast(null);
             try {
               const res = await fetch('https://waitlist-82co.onrender.com/waitlist', {
@@ -86,18 +88,23 @@ export default function Hero() {
                 headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
                 body: JSON.stringify({ email }),
               });
-              if (res.ok) {
+              if (res.status === 201) {
                 form.reset();
+                setShowAlreadyOnWaitlistModal(true);
+                const newEmails = [...submittedEmails, email];
+                setSubmittedEmails(newEmails);
+                localStorage.setItem('submittedEmails', JSON.stringify(newEmails));
+              } else if (res.ok) {
+                form.reset();
+                setShowSocialModal(true);
                 const newEmails = [...submittedEmails, email];
                 setSubmittedEmails(newEmails);
                 localStorage.setItem('submittedEmails', JSON.stringify(newEmails));
               } else {
                 setToast({ message: 'Unable to submit right now. Please try again.', type: 'error' });
-                setShowSocialModal(false);
               }
             } catch (err) {
               setToast({ message: 'Network error. Please try again.', type: 'error' });
-              setShowSocialModal(false);
             } finally {
               setLoading(false);
             }
@@ -224,6 +231,40 @@ export default function Hero() {
               </button>
             </div>
           </div>)}
+
+        {/* Already on waitlist modal */}
+        {showAlreadyOnWaitlistModal && (
+          <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+            <div className="relative w-full max-w-md mx-4 rounded-3xl bg-[#020617] border border-blue-500/50 shadow-[0_24px_80px_rgba(15,23,42,0.95)] p-6 md:p-8">
+              {/* Close button */}
+              <button
+                type="button"
+                onClick={() => setShowAlreadyOnWaitlistModal(false)}
+                className="absolute right-4 top-4 h-8 w-8 flex items-center justify-center rounded-full bg-white/5 text-white/70 hover:bg-white/10 hover:text-white transition"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+
+              <div className="text-center">
+                <h2 className="text-xl md:text-2xl font-semibold text-white mb-4">
+                  You are already on the waitlist
+                </h2>
+                <p className="text-sm md:text-base text-blue-100/80 mb-6">
+                  Your email has already been registered. We&apos;ll notify you when SenseiFi launches!
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => setShowAlreadyOnWaitlistModal(false)}
+                  className="w-full rounded-2xl bg-white/10 hover:bg-white/15 text-white text-sm md:text-base font-medium py-2.5 transition"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
     </section>
