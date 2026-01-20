@@ -67,7 +67,7 @@ export default function Hero() {
         {/* Email input and CTA */}
         <form
           className="relative w-full max-w-2xl mx-auto mb-8 sm:mb-12"
-          onSubmit={async (e) => {
+            onSubmit={async (e) => {
             e.preventDefault();
             const form = e.currentTarget;
             const formData = new FormData(form);
@@ -81,10 +81,10 @@ export default function Hero() {
             setShowSocialModal(true);
             setToast(null);
             try {
-              const res = await fetch('https://formspree.io/f/mvzgnqge', {
+              const res = await fetch('https://waitlist-82co.onrender.com/waitlist', {
                 method: 'POST',
-                headers: { Accept: 'application/json' },
-                body: formData,
+                headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                body: JSON.stringify({ email }),
               });
               if (res.ok) {
                 form.reset();
