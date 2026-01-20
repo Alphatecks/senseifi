@@ -6,17 +6,24 @@ export default function Hero() {
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [showSocialModal, setShowSocialModal] = useState(false);
+  const [submittedEmails, setSubmittedEmails] = useState<string[]>([]);
 
   useEffect(() => {
     if (!toast) return;
     const id = window.setTimeout(() => setToast(null), 4000);
     return () => window.clearTimeout(id);
   }, [toast]);
-  const users = [
-    { id: 1, avatar: 'https://i.pravatar.cc/150?img=1' },
-    { id: 2, avatar: 'https://i.pravatar.cc/150?img=5' },
-    { id: 3, avatar: 'https://i.pravatar.cc/150?img=8' },
-  ];
+
+  useEffect(() => {
+    const stored = localStorage.getItem('submittedEmails');
+    if (stored) {
+      try {
+        setSubmittedEmails(JSON.parse(stored));
+      } catch (e) {
+        // ignore invalid data
+      }
+    }
+  }, []);
 
   return (
     <section className="min-h-[75vh] md:min-h-screen flex items-center justify-center relative overflow-hidden pt-4 md:pt-0 pb-8 md:pb-10 bg-[#0a0a1a]">
@@ -66,6 +73,10 @@ export default function Hero() {
             const formData = new FormData(form);
             const email = formData.get('email');
             if (!email || typeof email !== 'string') return;
+            if (submittedEmails.includes(email)) {
+              setToast({ message: 'This email has already been registered for the waitlist.', type: 'error' });
+              return;
+            }
             setLoading(true);
             setShowSocialModal(true);
             setToast(null);
@@ -77,6 +88,9 @@ export default function Hero() {
               });
               if (res.ok) {
                 form.reset();
+                const newEmails = [...submittedEmails, email];
+                setSubmittedEmails(newEmails);
+                localStorage.setItem('submittedEmails', JSON.stringify(newEmails));
               } else {
                 setToast({ message: 'Unable to submit right now. Please try again.', type: 'error' });
                 setShowSocialModal(false);
@@ -137,6 +151,27 @@ export default function Hero() {
               </p>
 
               <div className="space-y-3">
+                {/* Discord */}
+                <button
+                  type="button"
+                  onClick={() => window.open('https://discord.com', '_blank')}
+                  className="w-full flex items-center justify-between rounded-2xl bg-[#020617] hover:bg-[#020617]/80 border border-indigo-500/60 px-4 py-3 md:px-5 md:py-3.5 transition"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="h-9 w-9 rounded-full bg-[#5865F2] flex items-center justify-center">
+                      <img
+                        src="https://static.vecteezy.com/system/resources/thumbnails/018/930/718/small_2x/discord-logo-discord-icon-transparent-free-png.png"
+                        alt="Discord"
+                        className="h-9 w-9"
+                      />
+                    </div>
+                    <div className="text-left">
+                      <p className="text-white text-sm md:text-base font-medium">Join our Discord community</p>
+                      <p className="text-xs text-blue-200/80">Deep dives, feedback, and product channels.</p>
+                    </div>
+                  </div>
+                </button>
+
                 {/* Telegram */}
                 <button
                   type="button"
@@ -153,28 +188,7 @@ export default function Hero() {
                     </div>
                     <div className="text-left">
                       <p className="text-white text-sm md:text-base font-medium">Join our Telegram community</p>
-                      <p className="text-xs text-blue-200/80">Alpha drops, updates, and strategy chats.</p>
-                    </div>
-                  </div>
-                </button>
-
-                {/* Discord */}
-                <button
-                  type="button"
-                  onClick={() => window.open('https://discord.com', '_blank')}
-                  className="w-full flex items-center justify-between rounded-2xl bg-[#020617] hover:bg-[#020617]/80 border border-indigo-500/60 px-4 py-3 md:px-5 md:py-3.5 transition"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="h-9 w-9 rounded-full bg-[#5865F2] flex items-center justify-center">
-                      <img
-                        src="https://upload.wikimedia.org/wikipedia/commons/9/98/Discord_logo.svg"
-                        alt="Discord"
-                        className="h-6 w-6"
-                      />
-                    </div>
-                    <div className="text-left">
-                      <p className="text-white text-sm md:text-base font-medium">Join our Discord community</p>
-                      <p className="text-xs text-blue-200/80">Deep dives, feedback, and product channels.</p>
+                      <p className="text-xs text-blue-200/80">Get Live updates on SenseiFi</p>
                     </div>
                   </div>
                 </button>
@@ -209,26 +223,8 @@ export default function Hero() {
                 Done
               </button>
             </div>
-          </div>
-        )}
+          </div>)}
 
-        {/* User avatars and count */}
-        <div className="flex items-center justify-center gap-2 sm:gap-3 md:gap-4 hide-avatars-2k">
-          <div className="flex -space-x-2 sm:-space-x-2.5 md:-space-x-3">
-            {users.map((user) => (
-              <img
-                key={user.id}
-                src={user.avatar}
-                alt="User avatar"
-                className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-full border-2 border-[#0a0a1a]"
-              />
-            ))}
-          </div>
-          <div className="text-left">
-            <p className="text-white font-semibold text-sm sm:text-base md:text-lg">2k+</p>
-            <p className="text-gray-400 text-xs sm:text-sm md:text-base">Registered Users</p>
-          </div>
-        </div>
       </div>
     </section>
   );
