@@ -88,18 +88,28 @@ export default function Hero() {
                 headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
                 body: JSON.stringify({ email }),
               });
-              if (res.status === 201) {
+              
+              if (res.ok) {
                 form.reset();
-                setShowAlreadyOnWaitlistModal(true);
-                const newEmails = [...submittedEmails, email];
-                setSubmittedEmails(newEmails);
-                localStorage.setItem('submittedEmails', JSON.stringify(newEmails));
-              } else if (res.ok) {
-                form.reset();
-                setShowSocialModal(true);
-                const newEmails = [...submittedEmails, email];
-                setSubmittedEmails(newEmails);
-                localStorage.setItem('submittedEmails', JSON.stringify(newEmails));
+                // Check response body for duplicate indication
+                const data = await res.json().catch(() => ({}));
+                const responseText = JSON.stringify(data).toLowerCase();
+                // Only show "already on waitlist" if response explicitly indicates duplicate
+                // Check for clear duplicate messages in response
+                const isDuplicate = (responseText.includes('already') && responseText.includes('waitlist')) ||
+                                  responseText.includes('already exists') ||
+                                  responseText.includes('duplicate');
+                
+                // Show "already on waitlist" modal only if status is 201 AND response indicates duplicate
+                if (res.status === 201 && isDuplicate) {
+                  setShowAlreadyOnWaitlistModal(true);
+                } else {
+                  // Default to success modal for all other successful responses
+                  setShowSocialModal(true);
+                  const newEmails = [...submittedEmails, email];
+                  setSubmittedEmails(newEmails);
+                  localStorage.setItem('submittedEmails', JSON.stringify(newEmails));
+                }
               } else {
                 setToast({ message: 'Unable to submit right now. Please try again.', type: 'error' });
               }
@@ -161,7 +171,7 @@ export default function Hero() {
                 {/* Discord */}
                 <button
                   type="button"
-                  onClick={() => window.open('https://discord.com', '_blank')}
+                  onClick={() => window.open('https://discord.gg/gW9hezfk', '_blank')}
                   className="w-full flex items-center justify-between rounded-2xl bg-[#020617] hover:bg-[#020617]/80 border border-indigo-500/60 px-4 py-3 md:px-5 md:py-3.5 transition"
                 >
                   <div className="flex items-center gap-3">
@@ -203,7 +213,7 @@ export default function Hero() {
                 {/* X / Twitter */}
                 <button
                   type="button"
-                  onClick={() => window.open('https://x.com', '_blank')}
+                  onClick={() => window.open('https://x.com/SenseiFi_', '_blank')}
                   className="w-full flex items-center justify-between rounded-2xl bg-[#020617] hover:bg-[#020617]/80 border border-slate-500/70 px-4 py-3 md:px-5 md:py-3.5 transition"
                 >
                   <div className="flex items-center gap-3">
