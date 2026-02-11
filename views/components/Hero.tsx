@@ -106,9 +106,9 @@ export default function Hero() {
                 } else {
                   // Default to success modal for all other successful responses
                   setShowSocialModal(true);
-                  const newEmails = [...submittedEmails, email];
-                  setSubmittedEmails(newEmails);
-                  localStorage.setItem('submittedEmails', JSON.stringify(newEmails));
+                const newEmails = [...submittedEmails, email];
+                setSubmittedEmails(newEmails);
+                localStorage.setItem('submittedEmails', JSON.stringify(newEmails));
                 }
               } else {
                 setToast({ message: 'Unable to submit right now. Please try again.', type: 'error' });

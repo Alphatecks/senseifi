@@ -1,13 +1,89 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import QRCodeBox from './QRCodeBox';
+import { useWallet } from '../../hooks/useWallet';
 
 export default function ConnectWalletPage() {
   const [open, setOpen] = useState(false);
   const [selectedPath, setSelectedPath] = useState<'guard' | 'trade'>('guard');
+  const [connectedWalletType, setConnectedWalletType] = useState<'metamask' | 'coinbase' | null>(null);
+  const [isConnectingMetaMask, setIsConnectingMetaMask] = useState(false);
+  const [isConnectingCoinbase, setIsConnectingCoinbase] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+  const router = useRouter();
+  const {
+    address,
+    isConnected,
+    chainId,
+    connectMetaMask,
+    connectCoinbase,
+    disconnectWallet,
+    registerWalletWithBackend,
+    isRegistering,
+    registrationError,
+    isPending,
+  } = useWallet();
+
+  // Track if component is mounted on client side
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // Reset wallet type and connecting states when disconnected
+  useEffect(() => {
+    if (!isConnected) {
+      setConnectedWalletType(null);
+      setIsConnectingMetaMask(false);
+      setIsConnectingCoinbase(false);
+    }
+  }, [isConnected]);
+
+  // Auto-register wallet when connected
+  useEffect(() => {
+    if (isConnected && address && chainId && !isRegistering && connectedWalletType) {
+      registerWalletWithBackend(connectedWalletType)
+        .then(() => {
+          // Redirect to SenseiGuard dashboard after successful registration
+          if (selectedPath === 'guard') {
+            setTimeout(() => router.push('/guard'), 1000);
+          }
+        })
+        .catch((error) => {
+          console.error('Failed to register wallet:', error);
+        });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isConnected, address, chainId, connectedWalletType]);
+
+  const handleConnectMetaMask = async () => {
+    try {
+      setIsConnectingMetaMask(true);
+      setConnectedWalletType('metamask');
+      await connectMetaMask();
+    } catch (error) {
+      console.error('Failed to connect MetaMask:', error);
+      setConnectedWalletType(null);
+    } finally {
+      setIsConnectingMetaMask(false);
+    }
+  };
+
+  const handleConnectCoinbase = async () => {
+    try {
+      setIsConnectingCoinbase(true);
+      setConnectedWalletType('coinbase');
+      await connectCoinbase();
+    } catch (error) {
+      console.error('Failed to connect Coinbase Wallet:', error);
+      setConnectedWalletType(null);
+    } finally {
+      setIsConnectingCoinbase(false);
+    }
+  };
 
   return (
     <div
@@ -32,13 +108,30 @@ export default function ConnectWalletPage() {
             SenseiFi
           </span>
         </Link>
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="bg-gradient-radial from-[#0026FF] to-blue-400 hover:from-[#0026FF] hover:to-blue-500 text-white px-6 py-2.5 rounded-2xl font-medium transition shadow-lg border-2 border-white whitespace-nowrap"
-        >
-          Connect Wallet
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="bg-gradient-radial from-[#0026FF] to-blue-400 hover:from-[#0026FF] hover:to-blue-500 text-white px-6 py-2.5 rounded-2xl font-medium transition shadow-lg border-2 border-white whitespace-nowrap"
+          >
+            {!isMounted
+              ? 'Connect Wallet'
+              : isConnected && connectedWalletType === 'metamask'
+              ? 'Connected'
+              : isConnected && address
+              ? `${address.slice(0, 6)}...${address.slice(-4)}`
+              : 'Connect Wallet'}
+          </button>
+          {isMounted && isConnected && (
+            <button
+              type="button"
+              onClick={disconnectWallet}
+              className="bg-red-600 hover:bg-red-700 text-white px-6 py-2.5 rounded-2xl font-medium transition shadow-lg border-2 border-red-400 whitespace-nowrap"
+            >
+              Disconnect
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Heading */}
@@ -249,10 +342,12 @@ export default function ConnectWalletPage() {
                   </span>
                 </div>
                 <button
-                  className="backdrop-blur-md bg-white/10 border border-white/30 text-white text-base px-7 py-2 rounded-xl shadow-md transition font-normal hover:bg-white/20"
+                  onClick={handleConnectMetaMask}
+                  disabled={isConnectingMetaMask || isConnectingCoinbase || isRegistering || (isConnected && connectedWalletType === 'metamask')}
+                  className="backdrop-blur-md bg-white/10 border border-white/30 text-white text-base px-7 py-2 rounded-xl shadow-md transition font-normal hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{ boxShadow: '0 0 0 1.5px #fff3, 0 2px 8px 0 #0026FF22', borderRadius: 14 }}
                 >
-                  Connect
+                  {isConnectingMetaMask || (isPending && connectedWalletType === 'metamask') || (isRegistering && connectedWalletType === 'metamask') ? 'Connecting...' : isConnected && connectedWalletType === 'metamask' ? 'Connected' : 'Connect'}
                 </button>
               </div>
               <div
@@ -278,13 +373,31 @@ export default function ConnectWalletPage() {
                   <span className="text-white font-medium text-base">Coinbase Wallet</span>
                 </div>
                 <button
-                  className="backdrop-blur-md bg-white/10 border border-white/30 text-white text-base px-7 py-2 min-w-[110px] rounded-xl shadow-md transition font-normal hover:bg-white/20"
+                  onClick={handleConnectCoinbase}
+                  disabled={isConnectingMetaMask || isConnectingCoinbase || isRegistering || (isConnected && connectedWalletType === 'coinbase')}
+                  className="backdrop-blur-md bg-white/10 border border-white/30 text-white text-base px-7 py-2 min-w-[110px] rounded-xl shadow-md transition font-normal hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{ boxShadow: '0 0 0 1.5px #fff3, 0 2px 8px 0 #2563eb22', borderRadius: 14 }}
                 >
-                  Connect
+                  {isConnectingCoinbase || (isPending && connectedWalletType === 'coinbase') || (isRegistering && connectedWalletType === 'coinbase') ? 'Connecting...' : isConnected && connectedWalletType === 'coinbase' ? 'Connected' : 'Connect'}
                 </button>
               </div>
             </div>
+            {/* Error message */}
+            {registrationError && (
+              <div className="mb-4 p-3 rounded-lg bg-red-500/20 border border-red-500/50 text-red-200 text-sm">
+                {registrationError}
+              </div>
+            )}
+            
+            {/* Connected wallet info */}
+            {isConnected && address && (
+              <div className="mb-4 p-3 rounded-lg bg-green-500/20 border border-green-500/50 text-green-200 text-sm">
+                <p>Connected: {address.slice(0, 6)}...{address.slice(-4)}</p>
+                <p>Chain ID: {chainId}</p>
+                {isRegistering && <p>Registering with backend...</p>}
+              </div>
+            )}
+
             {/* Divider */}
             <div className="flex items-center mb-6 w-full">
               <div className="flex-grow h-px bg-gray-700" />

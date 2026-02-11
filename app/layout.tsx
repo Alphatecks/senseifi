@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import '../styles/mobile-hide.css'
+import { Providers } from './providers'
 
 export const metadata: Metadata = {
   title: 'SenseiFi - AI-Powered Trading Intelligence',
@@ -14,7 +15,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="bg-[#0a0a1a]">{children}</body>
+      <body className="bg-[#0a0a1a]">
+        <Providers>{children}</Providers>
+      </body>
     </html>
   )
 }
