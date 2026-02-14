@@ -14,9 +14,11 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
-      <body className="bg-[#0a0a1a]">
-        <Providers>{children}</Providers>
+    <html lang="en" className="h-full">
+      <body className="bg-[#0a0a1a] h-full overflow-hidden">
+        <div className="root-scroll h-full min-h-screen">
+          <Providers>{children}</Providers>
+        </div>
       </body>
     </html>
   )

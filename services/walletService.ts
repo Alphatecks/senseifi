@@ -72,6 +72,37 @@ export class WalletService {
 
     return response.data;
   }
+
+  async disconnectWallet(address: string): Promise<void> {
+    const url = `${WALLET_API_BASE_URL}/wallets/${address}`;
+    
+    try {
+      const response = await fetch(url, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok && response.status !== 204) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      // Handle both JSON and empty responses
+      if (response.status === 204 || response.headers.get('content-length') === '0') {
+        return; // Success with no content
+      }
+
+      // Try to parse JSON if there's content
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        await response.json();
+      }
+    } catch (error) {
+      console.error('Failed to disconnect wallet:', error);
+      throw error;
+    }
+  }
 }
 
 export const walletService = new WalletService();

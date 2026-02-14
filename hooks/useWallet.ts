@@ -41,6 +41,16 @@ export function useWallet() {
   };
 
   const disconnectWallet = async () => {
+    if (address) {
+      try {
+        // Disconnect from backend first
+        await walletService.disconnectWallet(address);
+      } catch (error) {
+        console.error('Failed to disconnect wallet from backend:', error);
+        // Continue with local disconnect even if backend call fails
+      }
+    }
+    // Disconnect from wagmi
     disconnect();
   };
 

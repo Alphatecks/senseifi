@@ -52,6 +52,13 @@
     animation: slide-in-left 2s cubic-bezier(0.4,0,0.2,1) both;
   }
 }
+/* Root scroll container for pages (e.g. waitlist) – explicit scroll area */
+.root-scroll {
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
 /* Hide horizontal scrollbar utility */
 .hide-scrollbar {
   scrollbar-width: none; /* Firefox */
@@ -60,6 +67,76 @@
 .hide-scrollbar::-webkit-scrollbar {
   display: none; /* Chrome/Safari/Webkit */
 }
+
+/* Dashboard header emboss (neumorphic) – gray/dark-gray and gray-white, no black */
+.emboss-raised {
+  box-shadow:
+    2px 2px 4px rgba(70, 78, 95, 0.45),
+    -1px -1px 3px rgba(200, 208, 220, 0.1);
+}
+.emboss-inset {
+  box-shadow:
+    inset 2px 2px 5px rgba(70, 78, 95, 0.4),
+    inset -1px -1px 3px rgba(200, 208, 220, 0.08);
+}
+
+/* Stronger inset 3D for search input (recessed feel) */
+.emboss-inset-3d-input {
+  box-shadow:
+    inset 3px 3px 8px rgba(70, 78, 95, 0.5),
+    inset -2px -2px 6px rgba(200, 208, 220, 0.1);
+}
+
+/* Stronger emboss for dark cards (e.g. Live Activity list items) so the effect is visible */
+.emboss-raised-dark {
+  box-shadow:
+    4px 4px 10px rgba(70, 78, 95, 0.5),
+    -3px -3px 8px rgba(200, 208, 220, 0.12);
+}
+
+/* Raised border + inset 3D interior for Live Activity list items */
+.emboss-raised-dark-inset {
+  box-shadow:
+    4px 4px 10px rgba(70, 78, 95, 0.5),
+    -3px -3px 8px rgba(200, 208, 220, 0.12),
+    inset 3px 3px 8px rgba(70, 78, 95, 0.4),
+    inset -2px -2px 6px rgba(200, 208, 220, 0.08);
+}
+
+/* 78% security gauge: recessed (inset) 3D so the arc looks carved in */
+.gauge-emboss-inset {
+  border-radius: 9999px;
+  box-shadow:
+    inset 3px 3px 8px rgba(0, 0, 0, 0.35),
+    inset -2px -2px 6px rgba(255, 255, 255, 0.04);
+}
+
+@keyframes arc-rotate {
+  from { transform: rotate(-90deg); }
+  to { transform: rotate(270deg); }
+}
+.animate-arc-rotate {
+  animation: arc-rotate 8s linear infinite;
+}
+
+/* Wallet health speedometer: arc fill and needle sweep */
+@keyframes gauge-arc-fill {
+  from { stroke-dashoffset: 126; }
+  to { stroke-dashoffset: 28; }
+}
+@keyframes gauge-needle-sweep {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(50.4deg); }
+}
+.animate-gauge-arc-fill {
+  stroke-dasharray: 126 126;
+  animation: gauge-arc-fill 2.5s ease-out forwards;
+}
+.animate-gauge-needle-sweep {
+  transform-origin: 50px 50px;
+  animation: gauge-needle-sweep 2.5s ease-out forwards;
+}
+
 @font-face {
   font-family: 'Satoshi';
   src: url('/fonts/satoshi/Satoshi-Regular.otf') format('opentype');
@@ -114,18 +191,19 @@
 
 html {
   background: var(--background);
-  min-height: 100%;
+  height: 100%;
   overscroll-behavior: none;
-  overflow-x: hidden;
+  overflow: hidden;
 }
 
 body {
   color: var(--foreground);
   background: var(--background);
-  min-height: 100vh;
+  height: 100%;
+  min-height: 100%;
   font-family: 'Satoshi', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  overscroll-behavior-y: none;
-  overflow-x: hidden;
+  overscroll-behavior: none;
+  overflow: hidden;
 }
 
 #__next {
@@ -161,5 +239,66 @@ body {
   to {
     background-position: -700px 700px, -600px 600px, -500px 500px, -800px 800px, -900px 900px, -1000px 1000px;
   }
+}
+
+/* Dashboard: cryptic hack/robotic background animation */
+.dashboard-hack-bg {
+  background-color: #060810;
+  background-image:
+    linear-gradient(rgba(37, 99, 235, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(37, 99, 235, 0.03) 1px, transparent 1px);
+  background-size: 24px 24px;
+  animation: dashboard-grid-pulse 8s ease-in-out infinite;
+}
+.dashboard-hack-bg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(37, 99, 235, 0.02) 50%,
+    transparent 100%
+  );
+  background-size: 100% 120px;
+  animation: dashboard-scanline 4s linear infinite;
+  pointer-events: none;
+}
+.dashboard-hack-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(34, 197, 94, 0.04) 15%,
+    transparent 30%,
+    transparent 70%,
+    rgba(34, 197, 94, 0.04) 85%,
+    transparent 100%
+  );
+  background-size: 400% 100%;
+  animation: dashboard-sweep 6s linear infinite;
+  pointer-events: none;
+}
+@keyframes dashboard-grid-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+@keyframes dashboard-scanline {
+  0% { background-position: 0 0; }
+  100% { background-position: 0 120px; }
+}
+@keyframes dashboard-sweep {
+  0% { background-position: 0% 0; }
+  100% { background-position: 100% 0; }
+}
+
+/* Chrome nav icon: match other nav icon colors (grey inactive, blue active) */
+.chrome-icon-inactive {
+  filter: brightness(0) saturate(100%) invert(72%) sepia(23%) saturate(1500%) hue-rotate(190deg) brightness(91%) contrast(88%);
+}
+.chrome-icon-active {
+  filter: brightness(0) saturate(100%) invert(27%) sepia(98%) saturate(2476%) hue-rotate(206deg) brightness(92%) contrast(101%);
 }
 

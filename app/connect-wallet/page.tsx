@@ -290,7 +290,13 @@ export default function ConnectWalletPage() {
             {/* Continue button */}
             <button
               type="button"
-              onClick={() => setOpen(true)}
+              onClick={() => {
+                if (isConnected && selectedPath === 'guard') {
+                  router.push('/guard');
+                } else {
+                  setOpen(true);
+                }
+              }}
               className="mt-6 w-full rounded-2xl bg-gradient-to-r from-[#2563EB] via-[#1D4ED8] to-[#0EA5E9] px-6 py-3 text-sm md:text-base font-medium text-white shadow-[0_18px_45px_rgba(37,99,235,0.65)] hover:shadow-[0_22px_55px_rgba(37,99,235,0.85)] hover:brightness-110 transition"
             >
               Continue
