@@ -13,6 +13,26 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'upload.wikimedia.org',
       },
+      {
+        protocol: 'https',
+        hostname: 'images.ctfassets.net',
+      },
+      {
+        protocol: 'https',
+        hostname: 'bin.bnbstatic.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'assets.kraken.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'www.bitstamp.net',
+      },
+      {
+        protocol: 'https',
+        hostname: 'cdn.pixabay.com',
+      },
     ],
   },
   webpack: (config, { isServer }) => {

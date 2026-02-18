@@ -10,6 +10,7 @@ export function useWallet() {
   const { disconnect } = useDisconnect();
   const chainId = useChainId();
   const [isRegistering, setIsRegistering] = useState(false);
+  const [isDisconnecting, setIsDisconnecting] = useState(false);
   const [registrationError, setRegistrationError] = useState<string | null>(null);
 
   const connectMetaMask = async () => {
@@ -41,17 +42,19 @@ export function useWallet() {
   };
 
   const disconnectWallet = async () => {
-    if (address) {
-      try {
-        // Disconnect from backend first
-        await walletService.disconnectWallet(address);
-      } catch (error) {
-        console.error('Failed to disconnect wallet from backend:', error);
-        // Continue with local disconnect even if backend call fails
+    setIsDisconnecting(true);
+    try {
+      if (address) {
+        try {
+          await walletService.disconnectWallet(address);
+        } catch (error) {
+          console.error('Failed to disconnect wallet from backend:', error);
+        }
       }
+      disconnect();
+    } finally {
+      setIsDisconnecting(false);
     }
-    // Disconnect from wagmi
-    disconnect();
   };
 
   const registerWalletWithBackend = async (walletType: 'metamask' | 'coinbase') => {
@@ -82,6 +85,7 @@ export function useWallet() {
     disconnectWallet,
     registerWalletWithBackend,
     isRegistering,
+    isDisconnecting,
     registrationError,
     isPending,
   };

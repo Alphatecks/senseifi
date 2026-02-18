@@ -24,6 +24,7 @@ export default function ConnectWalletPage() {
     disconnectWallet,
     registerWalletWithBackend,
     isRegistering,
+    isDisconnecting,
     registrationError,
     isPending,
   } = useWallet();
@@ -126,9 +127,37 @@ export default function ConnectWalletPage() {
             <button
               type="button"
               onClick={disconnectWallet}
-              className="bg-red-600 hover:bg-red-700 text-white px-6 py-2.5 rounded-2xl font-medium transition shadow-lg border-2 border-red-400 whitespace-nowrap"
+              disabled={isDisconnecting}
+              className="bg-red-600 hover:bg-red-700 disabled:opacity-80 disabled:cursor-not-allowed text-white px-6 py-2.5 rounded-2xl font-medium transition shadow-lg border-2 border-red-400 whitespace-nowrap inline-flex items-center justify-center gap-2 min-w-[120px]"
             >
-              Disconnect
+              {isDisconnecting ? (
+                <>
+                  <svg
+                    className="animate-spin h-5 w-5 text-white"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    aria-hidden
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    />
+                  </svg>
+                  Disconnecting…
+                </>
+              ) : (
+                'Disconnect'
+              )}
             </button>
           )}
         </div>
@@ -228,15 +257,10 @@ export default function ConnectWalletPage() {
               </span>
             </button>
 
-            {/* SenseiTrade option */}
-            <button
-              type="button"
-              onClick={() => setSelectedPath('trade')}
-              className={`w-full flex items-center justify-between rounded-2xl px-4 py-4 md:px-5 md:py-4 text-left transition ${
-                selectedPath === 'trade'
-                  ? 'bg-gradient-to-r from-[#0F172A] via-[#020617] to-[#020617] border border-blue-500/60 shadow-[0_0_30px_rgba(37,99,235,0.55)]'
-                  : 'bg-[#020617]/80 border border-slate-700 hover:border-blue-500/70 hover:bg-slate-900/80'
-              }`}
+            {/* SenseiTrade option – inactive (Coming Soon) */}
+            <div
+              className="w-full flex items-center justify-between rounded-2xl px-4 py-4 md:px-5 md:py-4 text-left cursor-not-allowed opacity-60 bg-[#020617]/60 border border-slate-700/80"
+              aria-disabled="true"
             >
               <div className="flex items-center gap-4">
                 {/* Mobile: logo only, no container. Desktop: logo in styled container. */}
@@ -274,18 +298,8 @@ export default function ConnectWalletPage() {
                   </p>
                 </div>
               </div>
-              <span
-                className={`ml-4 inline-flex h-5 w-5 items-center justify-center rounded-full md:rounded-[20px] border force-mobile-circle ${
-                  selectedPath === 'trade'
-                    ? 'border-blue-300 bg-blue-500/30'
-                    : 'border-slate-500 bg-transparent'
-                }`}
-              >
-                {selectedPath === 'trade' && (
-                  <span className="h-2.5 w-2.5 rounded-full bg-white aspect-square md:aspect-auto force-mobile-circle-inner" />
-                )}
-              </span>
-            </button>
+              <span className="ml-4 inline-flex h-5 w-5 items-center justify-center rounded-full md:rounded-[20px] border border-slate-500 bg-transparent force-mobile-circle" />
+            </div>
 
             {/* Continue button */}
             <button

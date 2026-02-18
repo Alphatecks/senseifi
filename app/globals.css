@@ -294,6 +294,36 @@ body {
   100% { background-position: 100% 0; }
 }
 
+/* Mobile dashboard: blockchain / crypto background animation */
+.blockchain-bg-svg {
+  opacity: 1;
+}
+.blockchain-node {
+  animation: blockchain-node-pulse 3s ease-in-out infinite;
+}
+.blockchain-node:nth-child(11) { animation-delay: 0.2s; }
+.blockchain-node:nth-child(12) { animation-delay: 0.4s; }
+.blockchain-node:nth-child(13) { animation-delay: 0.1s; }
+.blockchain-node:nth-child(14) { animation-delay: 0.5s; }
+.blockchain-node:nth-child(15) { animation-delay: 0.3s; }
+.blockchain-node:nth-child(16) { animation-delay: 0.6s; }
+.blockchain-node:nth-child(17) { animation-delay: 0.15s; }
+.blockchain-node:nth-child(18) { animation-delay: 0.35s; }
+.blockchain-node:nth-child(19) { animation-delay: 0.55s; }
+.blockchain-line {
+  animation: blockchain-line-flow 4s ease-in-out infinite;
+  stroke-dasharray: 8 12;
+}
+@keyframes blockchain-node-pulse {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+@keyframes blockchain-line-flow {
+  0% { stroke-dashoffset: 0; opacity: 0.4; }
+  50% { stroke-dashoffset: 20; opacity: 0.9; }
+  100% { stroke-dashoffset: 40; opacity: 0.4; }
+}
+
 /* Chrome nav icon: match other nav icon colors (grey inactive, blue active) */
 .chrome-icon-inactive {
   filter: brightness(0) saturate(100%) invert(72%) sepia(23%) saturate(1500%) hue-rotate(190deg) brightness(91%) contrast(88%);

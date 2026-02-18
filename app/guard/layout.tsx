@@ -30,7 +30,7 @@ const NOTIFICATIONS = [
 
 function NavIcon({ name, active }: { name: string; active?: boolean }) {
   const cls = "w-7 h-7 shrink-0";
-  const iconCls = active ? "text-[#2563EB]" : "text-slate-400";
+  const iconCls = active ? "text-[#4066FF]" : "text-slate-400";
   if (name === "grid")
     return (
       <svg className={`${cls} ${iconCls}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -42,31 +42,31 @@ function NavIcon({ name, active }: { name: string; active?: boolean }) {
     );
   if (name === "key")
     return (
-      <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className={`${cls} ${iconCls}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
       </svg>
     );
   if (name === "chart")
     return (
-      <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className={`${cls} ${iconCls}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
       </svg>
     );
   if (name === "shield-check")
     return (
-      <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className={`${cls} ${iconCls}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
       </svg>
     );
   if (name === "document")
     return (
-      <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className={`${cls} ${iconCls}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
       </svg>
     );
   if (name === "card")
     return (
-      <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className={`${cls} ${iconCls}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
       </svg>
     );
@@ -82,7 +82,7 @@ function NavIcon({ name, active }: { name: string; active?: boolean }) {
     );
   if (name === "settings")
     return (
-      <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className={`${cls} ${iconCls}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
       </svg>
@@ -93,12 +93,17 @@ function NavIcon({ name, active }: { name: string; active?: boolean }) {
 export default function GuardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const notificationRef = useRef<HTMLDivElement>(null);
+  const mobileNotificationRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!notificationsOpen) return;
     const handleClickOutside = (e: MouseEvent) => {
-      if (notificationRef.current && !notificationRef.current.contains(e.target as Node)) setNotificationsOpen(false);
+      const target = e.target as Node;
+      const inDesktop = notificationRef.current?.contains(target);
+      const inMobile = mobileNotificationRef.current?.contains(target);
+      if (!inDesktop && !inMobile) setNotificationsOpen(false);
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -109,7 +114,46 @@ export default function GuardLayout({ children }: { children: React.ReactNode })
   return (
     <div className="h-screen flex overflow-hidden bg-[#0a0a1a] text-white relative">
       <div className="dashboard-hack-bg fixed inset-0 pointer-events-none z-0" aria-hidden />
-      <aside className="relative z-10 w-64 shrink-0 bg-[#080a12] border-r border-slate-800/60 flex flex-col">
+      {/* Mobile only: visible blockchain / crypto background animation */}
+      <div className="lg:hidden fixed inset-0 pointer-events-none z-0 overflow-hidden" aria-hidden>
+        <svg className="absolute inset-0 w-full h-full blockchain-bg-svg" viewBox="0 0 400 800" preserveAspectRatio="xMidYMid slice">
+          <defs>
+            <linearGradient id="blockchain-line-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="rgba(37, 99, 235, 0)" />
+              <stop offset="50%" stopColor="rgba(37, 99, 235, 0.45)" />
+              <stop offset="100%" stopColor="rgba(37, 99, 235, 0)" />
+            </linearGradient>
+            <filter id="blockchain-glow">
+              <feGaussianBlur stdDeviation="1" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
+          {/* Connection lines (blockchain edges) */}
+          <line x1="50" y1="100" x2="200" y2="180" stroke="url(#blockchain-line-grad)" strokeWidth="0.5" className="blockchain-line" />
+          <line x1="200" y1="180" x2="350" y2="120" stroke="url(#blockchain-line-grad)" strokeWidth="0.5" className="blockchain-line" />
+          <line x1="100" y1="320" x2="200" y2="280" stroke="url(#blockchain-line-grad)" strokeWidth="0.5" className="blockchain-line" />
+          <line x1="200" y1="280" x2="300" y2="340" stroke="url(#blockchain-line-grad)" strokeWidth="0.5" className="blockchain-line" />
+          <line x1="80" y1="500" x2="200" y2="460" stroke="url(#blockchain-line-grad)" strokeWidth="0.5" className="blockchain-line" />
+          <line x1="200" y1="460" x2="320" y2="520" stroke="url(#blockchain-line-grad)" strokeWidth="0.5" className="blockchain-line" />
+          <line x1="200" y1="180" x2="200" y2="280" stroke="url(#blockchain-line-grad)" strokeWidth="0.4" className="blockchain-line" />
+          <line x1="200" y1="280" x2="200" y2="460" stroke="url(#blockchain-line-grad)" strokeWidth="0.4" className="blockchain-line" />
+          {/* Nodes (blockchain blocks) */}
+          <circle cx="50" cy="100" r="4" fill="rgba(37, 99, 235, 0.5)" filter="url(#blockchain-glow)" className="blockchain-node" />
+          <circle cx="200" cy="180" r="5" fill="rgba(37, 99, 235, 0.6)" filter="url(#blockchain-glow)" className="blockchain-node" />
+          <circle cx="350" cy="120" r="4" fill="rgba(37, 99, 235, 0.45)" filter="url(#blockchain-glow)" className="blockchain-node" />
+          <circle cx="100" cy="320" r="3.5" fill="rgba(37, 99, 235, 0.4)" filter="url(#blockchain-glow)" className="blockchain-node" />
+          <circle cx="200" cy="280" r="5" fill="rgba(37, 99, 235, 0.55)" filter="url(#blockchain-glow)" className="blockchain-node" />
+          <circle cx="300" cy="340" r="4" fill="rgba(37, 99, 235, 0.45)" filter="url(#blockchain-glow)" className="blockchain-node" />
+          <circle cx="80" cy="500" r="3.5" fill="rgba(37, 99, 235, 0.4)" filter="url(#blockchain-glow)" className="blockchain-node" />
+          <circle cx="200" cy="460" r="5" fill="rgba(37, 99, 235, 0.5)" filter="url(#blockchain-glow)" className="blockchain-node" />
+          <circle cx="320" cy="520" r="4" fill="rgba(37, 99, 235, 0.4)" filter="url(#blockchain-glow)" className="blockchain-node" />
+        </svg>
+      </div>
+      {/* Desktop sidebar - hidden on mobile */}
+      <aside className="hidden lg:flex relative z-10 w-64 shrink-0 bg-[#080a12] border-r border-slate-800/60 flex-col">
         <div className="pt-10 pb-4 px-4 flex items-center gap-2">
           <Image src="/images/scaled_logo.png" alt="SenseiFi" width={32} height={32} className="h-8 w-auto" />
           <span className="font-semibold text-white text-3xl">SenseiFi</span>
@@ -152,8 +196,90 @@ export default function GuardLayout({ children }: { children: React.ReactNode })
           </div>
         </div>
       </aside>
+      {/* Mobile nav drawer - visible only below lg */}
+      <div className={`lg:hidden fixed inset-y-0 left-0 z-50 w-[280px] bg-[#080a12] border-r border-slate-800/60 flex flex-col transform transition-transform duration-300 ease-out ${mobileNavOpen ? "translate-x-0" : "-translate-x-full"}`}>
+        <div className="pt-10 pb-4 px-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Image src="/images/scaled_logo.png" alt="SenseiFi" width={32} height={32} className="h-8 w-auto" />
+            <span className="font-semibold text-white text-xl">SenseiFi</span>
+          </div>
+          <button type="button" onClick={() => setMobileNavOpen(false)} className="p-2 text-slate-400 hover:text-white" aria-label="Close menu">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+        <nav className="px-3 space-y-1 overflow-y-auto">
+          {navItems.map((item) => {
+            const active = pathname === item.href;
+            return (
+              <Link
+                key={item.label}
+                href={item.href}
+                onClick={() => setMobileNavOpen(false)}
+                className={`flex items-center gap-4 px-4 py-3 text-base font-medium transition rounded-lg ${active ? "bg-slate-800/90 text-white border border-blue-500/40" : "text-slate-400 hover:text-slate-300 hover:bg-slate-800/40"}`}
+              >
+                <NavIcon name={item.icon} active={active} />
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
+      </div>
+      {mobileNavOpen && <div className="lg:hidden fixed inset-0 z-40 bg-black/60" onClick={() => setMobileNavOpen(false)} aria-hidden />}
       <main className="relative z-10 flex-1 flex flex-col min-w-0 min-h-0">
-        <header className="h-20 shrink-0 border-b border-slate-800/60 flex items-center px-4 sm:px-6 gap-4 bg-[#0f1115]">
+        {/* Mobile header - visible only below lg */}
+        <header className="lg:hidden h-16 shrink-0 flex items-center justify-between px-4 bg-[#0a0a1a]">
+          <div className="flex items-center gap-2">
+            <Image src="/images/scaled_logo.png" alt="SenseiFi" width={28} height={28} className="h-7 w-auto" />
+            <span className="font-semibold text-white text-xl">SenseiFi</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="relative" ref={mobileNotificationRef}>
+              <button type="button" onClick={() => setNotificationsOpen((v) => !v)} className="relative flex items-center justify-center w-10 h-10 rounded-lg text-slate-400 hover:text-white transition" aria-label="Notifications">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#2563EB]" aria-hidden />
+              </button>
+              {notificationsOpen && (
+                <div className="absolute right-0 top-full mt-2 z-50 w-[calc(100vw-2rem)] max-w-[380px] max-h-[85vh] flex flex-col rounded-xl bg-[#1a1d24] border border-slate-700/60 shadow-xl overflow-hidden">
+                  <div className="p-4 border-b border-slate-700/60 flex items-center justify-between shrink-0">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-white font-bold text-base">Notifications</h3>
+                      <span className="flex items-center justify-center min-w-[22px] h-[22px] rounded-full bg-[#2563EB] text-white text-xs font-semibold">2</span>
+                    </div>
+                    <button type="button" className="text-[#60a5fa] hover:text-[#93c5fd] text-sm font-medium transition">Mark all as read</button>
+                  </div>
+                  <div className="overflow-y-auto flex-1 min-h-0 max-h-[60vh]">
+                    {NOTIFICATIONS.map((n) => (
+                      <div key={n.id} className="p-4 border-b border-slate-700/50 last:border-b-0">
+                        <div className="flex gap-3">
+                          <div className="shrink-0 pt-0.5">
+                            {n.icon === "logo" ? (
+                              <div className="w-9 h-9 rounded-full bg-[#2563EB]/80 flex items-center justify-center overflow-hidden p-1.5">
+                                <Image src={senseiCardLogo} alt="SenseiFi" width={28} height={28} className="w-6 h-6 object-contain" />
+                              </div>
+                            ) : (
+                              <span className={`block w-2.5 h-2.5 rounded-full ${n.unread ? "bg-white" : "bg-transparent"}`} aria-hidden />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-white font-semibold text-sm leading-tight flex items-center gap-1.5">{n.title}</p>
+                            <p className="text-slate-300 text-sm mt-1">{n.desc}</p>
+                            {n.button && <button type="button" className="mt-2 rounded-lg bg-gradient-to-b from-[#4066FF] to-[#0026FF] text-white text-sm font-medium px-4 py-2">{n.button}</button>}
+                            <p className="text-slate-500 text-xs mt-2">{n.time}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            <button type="button" onClick={() => setMobileNavOpen(true)} className="flex items-center justify-center w-10 h-10 rounded-lg text-slate-400 hover:text-white transition" aria-label="Menu">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+            </button>
+          </div>
+        </header>
+        {/* Desktop header - hidden on mobile */}
+        <header className="hidden lg:flex h-20 shrink-0 border-b border-slate-800/60 items-center px-4 sm:px-6 gap-4 bg-[#0f1115]">
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <div className="emboss-raised flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-[#1a1d24]">
               <Image src="/images/icons/dashboard-icon.png" alt="" width={20} height={20} className="w-5 h-5 sm:w-6 sm:h-6 opacity-90" />

@@ -10,9 +10,11 @@ import frameBlockIcon from "@/assets/icons/Frame 2147237641 (2).png";
 import liveActivityTitleIcon from "@/assets/icons/Frame 2147237579.png";
 import walletHealthIcon from "@/assets/icons/Frame 2147237579 (1).png";
 import shieldIcon from "@/assets/icons/Shield.png";
+import securityStatusIcon from "@/assets/icons/Vector.png";
 import senseiCardIcon from "@/assets/icons/wallets.png";
 import senseiCardLogo from "@/assets/icons/Mono.png";
 import senseiCardPattern from "@/assets/icons/SVG.svg";
+import walletCardBg from "@/assets/icons/Rectangle 1000002102.png";
 const beVietnamPro = localFont({
   src: [
     { path: "../../assets/fonts/Be_Vietnam_Pro/BeVietnamPro-Medium.ttf", weight: "500", style: "normal" },
@@ -22,8 +24,219 @@ const beVietnamPro = localFont({
 });
 
 export default function GuardDashboardPage() {
+  const liveActivityItems = [
+    { icon: "check" as const, title: "Outgoing Transaction Detected", desc: "0.42 ETH sent to 0x913...a21" },
+    { icon: "warn" as const, title: "Suspicious Approval Request", desc: "Unlimited token approval requested by unknown contact" },
+  ];
+  const walletCards = [
+    { symbol: "BTC", name: "Bitcoin", balance: "$2,483.45", change: "+2.3%", icon: "/images/icons/bitcoin-ellipse.png" },
+    { symbol: "ETH", name: "Ethereum", balance: "$1,345.45", change: "+2.3%", icon: "/images/icons/ethereum.png" },
+    { symbol: "LTC", name: "Litecoin", balance: "$883.45", change: "+2.3%", icon: "/images/icons/litecoin.png" },
+  ];
+
   return (
-    <div className="rounded-2xl bg-blue-950/25 border border-blue-900/40 p-6 space-y-6">
+    <div className="p-4 space-y-6 lg:rounded-2xl lg:bg-blue-950/25 lg:border lg:border-blue-900/40 lg:p-6">
+      {/* MOBILE LAYOUT - visible only below lg, no outer card background on mobile */}
+      <div className="lg:hidden space-y-4">
+        {/* Security Status - full width on mobile */}
+        <div className="-mx-6 w-[calc(100%+3rem)] rounded-2xl bg-gradient-to-br from-blue-950 to-slate-900 border border-slate-700/80 p-5 flex flex-col shadow-[inset_1px_1px_0_0_rgba(255,255,255,0.06)]">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Image src={securityStatusIcon} alt="" width={20} height={20} className="w-5 h-5 opacity-90" />
+              <h2 className="text-base font-semibold text-white">Security Status</h2>
+            </div>
+            <button type="button" className="text-sm text-slate-400 hover:text-white transition">View</button>
+          </div>
+          <div className="flex gap-4">
+            <div className="relative w-32 h-32 shrink-0 rounded-full gauge-emboss-inset">
+              <svg className="w-full h-full -rotate-90 animate-arc-rotate absolute inset-0" viewBox="0 0 36 36">
+                <defs>
+                  <radialGradient id="mobileWalletProgressGradient" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
+                    <stop offset="0%" stopColor="#4066FF" />
+                    <stop offset="100%" stopColor="#0026FF" />
+                  </radialGradient>
+                  <filter id="mobileArcGlow" x="-50%" y="-50%" width="200%" height="200%">
+                    <feGaussianBlur in="SourceGraphic" stdDeviation="1.8" result="blur" />
+                    <feMerge>
+                      <feMergeNode in="blur" />
+                      <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                  </filter>
+                </defs>
+                <path
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="3.5"
+                  className="text-slate-700"
+                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                />
+                <path
+                  fill="none"
+                  stroke="url(#mobileWalletProgressGradient)"
+                  strokeWidth="3.5"
+                  strokeDasharray="78, 100"
+                  strokeLinecap="round"
+                  filter="url(#mobileArcGlow)"
+                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                />
+              </svg>
+              <span className="absolute inset-0 flex items-center justify-center text-2xl font-bold text-white">78%</span>
+            </div>
+            <div className="flex-1 min-w-0 flex flex-col justify-center">
+              <p className="text-sm text-slate-300">Status: <span className="inline-flex items-center px-3 py-1 rounded-lg bg-[#0026FF] text-white font-medium text-xs">Strong</span></p>
+              <p className="text-xs text-slate-400 mt-2 leading-snug">Your wallet is well protected. A few settings can be improved for stronger security.</p>
+            </div>
+          </div>
+          <div className="flex items-center justify-between mt-4 pt-4">
+            <p className="text-sm text-slate-400">Last Scan: 2 hrs ago</p>
+            <button type="button" className="rounded-lg bg-gradient-to-b from-[#4066FF] to-[#0026FF] text-white text-sm font-medium px-5 py-2.5 transition">Run Full Scan</button>
+          </div>
+        </div>
+
+        {/* 4 cards grid - full width on mobile for wider cards */}
+        <div className="grid grid-cols-2 gap-3 -mx-6 w-[calc(100%+3rem)]">
+          <ThreatIntelligenceCard mobile />
+          <RecentScansCard mobile />
+          <TotalAssetCard mobile />
+          <UnreadAlertsCard mobile />
+        </div>
+
+        {/* Connected Wallet - full width, no container on mobile */}
+        <section className="-mx-10 w-[calc(100%+5rem)] px-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Image src="/images/icons/wallets.png" alt="" width={20} height={20} className="w-5 h-5 opacity-90" />
+              <h2 className="text-base font-semibold text-white">Connected Wallet</h2>
+            </div>
+            <button type="button" className="text-sm text-slate-400 hover:text-white transition">View wallets</button>
+          </div>
+          <div className="flex gap-3 overflow-x-auto hide-scrollbar pb-1 -mx-1">
+            {walletCards.map((w, i) => (
+              <div
+                key={`${w.symbol}-m-${i}`}
+                className="shrink-0 w-[220px] min-h-[120px] rounded-2xl p-4 relative overflow-hidden border border-slate-700/60"
+              >
+                <Image
+                  src={walletCardBg}
+                  alt=""
+                  fill
+                  className="object-cover"
+                  sizes="220px"
+                />
+                {/* Wavy chart graphic - right side (same as desktop) */}
+                <div className="absolute right-0 bottom-0 top-0 w-[45%] pointer-events-none z-[1]">
+                  <svg viewBox="0 0 100 100" className="w-full h-full text-blue-900/80" preserveAspectRatio="none">
+                    <path
+                      fill="currentColor"
+                      stroke="rgba(0,0,0,0.35)"
+                      strokeWidth="0.6"
+                      d="M0 100 L0 75 Q25 55 40 65 T80 45 Q95 35 100 40 L100 100 Z"
+                    />
+                  </svg>
+                </div>
+                <div className="relative z-10">
+                  <div className="flex items-start gap-2">
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center bg-white/20 shrink-0">
+                      <Image src={w.icon} alt={w.name} width={20} height={20} className="object-contain" />
+                    </div>
+                    <div>
+                      <p className="text-white font-bold text-sm">{w.symbol}</p>
+                      <p className="text-white/80 text-xs">{w.name}</p>
+                    </div>
+                  </div>
+                  <p className="text-white font-normal text-lg mt-3">{w.balance}</p>
+                  <span className="inline-flex items-center gap-0.5 text-xs font-medium text-emerald-200 mt-1">
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M7 14l5-5 5 5z" /></svg>
+                    {w.change}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Live Activity - full width on mobile */}
+        <section className="-mx-8 w-[calc(100%+4rem)] rounded-2xl bg-slate-900/80 border border-slate-800/80 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Image src={liveActivityTitleIcon} alt="" width={22} height={22} className="w-5 h-5 opacity-90" />
+              <h2 className="text-base font-semibold text-white">Live Activity</h2>
+            </div>
+            <button type="button" className="text-sm text-slate-400 hover:text-white transition">View wallets</button>
+          </div>
+          <ul className="space-y-3">
+            {liveActivityItems.map((a) => (
+              <li key={a.title} className="flex items-center gap-3 p-3 rounded-lg bg-slate-800/80 border border-slate-700/40">
+                {a.icon === "check" && (
+                  <span className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-emerald-500/20">
+                    <Image src={frameCheckIcon} alt="" width={24} height={24} className="w-6 h-6 object-contain" />
+                  </span>
+                )}
+                {a.icon === "warn" && (
+                  <span className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-amber-500/20">
+                    <Image src={frameWarnIcon} alt="" width={24} height={24} className="w-6 h-6 object-contain" />
+                  </span>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-white leading-snug">{a.title}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">{a.desc}</p>
+                </div>
+                <svg className="w-4 h-4 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        {/* Sensei Card - under Live Activity on mobile, same design as desktop */}
+        <section className="-mx-8 w-[calc(100%+4rem)] rounded-2xl bg-slate-900/80 border border-slate-800/80 p-4 flex flex-col">
+          <div className="flex items-center gap-2 mb-3">
+            <Image src={senseiCardIcon} alt="" width={22} height={22} className="w-5 h-5 shrink-0 object-contain opacity-90" />
+            <h2 className="text-base font-semibold text-white">Sensei Card</h2>
+          </div>
+          <div className="relative rounded-2xl overflow-hidden aspect-[1.6/1] flex flex-col justify-between p-4 border border-slate-500/50 shadow-[0_4px_14px_rgba(0,0,0,0.25)]" style={{ background: "linear-gradient(165deg, #2d3561 0%, #1e2442 50%, #161b32 100%)" }}>
+            <div className="absolute bottom-0 right-0 w-[55%] h-[60%] opacity-60 pointer-events-none" style={{ backgroundImage: `url(${typeof senseiCardPattern === "string" ? senseiCardPattern : (senseiCardPattern as { src?: string }).src})`, backgroundSize: "contain", backgroundRepeat: "no-repeat", backgroundPosition: "100% 100%" }} aria-hidden />
+            <div className="relative z-10 flex items-start justify-between">
+              <div className="w-9 h-9 rounded-lg overflow-hidden shrink-0 shadow-md">
+                <Image src={senseiCardLogo} alt="" width={36} height={36} className="w-full h-full object-contain" />
+              </div>
+              <span className={`text-white text-sm font-semibold tracking-tight ${beVietnamPro.className}`}>SenseiCard</span>
+            </div>
+            <p className={`relative z-10 text-white text-lg font-bold ${beVietnamPro.className}`}>5022 3386 9820 1246</p>
+            <div className="relative z-10 flex items-center justify-between text-xs text-white/80">
+              <span>Finances</span>
+              <span>01/10</span>
+            </div>
+          </div>
+          <div className="flex gap-2 mt-3">
+            <button type="button" className="flex-1 rounded-lg px-3 py-2.5 text-sm font-medium text-white transition hover:opacity-90" style={{ backgroundColor: "#27283B" }}>Withdraw</button>
+            <button type="button" className="flex-1 rounded-lg bg-gradient-to-b from-[#4066FF] to-[#0026FF] hover:from-[#3355FF] hover:to-[#001fcc] text-white text-sm font-medium py-2.5 transition shadow-[0_4px_12px_rgba(0,38,255,0.25)] ring-1 ring-inset ring-[#4066FF]/90">Transfer</button>
+          </div>
+          <p className="mt-3 pt-3 text-sm text-slate-500 flex items-center gap-1.5 shrink-0 border-t border-slate-700/60">
+            <svg className="w-4 h-4 text-slate-500 shrink-0" fill="currentColor" viewBox="0 0 24 24"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" /></svg>
+            Information needed
+          </p>
+        </section>
+
+        {/* Security Tip - after Sensei Card on mobile */}
+        <section className="-mx-8 w-[calc(100%+4rem)] rounded-2xl bg-slate-900/80 border border-slate-800/80 p-4 flex flex-col gap-3">
+          <div className="flex items-center gap-2 shrink-0">
+            <Image src={liveActivityTitleIcon} alt="" width={22} height={22} className="w-5 h-5 object-contain opacity-90" />
+            <h2 className="text-xs font-medium text-slate-400 tracking-wider">Security Tip</h2>
+          </div>
+          <div className="flex flex-row items-center gap-3">
+            <div className="flex-1 min-w-0">
+              <h3 className="text-sm font-semibold text-white">Revoke What You Don&apos;t Use</h3>
+              <p className="text-xs text-slate-400 mt-1">Old approvals stay active even when you stop using a dApp. Clearing them removes hidden access and keeps your wallet secure.</p>
+            </div>
+            <div className="shrink-0 w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden">
+              <Image src={shieldIcon} alt="" width={40} height={40} className="w-10 h-10 object-contain" />
+            </div>
+          </div>
+        </section>
+      </div>
+
+      {/* DESKTOP LAYOUT - visible only at lg+, unchanged */}
+      <div className="hidden lg:block space-y-6">
           {/* Status card + 2x2 cards beside it */}
           <div className="grid grid-cols-1 lg:grid-cols-[auto_1fr] gap-4">
             {/* Wallet Security Overview */}
@@ -67,7 +280,7 @@ export default function GuardDashboardPage() {
                 </div>
                 <div className="flex-1 min-w-0 flex flex-col sm:mt-16">
                   <p className="text-sm text-slate-300">Status: <span className="inline-flex items-center justify-center min-w-[5rem] px-4 py-1 rounded-lg bg-[#0026FF] text-white font-medium">Strong</span></p>
-                  <p className="text-base text-slate-400 mt-2">Wallet security is strong at 82% safe and protected, with a few areas you can further strengthen.</p>
+                  <p className="text-base text-slate-400 mt-2">Your wallet is well protected. A few settings can be improved for stronger security.</p>
                 </div>
               </div>
               <div className="flex items-center w-full mt-4 gap-4">
@@ -182,7 +395,7 @@ export default function GuardDashboardPage() {
                   { icon: "warn", color: "text-amber-500", title: "Suspicious Approval Request", desc: "Unlimited token approval requested by unknown contract", descIcon: true },
                   { icon: "block", color: "text-red-500", title: "High-Risk Contract Interaction Blocked", desc: "Interaction prevented with flagged contract" },
                 ].map((a) => (
-                  <li key={a.title} className="emboss-raised-dark-inset flex items-center gap-3 p-3.5 rounded-lg bg-slate-800/80 border border-slate-700/40 hover:border-slate-600 transition">
+                  <li key={a.title} className="emboss-inset-3d-input flex items-center gap-3 p-3.5 rounded-lg bg-slate-800/80 border border-slate-700/40 hover:border-slate-600 transition">
                     {a.icon === "check" && (
                       <span className="shrink-0 w-8 h-8 flex items-center justify-center overflow-hidden rounded">
                         <Image src={frameCheckIcon} alt="" width={32} height={32} className="w-8 h-8 object-contain" />
@@ -255,7 +468,7 @@ export default function GuardDashboardPage() {
               <div className="rounded-2xl bg-slate-900/80 border border-slate-800/80 p-4 flex flex-col gap-4">
                 <div className="flex items-center gap-2 shrink-0">
                   <Image src={liveActivityTitleIcon} alt="" width={28} height={28} className="w-7 h-7 object-contain opacity-90" />
-                  <h2 className="text-sm font-medium text-slate-400 uppercase tracking-wider">Security Tip</h2>
+                  <h2 className="text-sm font-medium text-slate-400 tracking-wider">Security Tip</h2>
                 </div>
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
                 <div className="flex-1 min-w-0">
@@ -300,29 +513,30 @@ export default function GuardDashboardPage() {
                 </p>
             </div>
           </div>
+      </div>
     </div>
   );
 }
 
-function ThreatIntelligenceCard() {
+function ThreatIntelligenceCard({ mobile }: { mobile?: boolean }) {
   return (
-    <div className="rounded-xl p-5 flex flex-col min-h-[180px] bg-gradient-to-br from-blue-950 to-slate-900">
+    <div className={`rounded-xl flex flex-col bg-gradient-to-br from-blue-950 to-slate-900 ${mobile ? "p-2.5 min-h-[115px]" : "p-5 min-h-[180px]"}`}>
       <div className="flex items-center gap-2">
-        <Image src="/images/icons/alert.png" alt="" width={20} height={20} className="w-5 h-5 shrink-0" />
-        <p className="text-white font-medium text-base">Threat Intelligence</p>
+        <Image src="/images/icons/alert.png" alt="" width={mobile ? 16 : 20} height={mobile ? 16 : 20} className="shrink-0" />
+        <p className={`text-white font-medium ${mobile ? "text-xs" : "text-base"}`}>Threat Intelligence</p>
       </div>
-      <div className="flex items-baseline gap-2 mt-3">
-        <span className="text-white font-normal text-4xl">2</span>
-        <span className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-sm font-medium bg-[#2F4F2F] text-[#A0E0A0]">
-          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M7 14l5-5 5 5z" /></svg>
+      <div className={`flex items-baseline gap-2 mt-2 ${mobile ? "mt-1" : "mt-3"}`}>
+        <span className={`text-white font-normal ${mobile ? "text-xl" : "text-4xl"}`}>2</span>
+        <span className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium bg-[#2F4F2F] text-[#A0E0A0]">
+          <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24"><path d="M7 14l5-5 5 5z" /></svg>
           +2.3%
         </span>
       </div>
-      <div className="flex items-center justify-between mt-auto pt-4">
-        <p className="text-sm text-slate-400">This month</p>
+      <div className={`flex items-center justify-between mt-auto ${mobile ? "pt-2" : "pt-4"}`}>
+        <p className={`text-slate-400 ${mobile ? "text-[10px]" : "text-sm"}`}>This month</p>
         <button
           type="button"
-          className="rounded-lg bg-gradient-to-b from-[#4066FF] to-[#0026FF] hover:from-[#3355FF] hover:to-[#001fcc] text-white text-sm font-medium px-4 py-2.5 transition shadow-[0_4px_12px_rgba(0,38,255,0.25)] ring-1 ring-inset ring-[#4066FF]/90"
+          className={`rounded bg-gradient-to-b from-[#4066FF] to-[#0026FF] text-white font-medium transition ${mobile ? "text-xs px-2.5 py-1.5" : "text-sm px-4 py-2.5"}`}
         >
           View Threat
         </button>
@@ -331,25 +545,27 @@ function ThreatIntelligenceCard() {
   );
 }
 
-function TotalAssetCard() {
+function TotalAssetCard({ mobile }: { mobile?: boolean }) {
   return (
-    <div className="rounded-xl p-5 flex flex-col min-h-[180px] bg-gradient-to-br from-blue-950 to-slate-900">
+    <div className={`rounded-xl flex flex-col bg-gradient-to-br from-blue-950 to-slate-900 ${mobile ? "p-2.5 min-h-[115px]" : "p-5 min-h-[180px]"}`}>
       <div className="flex items-center gap-2">
-        <Image src="/images/icons/wallets.png" alt="" width={20} height={20} className="w-5 h-5 shrink-0" />
-        <p className="text-white font-medium text-base">Total Asset</p>
+        <Image src="/images/icons/wallets.png" alt="" width={mobile ? 16 : 20} height={mobile ? 16 : 20} className="shrink-0" />
+        <p className={`text-white font-medium ${mobile ? "text-xs" : "text-base"}`}>Total Asset</p>
       </div>
-      <div className="flex items-baseline gap-2 mt-3">
-        <span className="text-white font-normal text-4xl">$12,450</span>
-        <span className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-sm font-medium bg-[#2F4F2F] text-[#A0E0A0]">
-          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M7 14l5-5 5 5z" /></svg>
-          +2.3%
-        </span>
+      <div className={`flex items-baseline gap-2 ${mobile ? "mt-1" : "mt-3"}`}>
+        <span className={`text-white font-normal ${mobile ? "text-xl" : "text-4xl"}`}>$12,450</span>
+        {!mobile && (
+          <span className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-sm font-medium bg-[#2F4F2F] text-[#A0E0A0]">
+            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M7 14l5-5 5 5z" /></svg>
+            +2.3%
+          </span>
+        )}
       </div>
-      <div className="flex items-center justify-between mt-auto pt-4">
-        <p className="text-sm text-slate-400">This month</p>
+      <div className={`flex items-center justify-between mt-auto ${mobile ? "pt-2" : "pt-4"}`}>
+        <p className={`text-slate-400 ${mobile ? "text-[10px]" : "text-sm"}`}>This month</p>
         <button
           type="button"
-          className="rounded-lg bg-gradient-to-b from-[#4066FF] to-[#0026FF] hover:from-[#3355FF] hover:to-[#001fcc] text-white text-sm font-medium px-4 py-2.5 transition shadow-[0_4px_12px_rgba(0,38,255,0.25)] ring-1 ring-inset ring-[#4066FF]/90"
+          className={`rounded bg-gradient-to-b from-[#4066FF] to-[#0026FF] text-white font-medium transition ${mobile ? "text-xs px-2.5 py-1.5" : "text-sm px-4 py-2.5"}`}
         >
           View wallets
         </button>
@@ -358,28 +574,28 @@ function TotalAssetCard() {
   );
 }
 
-function UnreadAlertsCard() {
+function UnreadAlertsCard({ mobile }: { mobile?: boolean }) {
   return (
-    <div className="rounded-xl p-5 flex flex-col min-h-[180px] bg-gradient-to-br from-blue-950 to-slate-900">
+    <div className={`rounded-xl flex flex-col bg-gradient-to-br from-blue-950 to-slate-900 ${mobile ? "p-2.5 min-h-[115px]" : "p-5 min-h-[180px]"}`}>
       <div className="flex items-center gap-2">
-        <Image src="/images/icons/alert-02.png" alt="" width={20} height={20} className="w-5 h-5 shrink-0" />
-        <p className="text-white font-medium text-base">Unread Alerts</p>
+        <Image src="/images/icons/alert-02.png" alt="" width={mobile ? 16 : 20} height={mobile ? 16 : 20} className="shrink-0" />
+        <p className={`text-white font-medium ${mobile ? "text-xs" : "text-base"}`}>Unread Alerts</p>
       </div>
-      <div className="flex items-baseline gap-2 mt-3">
-        <span className="text-white font-normal text-4xl">6</span>
-        <span className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-sm font-medium bg-red-900/50 text-red-400">
-          <svg className="w-3 h-3 rotate-180" fill="currentColor" viewBox="0 0 24 24"><path d="M7 14l5-5 5 5z" /></svg>
+      <div className={`flex items-baseline gap-2 ${mobile ? "mt-1" : "mt-3"}`}>
+        <span className={`text-white font-normal ${mobile ? "text-xl" : "text-4xl"}`}>6</span>
+        <span className={`inline-flex items-center gap-0.5 rounded font-medium bg-red-900/50 text-red-400 ${mobile ? "px-1.5 py-0.5 text-[10px]" : "px-2 py-0.5 text-sm"}`}>
+          <svg className={`rotate-180 ${mobile ? "w-2.5 h-2.5" : "w-3 h-3"}`} fill="currentColor" viewBox="0 0 24 24"><path d="M7 14l5-5 5 5z" /></svg>
           -2.3%
         </span>
       </div>
-      <div className="flex items-center justify-between mt-auto pt-4">
+      <div className={`flex items-center justify-between mt-auto ${mobile ? "pt-2" : "pt-4"}`}>
         <div className="flex items-center gap-1.5">
-          <Image src="/images/icons/alert-01.png" alt="" width={16} height={16} className="w-4 h-4 shrink-0" />
-          <p className="text-sm text-slate-400">1 high risk</p>
+          {!mobile && <Image src="/images/icons/alert-01.png" alt="" width={16} height={16} className="w-4 h-4 shrink-0" />}
+          <p className={`text-slate-400 ${mobile ? "text-[10px]" : "text-sm"}`}>1 high risk</p>
         </div>
         <button
           type="button"
-          className="rounded-lg bg-gradient-to-b from-[#4066FF] to-[#0026FF] hover:from-[#3355FF] hover:to-[#001fcc] text-white text-sm font-medium px-4 py-2.5 transition shadow-[0_4px_12px_rgba(0,38,255,0.25)] ring-1 ring-inset ring-[#4066FF]/90"
+          className={`rounded bg-gradient-to-b from-[#4066FF] to-[#0026FF] text-white font-medium transition ${mobile ? "text-xs px-2.5 py-1.5" : "text-sm px-4 py-2.5"}`}
         >
           View Alerts
         </button>
@@ -388,27 +604,27 @@ function UnreadAlertsCard() {
   );
 }
 
-function RecentScansCard() {
+function RecentScansCard({ mobile }: { mobile?: boolean }) {
   return (
-    <div className="rounded-xl p-5 flex flex-col min-h-[180px] bg-gradient-to-br from-blue-950 to-slate-900">
+    <div className={`rounded-xl flex flex-col bg-gradient-to-br from-blue-950 to-slate-900 ${mobile ? "p-2.5 min-h-[115px]" : "p-5 min-h-[180px]"}`}>
       <div className="flex items-center gap-2">
-        <Image src="/images/icons/scan.png" alt="" width={20} height={20} className="w-5 h-5 shrink-0" />
-        <p className="text-white font-medium text-base">Recent Scans</p>
+        <Image src="/images/icons/scan.png" alt="" width={mobile ? 16 : 20} height={mobile ? 16 : 20} className="shrink-0" />
+        <p className={`text-white font-medium ${mobile ? "text-xs" : "text-base"}`}>Recent Scans</p>
       </div>
-      <div className="flex items-baseline gap-2 mt-3">
-        <span className="text-white font-normal text-4xl">12</span>
-        <span className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-sm font-medium bg-[#2F4F2F] text-[#A0E0A0]">
-          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M7 14l5-5 5 5z" /></svg>
+      <div className={`flex items-baseline gap-2 ${mobile ? "mt-1" : "mt-3"}`}>
+        <span className={`text-white font-normal ${mobile ? "text-xl" : "text-4xl"}`}>12</span>
+        <span className={`inline-flex items-center gap-0.5 rounded font-medium bg-[#2F4F2F] text-[#A0E0A0] ${mobile ? "px-1.5 py-0.5 text-[10px]" : "px-2 py-0.5 text-sm"}`}>
+          <svg className={mobile ? "w-2.5 h-2.5" : "w-3 h-3"} fill="currentColor" viewBox="0 0 24 24"><path d="M7 14l5-5 5 5z" /></svg>
           +2.3%
         </span>
       </div>
-      <div className="flex items-center justify-between mt-auto pt-4">
-        <p className="text-sm text-slate-400">This month</p>
+      <div className={`flex items-center justify-between mt-auto ${mobile ? "pt-2" : "pt-4"}`}>
+        <p className={`text-slate-400 ${mobile ? "text-[10px]" : "text-sm"}`}>This month</p>
         <button
           type="button"
-          className="rounded-lg bg-gradient-to-b from-[#4066FF] to-[#0026FF] hover:from-[#3355FF] hover:to-[#001fcc] text-white text-sm font-medium px-4 py-2.5 transition shadow-[0_4px_12px_rgba(0,38,255,0.25)] ring-1 ring-inset ring-[#4066FF]/90"
+          className={`rounded bg-gradient-to-b from-[#4066FF] to-[#0026FF] text-white font-medium transition ${mobile ? "text-xs px-2 py-1.5" : "text-sm px-4 py-2.5"}`}
         >
-          Scan New Contract
+          Scan Contracts
         </button>
       </div>
     </div>
