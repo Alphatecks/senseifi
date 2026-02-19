@@ -11,8 +11,9 @@ export default function Hero() {
   const [submittedEmails, setSubmittedEmails] = useState<string[]>([]);
   const emailInputRef = useRef<HTMLInputElement>(null);
   const [referralLink, setReferralLink] = useState('');
-  const [xpValue, setXpValue] = useState(12);
-  const [xpProgressPercent, setXpProgressPercent] = useState(40);
+  const [xpValue, setXpValue] = useState<number | null>(null);
+  const [xpProgressPercent, setXpProgressPercent] = useState(0);
+  const [xpProgressAnimated, setXpProgressAnimated] = useState(0);
   const [successfulReferralsCount, setSuccessfulReferralsCount] = useState(0);
   const [referralScoreLoading, setReferralScoreLoading] = useState(false);
   const [referralCodeFromUrl, setReferralCodeFromUrl] = useState('');
@@ -45,9 +46,11 @@ export default function Hero() {
       const baseUrl = process.env.NEXT_PUBLIC_WAITLIST_API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL || 'https://waitlist-82co.onrender.com';
       const res = await fetch(`${baseUrl}/referrals/by-email?email=${encodeURIComponent(email)}`);
       const data = await res.json().catch(() => ({}));
+      console.log('[Referral score] API response', data);
       console.log('[Referral achievement] response', { status: res.status, statusText: res.statusText, data });
       if (res.ok && data) {
-        let ref = data.referral_code || null;
+        const code = data.code ?? data.referral_code ?? null;
+        let ref = code;
         if (!ref && data.referral_link) {
           try {
             if (data.referral_link.startsWith('?')) {
@@ -59,6 +62,17 @@ export default function Hero() {
         }
         if (ref) setReferralLink(`https://senseifi.io?ref=${ref}`);
         setSuccessfulReferralsCount(typeof data.successfulCount === 'number' ? data.successfulCount : 0);
+        if (typeof data.xp === 'number') {
+          setXpValue(data.xp);
+          // 1 referral = 100 XP; full bar = 20 referrals = 2000 XP
+          const XP_PER_REFERRAL = 100;
+          const XP_FULL_BAR = XP_PER_REFERRAL * 20;
+          setXpProgressPercent(Math.min(100, Math.max(0, (data.xp / XP_FULL_BAR) * 100)));
+        } else {
+          setXpValue(null);
+          setXpProgressPercent(0);
+        }
+        setXpProgressAnimated(0);
         setShowReferralScoreModal(true);
       } else {
         setToast({ message: data?.message || 'Could not load referral data.', type: 'error' });
@@ -75,6 +89,13 @@ export default function Hero() {
     const id = window.setTimeout(() => setToast(null), 4000);
     return () => window.clearTimeout(id);
   }, [toast]);
+
+  // Animate XP bar from 0 to current when modal is shown
+  useEffect(() => {
+    if (!showReferralScoreModal && !showSocialModal) return;
+    const t = setTimeout(() => setXpProgressAnimated(xpProgressPercent), 80);
+    return () => clearTimeout(t);
+  }, [showReferralScoreModal, showSocialModal, xpProgressPercent]);
 
   useEffect(() => {
     const stored = localStorage.getItem('submittedEmails');
@@ -154,6 +175,7 @@ export default function Hero() {
                 });
 
               const data = await res.json().catch(() => ({}));
+              console.log('[Waitlist] API response', data);
               console.log('[Waitlist] Joined waitlist', {
                 email,
                 extractedRefCode: refAtSubmit || null,
@@ -185,6 +207,7 @@ export default function Hero() {
                   }
                   const fullReferralUrl = ref ? `https://senseifi.io?ref=${ref}` : '';
                   if (fullReferralUrl) setReferralLink(fullReferralUrl);
+                  setXpProgressAnimated(0);
                   setShowSocialModal(true);
                   setShowAlreadyOnWaitlistModal(false);
                   const newEmails = [...submittedEmails, email];
@@ -285,17 +308,17 @@ export default function Hero() {
               ) : null}
               <div className="rounded-lg bg-white/5 p-3 mb-4">
                 <p className="text-xs text-blue-100/60 mb-2">XP progress</p>
-                <div className="relative h-2.5 rounded-full bg-white/10 overflow-visible">
+                <div className="relative h-2.5 rounded-full bg-white/10 overflow-visible xp-bar-track">
                   <div
-                    className="absolute inset-y-0 left-0 rounded-full bg-[#0026FF]"
-                    style={{ width: `${Math.min(100, Math.max(0, xpProgressPercent))}%` }}
+                    className="xp-bar-fill absolute inset-y-0 left-0 rounded-full bg-[#0026FF]"
+                    style={{ width: `${Math.min(100, Math.max(0, xpProgressAnimated))}%` }}
                   />
                   <div
-                    className="absolute top-1/2 w-3 h-3 -translate-y-1/2 rounded-full bg-white/95 shadow-sm border border-white/60 -translate-x-1/2"
-                    style={{ left: `${Math.min(100, Math.max(0, xpProgressPercent))}%` }}
+                    className="xp-bar-spark absolute top-1/2 w-3 h-3 -translate-y-1/2 rounded-full bg-white border border-white/80 -translate-x-1/2"
+                    style={{ left: `${Math.min(100, Math.max(0, xpProgressAnimated))}%` }}
                   />
                 </div>
-                <p className="text-sm text-white mt-1.5">{xpValue} XP</p>
+                <p className="text-sm text-white mt-1.5">{xpValue != null ? `${xpValue} XP` : '— XP'}</p>
               </div>
               <div className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-2.5">
                 <span className="text-xs text-blue-100/70">Successful referrals</span>
@@ -339,6 +362,9 @@ export default function Hero() {
               <h2 className="text-xl md:text-2xl font-semibold text-white mb-2">
                 You&apos;re on the waitlist 🎉
               </h2>
+              <p className="text-sm text-amber-200/90 mb-2">
+                Please ensure the email you used is correct. Spam or invalid emails will be disqualified.
+              </p>
               <p className="text-sm md:text-base text-blue-100/80 mb-6">
                 While we get your spot secured, stay close to the SenseiFi community:
               </p>
@@ -440,21 +466,21 @@ export default function Hero() {
                       </button>
                     </div>
                   ) : null}
-                  {/* Static XP progress bar – update xpValue and xpProgressPercent when fetching from API */}
-                  <div className="relative h-3 rounded-full bg-white/10 overflow-visible mb-6">
+                  {/* XP progress bar – animates from 0 with welding spark at leading edge */}
+                  <div className="relative h-3 rounded-full bg-white/10 overflow-visible mb-6 xp-bar-track">
                     <div
-                      className="absolute inset-y-0 left-0 rounded-full bg-[#0026FF]"
-                      style={{ width: `${Math.min(100, Math.max(0, xpProgressPercent))}%` }}
+                      className="xp-bar-fill absolute inset-y-0 left-0 rounded-full bg-[#0026FF]"
+                      style={{ width: `${Math.min(100, Math.max(0, xpProgressAnimated))}%` }}
                     />
                     <div
-                      className="absolute top-1/2 w-3.5 h-3.5 -translate-y-1/2 rounded-full bg-white/95 shadow-sm border border-white/60 -translate-x-1/2"
-                      style={{ left: `${Math.min(100, Math.max(0, xpProgressPercent))}%` }}
+                      className="xp-bar-spark absolute top-1/2 w-3.5 h-3.5 -translate-y-1/2 rounded-full bg-white border border-white/80 -translate-x-1/2"
+                      style={{ left: `${Math.min(100, Math.max(0, xpProgressAnimated))}%` }}
                     />
                     <span
-                      className="absolute top-full left-0 text-sm text-white whitespace-nowrap -translate-x-1/2 mt-1.5"
-                      style={{ left: `${Math.min(100, Math.max(0, xpProgressPercent))}%` }}
+                      className="absolute top-full left-0 text-sm text-white whitespace-nowrap -translate-x-1/2 mt-1.5 transition-all duration-[900ms] ease-out"
+                      style={{ left: `${Math.min(100, Math.max(0, xpProgressAnimated))}%` }}
                     >
-                      {xpValue} XP
+                      {xpValue != null ? `${xpValue} XP` : '— XP'}
                     </span>
                   </div>
                 </div>
