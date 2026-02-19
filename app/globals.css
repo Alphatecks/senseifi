@@ -87,6 +87,14 @@
     inset -2px -2px 6px rgba(200, 208, 220, 0.1);
 }
 
+/* Strong internal 3D emboss for dark buttons (e.g. waitlist dialog join buttons) – #3856FF tint */
+.emboss-internal-3d-dark {
+  box-shadow:
+    inset 4px 4px 10px rgba(56, 86, 255, 0.45),
+    inset -3px -3px 8px rgba(56, 86, 255, 0.15),
+    inset 1px 1px 0 rgba(56, 86, 255, 0.35);
+}
+
 /* Stronger emboss for dark cards (e.g. Live Activity list items) so the effect is visible */
 .emboss-raised-dark {
   box-shadow:

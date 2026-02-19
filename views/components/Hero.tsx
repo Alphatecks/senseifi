@@ -1,13 +1,55 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export default function Hero() {
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [showSocialModal, setShowSocialModal] = useState(false);
   const [showAlreadyOnWaitlistModal, setShowAlreadyOnWaitlistModal] = useState(false);
+  const [showReferralScoreModal, setShowReferralScoreModal] = useState(false);
   const [submittedEmails, setSubmittedEmails] = useState<string[]>([]);
+  const emailInputRef = useRef<HTMLInputElement>(null);
+  const [referralLink, setReferralLink] = useState('');
+  const [xpValue, setXpValue] = useState(12);
+  const [xpProgressPercent, setXpProgressPercent] = useState(40);
+  const [successfulReferralsCount, setSuccessfulReferralsCount] = useState(0);
+  const [referralScoreLoading, setReferralScoreLoading] = useState(false);
+
+  const openReferralScoreModal = async () => {
+    const email = emailInputRef.current?.value?.trim();
+    if (!email) {
+      setToast({ message: 'Enter your email to view referral score.', type: 'error' });
+      return;
+    }
+    setReferralScoreLoading(true);
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_WAITLIST_API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL || 'https://waitlist-82co.onrender.com';
+      const res = await fetch(`${baseUrl}/referrals/by-email?email=${encodeURIComponent(email)}`);
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data) {
+        let ref = data.referral_code || null;
+        if (!ref && data.referral_link) {
+          try {
+            if (data.referral_link.startsWith('?')) {
+              ref = new URLSearchParams(data.referral_link.slice(1)).get('ref');
+            } else {
+              ref = new URL(data.referral_link).searchParams.get('ref');
+            }
+          } catch { /* ignore */ }
+        }
+        if (ref) setReferralLink(`https://senseifi.io?ref=${ref}`);
+        setSuccessfulReferralsCount(typeof data.successfulCount === 'number' ? data.successfulCount : 0);
+        setShowReferralScoreModal(true);
+      } else {
+        setToast({ message: data?.message || 'Could not load referral data.', type: 'error' });
+      }
+    } catch {
+      setToast({ message: 'Network error. Please try again.', type: 'error' });
+    } finally {
+      setReferralScoreLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!toast) return;
@@ -72,47 +114,55 @@ export default function Hero() {
             e.preventDefault();
             const form = e.currentTarget;
             const formData = new FormData(form);
-            const email = formData.get('email');
-            if (!email || typeof email !== 'string') return;
-            if (submittedEmails.includes(email)) {
-              setToast({ message: 'This email has already been registered for the waitlist.', type: 'error' });
-              return;
-            }
+            const email = (formData.get('email') as string)?.trim();
+            if (!email) return;
             setLoading(true);
             setShowSocialModal(false);
             setShowAlreadyOnWaitlistModal(false);
             setToast(null);
             try {
-              const res = await fetch('https://waitlist-82co.onrender.com/waitlist', {
+              const waitlistBaseUrl = process.env.NEXT_PUBLIC_WAITLIST_API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL || 'https://waitlist-82co.onrender.com';
+              const res = await fetch(`${waitlistBaseUrl}/waitlist`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
                 body: JSON.stringify({ email }),
               });
-              
-              if (res.ok) {
-                form.reset();
-                // Check response body for duplicate indication
-                const data = await res.json().catch(() => ({}));
+
+              const data = await res.json().catch(() => ({}));
+                console.log('[Waitlist] response', { status: res.status, statusText: res.statusText, data });
                 const responseText = JSON.stringify(data).toLowerCase();
-                // Only show "already on waitlist" if response explicitly indicates duplicate
-                // Check for clear duplicate messages in response
-                const isDuplicate = (responseText.includes('already') && responseText.includes('waitlist')) ||
-                                  responseText.includes('already exists') ||
-                                  responseText.includes('duplicate');
-                
-                // Show "already on waitlist" modal only if status is 201 AND response indicates duplicate
-                if (res.status === 201 && isDuplicate) {
+                const isEmailAlreadyUsed =
+                  (responseText.includes('already') && responseText.includes('waitlist')) ||
+                  responseText.includes('already exists') ||
+                  responseText.includes('duplicate') ||
+                  responseText.includes('already registered') ||
+                  res.status === 409;
+
+                if (isEmailAlreadyUsed) {
                   setShowAlreadyOnWaitlistModal(true);
-                } else {
-                  // Default to success modal for all other successful responses
+                  setShowSocialModal(false);
+                } else if (res.ok) {
+                  form.reset();
+                  let ref = data.referral_code || null;
+                  if (!ref && data.referral_link) {
+                    try {
+                      if (data.referral_link.startsWith('?')) {
+                        ref = new URLSearchParams(data.referral_link.slice(1)).get('ref');
+                      } else {
+                        ref = new URL(data.referral_link).searchParams.get('ref');
+                      }
+                    } catch { /* ignore */ }
+                  }
+                  const fullReferralUrl = ref ? `https://senseifi.io?ref=${ref}` : '';
+                  if (fullReferralUrl) setReferralLink(fullReferralUrl);
                   setShowSocialModal(true);
-                const newEmails = [...submittedEmails, email];
-                setSubmittedEmails(newEmails);
-                localStorage.setItem('submittedEmails', JSON.stringify(newEmails));
+                  setShowAlreadyOnWaitlistModal(false);
+                  const newEmails = [...submittedEmails, email];
+                  setSubmittedEmails(newEmails);
+                  localStorage.setItem('submittedEmails', JSON.stringify(newEmails));
+                } else {
+                  setToast({ message: 'Unable to submit right now. Please try again.', type: 'error' });
                 }
-              } else {
-                setToast({ message: 'Unable to submit right now. Please try again.', type: 'error' });
-              }
             } catch (err) {
               setToast({ message: 'Network error. Please try again.', type: 'error' });
             } finally {
@@ -120,27 +170,123 @@ export default function Hero() {
             }
           }}
         >
-          <input 
-            type="email" 
+          <input
+            ref={emailInputRef}
+            type="email"
             name="email"
-            placeholder="Enter email" 
+            placeholder="Enter email"
             required
-            className="w-full min-w-64 h-16 px-6 pr-44 rounded-2xl bg-white/10 backdrop-blur-sm border border-white/25 shadow-[0_8px_30px_rgba(0,0,0,0.35)] text-white placeholder-white/75 focus:outline-none focus:ring-2 focus:ring-blue-400/50 focus:border-transparent transition"
+            className="w-full min-w-64 h-16 px-6 pr-44 md:pr-[18rem] rounded-2xl bg-white/10 backdrop-blur-sm border border-white/25 shadow-[0_8px_30px_rgba(0,0,0,0.35)] text-white placeholder-white/75 focus:outline-none focus:ring-2 focus:ring-blue-400/50 focus:border-transparent transition"
           />
-          <button
-            type="submit"
-            disabled={loading}
-            className="absolute top-1/2 right-2 -translate-y-1/2 bg-gradient-radial from-[#0026FF] to-blue-400 hover:from-[#0026FF] hover:to-blue-500 disabled:opacity-60 disabled:cursor-not-allowed text-white px-6 md:px-7 py-3 rounded-2xl font-medium transition shadow-lg border-2 border-white whitespace-nowrap flex items-center gap-2"
-          >
-            {loading && <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/60 border-t-transparent" aria-hidden />}
-            Join wait list
-          </button>
+          <div className="absolute top-1/2 right-2 -translate-y-1/2 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={openReferralScoreModal}
+              disabled={referralScoreLoading}
+              className="hidden md:inline-flex bg-white/10 hover:bg-white/15 text-white px-4 md:px-5 py-3 rounded-2xl font-medium transition border border-white/25 whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {referralScoreLoading ? 'Loading…' : 'View referral score'}
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="bg-gradient-radial from-[#0026FF] to-blue-400 hover:from-[#0026FF] hover:to-blue-500 disabled:opacity-60 disabled:cursor-not-allowed text-white px-6 md:px-7 py-3 rounded-2xl font-medium transition shadow-lg border-2 border-white whitespace-nowrap flex items-center gap-2"
+            >
+              {loading && <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/60 border-t-transparent" aria-hidden />}
+              Join wait list
+            </button>
+          </div>
         </form>
+        <button
+          type="button"
+          onClick={openReferralScoreModal}
+          disabled={referralScoreLoading}
+          className="mt-3 w-full md:hidden bg-white/10 hover:bg-white/15 text-white px-4 py-3 rounded-2xl font-medium transition border border-white/25 disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          {referralScoreLoading ? 'Loading…' : 'View referral score'}
+        </button>
 
 
-        {toast && toast.type === 'error' && (
+        {/* Referral achievement mini dialog – only when email is entered */}
+        {showReferralScoreModal && (
+          <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+            <div className="relative w-full max-w-sm rounded-xl bg-[#020617] border border-blue-500/50 shadow-[0_24px_80px_rgba(15,23,42,0.95)] p-5 text-left">
+              <button
+                type="button"
+                onClick={() => setShowReferralScoreModal(false)}
+                className="absolute right-3 top-3 h-8 w-8 flex items-center justify-center rounded-full bg-white/5 text-white/70 hover:bg-white/10 hover:text-white transition"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+              <h3 className="text-lg font-semibold text-white pr-8 mb-1">
+                Referral achievement
+              </h3>
+              <p className="text-xs text-blue-100/70 mb-4">
+                Track your referrals and XP
+              </p>
+              {referralLink ? (
+                <div className="rounded-lg bg-white/5 p-3 mb-4">
+                  <p className="text-xs text-blue-100/60 mb-1.5">Referral link</p>
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={referralLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 text-sm text-blue-300 hover:text-blue-200 truncate"
+                    >
+                      {referralLink}
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(referralLink);
+                        setToast({ message: 'Referral link copied', type: 'success' });
+                      }}
+                      className="shrink-0 p-1.5 rounded text-white/70 hover:text-white hover:bg-white/10 transition"
+                      aria-label="Copy link"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+              <div className="rounded-lg bg-white/5 p-3 mb-4">
+                <p className="text-xs text-blue-100/60 mb-2">XP progress</p>
+                <div className="relative h-2.5 rounded-full bg-white/10 overflow-visible">
+                  <div
+                    className="absolute inset-y-0 left-0 rounded-full bg-[#0026FF]"
+                    style={{ width: `${Math.min(100, Math.max(0, xpProgressPercent))}%` }}
+                  />
+                  <div
+                    className="absolute top-1/2 w-3 h-3 -translate-y-1/2 rounded-full bg-white/95 shadow-sm border border-white/60 -translate-x-1/2"
+                    style={{ left: `${Math.min(100, Math.max(0, xpProgressPercent))}%` }}
+                  />
+                </div>
+                <p className="text-sm text-white mt-1.5">{xpValue} XP</p>
+              </div>
+              <div className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-2.5">
+                <span className="text-xs text-blue-100/70">Successful referrals</span>
+                <span className="text-sm font-medium text-white">{successfulReferralsCount}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowReferralScoreModal(false)}
+                className="mt-4 w-full rounded-lg bg-gradient-to-b from-[#4066FF] to-[#0026FF] hover:from-[#3355FF] hover:to-[#001fcc] text-white text-sm font-medium py-2.5 transition shadow-[0_4px_12px_rgba(0,38,255,0.25)] ring-1 ring-inset ring-[#4066FF]/90"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        )}
+
+        {toast && (
           <div className="fixed top-20 left-0 right-0 z-50 px-4 flex justify-center" role="status" aria-live="polite">
-            <div className="rounded-2xl px-4 py-3 text-sm font-medium text-white shadow-2xl border backdrop-blur-sm transition duration-500 ease-out bg-blue-500/25 border-blue-300/50">
+            <div className={`rounded-2xl px-4 py-3 text-sm font-medium text-white shadow-2xl border backdrop-blur-sm transition duration-500 ease-out ${
+              toast.type === 'error' ? 'bg-blue-500/25 border-blue-300/50' : 'bg-emerald-500/25 border-emerald-300/50'
+            }`}>
               {toast.message}
             </div>
           </div>
@@ -149,7 +295,7 @@ export default function Hero() {
         {/* Social follow modal after join */}
         {showSocialModal && (
           <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-            <div className="relative w-full max-w-md mx-4 rounded-3xl bg-[#020617] border border-blue-500/50 shadow-[0_24px_80px_rgba(15,23,42,0.95)] p-6 md:p-8">
+            <div className="relative w-full max-w-md mx-4 rounded-xl bg-[#020617] border border-blue-500/50 shadow-[0_24px_80px_rgba(15,23,42,0.95)] p-6 md:p-8">
               {/* Close button */}
               <button
                 type="button"
@@ -172,7 +318,7 @@ export default function Hero() {
                 <button
                   type="button"
                   onClick={() => window.open('https://discord.gg/gW9hezfk', '_blank')}
-                  className="w-full flex items-center justify-between rounded-2xl bg-[#020617] hover:bg-[#020617]/80 border border-indigo-500/60 px-4 py-3 md:px-5 md:py-3.5 transition"
+                  className="w-full flex items-center justify-between rounded-lg bg-[#020617] hover:bg-[#020617]/80 px-4 py-3 md:px-5 md:py-3.5 transition emboss-internal-3d-dark"
                 >
                   <div className="flex items-center gap-3">
                     <div className="h-9 w-9 rounded-full bg-[#5865F2] flex items-center justify-center">
@@ -193,7 +339,7 @@ export default function Hero() {
                 <button
                   type="button"
                   onClick={() => window.open('https://t.me/senseifinance', '_blank')}
-                  className="w-full flex items-center justify-between rounded-2xl bg-[#0f172a] hover:bg-[#020617] border border-sky-500/60 px-4 py-3 md:px-5 md:py-3.5 transition"
+                  className="w-full flex items-center justify-between rounded-lg bg-[#0f172a] hover:bg-[#020617] px-4 py-3 md:px-5 md:py-3.5 transition emboss-internal-3d-dark"
                 >
                   <div className="flex items-center gap-3">
                     <div className="h-9 w-9 rounded-full bg-sky-500/10 flex items-center justify-center overflow-hidden">
@@ -214,16 +360,14 @@ export default function Hero() {
                 <button
                   type="button"
                   onClick={() => window.open('https://x.com/SenseiFi_', '_blank')}
-                  className="w-full flex items-center justify-between rounded-2xl bg-[#020617] hover:bg-[#020617]/80 border border-slate-500/70 px-4 py-3 md:px-5 md:py-3.5 transition"
+                  className="w-full flex items-center justify-between rounded-lg bg-[#020617] hover:bg-[#020617]/80 px-4 py-3 md:px-5 md:py-3.5 transition emboss-internal-3d-dark"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="h-9 w-9 rounded-full bg-white flex items-center justify-center overflow-hidden">
-                      <img
-                        src="https://upload.wikimedia.org/wikipedia/commons/5/5a/X_icon_2.svg"
-                        alt="X (Twitter)"
-                        className="h-5 w-5"
-                      />
-                    </div>
+                    <img
+                      src="https://upload.wikimedia.org/wikipedia/commons/5/5a/X_icon_2.svg"
+                      alt="X (Twitter)"
+                      className="h-5 w-5 shrink-0"
+                    />
                     <div className="text-left">
                       <p className="text-white text-sm md:text-base font-medium">Follow us on X</p>
                       <p className="text-xs text-blue-200/80">Real-time updates, threads, and announcements.</p>
@@ -232,20 +376,73 @@ export default function Hero() {
                 </button>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setShowSocialModal(false)}
-                className="mt-5 w-full rounded-2xl bg-white/10 hover:bg-white/15 text-white text-sm md:text-base font-medium py-2.5 transition"
-              >
-                Done
-              </button>
+              {/* Refer & Earn Together */}
+              <div className="mt-6">
+                <div className="rounded-lg bg-white/5 p-4 md:p-5 text-left">
+                  <h3 className="text-base md:text-lg font-semibold text-white mb-1">
+                    Refer & Earn Together
+                  </h3>
+                  <p className="text-sm text-blue-100/70 mb-4">
+                    Earn 1 XP for every successful referral and level up.
+                  </p>
+                  {referralLink ? (
+                    <div className="flex items-center gap-2 rounded-lg border border-dashed border-white/25 bg-white/5 px-3 py-2.5 mb-4">
+                      <a
+                        href={referralLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-1 text-sm text-blue-300 hover:text-blue-200 truncate"
+                      >
+                        {referralLink}
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(referralLink);
+                          setToast({ message: 'Referral link copied', type: 'success' });
+                        }}
+                        className="shrink-0 p-1.5 rounded text-white/70 hover:text-white hover:bg-white/10 transition"
+                        aria-label="Copy referral link"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                      </button>
+                    </div>
+                  ) : null}
+                  {/* Static XP progress bar – update xpValue and xpProgressPercent when fetching from API */}
+                  <div className="relative h-3 rounded-full bg-white/10 overflow-visible mb-6">
+                    <div
+                      className="absolute inset-y-0 left-0 rounded-full bg-[#0026FF]"
+                      style={{ width: `${Math.min(100, Math.max(0, xpProgressPercent))}%` }}
+                    />
+                    <div
+                      className="absolute top-1/2 w-3.5 h-3.5 -translate-y-1/2 rounded-full bg-white/95 shadow-sm border border-white/60 -translate-x-1/2"
+                      style={{ left: `${Math.min(100, Math.max(0, xpProgressPercent))}%` }}
+                    />
+                    <span
+                      className="absolute top-full left-0 text-sm text-white whitespace-nowrap -translate-x-1/2 mt-1.5"
+                      style={{ left: `${Math.min(100, Math.max(0, xpProgressPercent))}%` }}
+                    >
+                      {xpValue} XP
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowSocialModal(false)}
+                  className="mt-4 w-full rounded-lg bg-gradient-to-b from-[#4066FF] to-[#0026FF] hover:from-[#3355FF] hover:to-[#001fcc] text-white text-sm font-medium py-2.5 transition shadow-[0_4px_12px_rgba(0,38,255,0.25)] ring-1 ring-inset ring-[#4066FF]/90"
+                >
+                  Continue
+                </button>
+              </div>
             </div>
           </div>)}
 
         {/* Already on waitlist modal */}
         {showAlreadyOnWaitlistModal && (
           <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-            <div className="relative w-full max-w-md mx-4 rounded-3xl bg-[#020617] border border-blue-500/50 shadow-[0_24px_80px_rgba(15,23,42,0.95)] p-6 md:p-8">
+            <div className="relative w-full max-w-md mx-4 rounded-xl bg-[#020617] border border-blue-500/50 shadow-[0_24px_80px_rgba(15,23,42,0.95)] p-6 md:p-8">
               {/* Close button */}
               <button
                 type="button"
@@ -267,7 +464,7 @@ export default function Hero() {
                 <button
                   type="button"
                   onClick={() => setShowAlreadyOnWaitlistModal(false)}
-                  className="w-full rounded-2xl bg-white/10 hover:bg-white/15 text-white text-sm md:text-base font-medium py-2.5 transition"
+                  className="w-full rounded-lg bg-white/10 hover:bg-white/15 text-white text-sm md:text-base font-medium py-2.5 transition shadow-[inset_0_2px_4px_rgba(0,0,0,0.4),inset_0_-1px_2px_rgba(255,255,255,0.06)]"
                 >
                   Close
                 </button>
