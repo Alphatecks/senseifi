@@ -145,9 +145,8 @@ export default function Hero() {
                 (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('ref')?.trim()) ||
                 (typeof window !== 'undefined' && (() => { try { return sessionStorage.getItem('senseifi_ref'); } catch { return null; } })()) ||
                 '';
-              const body: { email: string; referral_code?: string } = { email };
-              if (refAtSubmit) body.referral_code = refAtSubmit;
-              console.log('[Waitlist] request body', body);
+              const body: { email: string; ref?: string } = { email };
+              if (refAtSubmit) body.ref = refAtSubmit;
               const res = await fetch(`${waitlistBaseUrl}/waitlist`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -155,7 +154,12 @@ export default function Hero() {
                 });
 
               const data = await res.json().catch(() => ({}));
-                console.log('[Waitlist] response', { status: res.status, statusText: res.statusText, data });
+              console.log('[Waitlist] Joined waitlist', {
+                email,
+                extractedRefCode: refAtSubmit || null,
+                requestBody: body,
+                response: { status: res.status, statusText: res.statusText, data },
+              });
                 const responseText = JSON.stringify(data).toLowerCase();
                 const isEmailAlreadyUsed =
                   (responseText.includes('already') && responseText.includes('waitlist')) ||
