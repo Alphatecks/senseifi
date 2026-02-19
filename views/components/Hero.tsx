@@ -15,6 +15,24 @@ export default function Hero() {
   const [xpProgressPercent, setXpProgressPercent] = useState(40);
   const [successfulReferralsCount, setSuccessfulReferralsCount] = useState(0);
   const [referralScoreLoading, setReferralScoreLoading] = useState(false);
+  const [referralCodeFromUrl, setReferralCodeFromUrl] = useState('');
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get('ref')?.trim();
+    if (ref) {
+      setReferralCodeFromUrl(ref);
+      try {
+        sessionStorage.setItem('senseifi_ref', ref);
+      } catch { /* ignore */ }
+    } else {
+      try {
+        const stored = sessionStorage.getItem('senseifi_ref');
+        if (stored) setReferralCodeFromUrl(stored);
+      } catch { /* ignore */ }
+    }
+  }, []);
 
   const openReferralScoreModal = async () => {
     const email = emailInputRef.current?.value?.trim();
@@ -27,6 +45,7 @@ export default function Hero() {
       const baseUrl = process.env.NEXT_PUBLIC_WAITLIST_API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL || 'https://waitlist-82co.onrender.com';
       const res = await fetch(`${baseUrl}/referrals/by-email?email=${encodeURIComponent(email)}`);
       const data = await res.json().catch(() => ({}));
+      console.log('[Referral achievement] response', { status: res.status, statusText: res.statusText, data });
       if (res.ok && data) {
         let ref = data.referral_code || null;
         if (!ref && data.referral_link) {
@@ -122,11 +141,13 @@ export default function Hero() {
             setToast(null);
             try {
               const waitlistBaseUrl = process.env.NEXT_PUBLIC_WAITLIST_API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL || 'https://waitlist-82co.onrender.com';
-              const res = await fetch(`${waitlistBaseUrl}/waitlist`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-                body: JSON.stringify({ email }),
-              });
+              const body: { email: string; referral_code?: string } = { email };
+                if (referralCodeFromUrl) body.referral_code = referralCodeFromUrl;
+                const res = await fetch(`${waitlistBaseUrl}/waitlist`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                  body: JSON.stringify(body),
+                });
 
               const data = await res.json().catch(() => ({}));
                 console.log('[Waitlist] response', { status: res.status, statusText: res.statusText, data });
