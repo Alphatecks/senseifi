@@ -12,6 +12,7 @@ export default function ReferralRefPersist() {
     if (typeof window === "undefined") return;
     const ref = new URLSearchParams(window.location.search).get("ref")?.trim();
     if (ref) {
+      console.log("Referral code from URL:", ref);
       try {
         sessionStorage.setItem("senseifi_ref", ref);
       } catch {
