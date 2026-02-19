@@ -141,9 +141,14 @@ export default function Hero() {
             setToast(null);
             try {
               const waitlistBaseUrl = process.env.NEXT_PUBLIC_WAITLIST_API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL || 'https://waitlist-82co.onrender.com';
+              const refAtSubmit =
+                (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('ref')?.trim()) ||
+                (typeof window !== 'undefined' && (() => { try { return sessionStorage.getItem('senseifi_ref'); } catch { return null; } })()) ||
+                '';
               const body: { email: string; referral_code?: string } = { email };
-                if (referralCodeFromUrl) body.referral_code = referralCodeFromUrl;
-                const res = await fetch(`${waitlistBaseUrl}/waitlist`, {
+              if (refAtSubmit) body.referral_code = refAtSubmit;
+              console.log('[Waitlist] request body', body);
+              const res = await fetch(`${waitlistBaseUrl}/waitlist`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
                   body: JSON.stringify(body),
