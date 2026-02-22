@@ -11,9 +11,7 @@ export default function AppDownload() {
           <div className="flex items-center">
             <div className="flex-1 text-white space-y-4 pr-3">
               <h2 className="text-[18px] font-medium leading-snug max-w-[210px]">
-                Download for seamless
-                <br />
-                web3 experience
+                Soon to be available on App Stores.
               </h2>
               <div className="flex items-center gap-3">
                 <a href="#" className="inline-block transition hover:scale-[1.02] active:scale-[0.99]">
@@ -61,9 +59,7 @@ export default function AppDownload() {
             {/* Text and store badges */}
             <div className="text-white max-w-xl translate-x-8 md:translate-x-10">
               <h2 className="text-4xl md:text-5xl font-medium leading-tight mb-8">
-                Download for seamless
-                <br />
-                web3 experience
+                Soon to be available on App Stores.
               </h2>
 
               <div className="flex flex-wrap gap-4">

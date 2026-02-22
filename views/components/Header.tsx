@@ -48,12 +48,12 @@ export default function Header() {
               </span>
             )}
           </button>
-          <Link
+          {/* <Link
             href="/connect-wallet"
             className="hidden md:inline-flex flex-none mr-0 md:mr-40 bg-gradient-radial from-[#0026FF] to-blue-400 hover:from-[#0026FF] hover:to-blue-500 text-white px-8 py-3 rounded-2xl font-medium transition shadow-lg border-2 border-white items-center justify-center"
           >
             Get started
-          </Link>
+          </Link> */}
         </div>
       </nav>
 
@@ -91,12 +91,12 @@ export default function Header() {
         </ul>
 
         <div className="mt-8">
-          <Link
+          {/* <Link
             href="/connect-wallet"
             className="w-auto px-6 bg-gradient-radial from-[#0026FF] to-blue-400 hover:from-[#0026FF] hover:to-blue-500 text-white py-3 rounded-2xl font-medium transition shadow-lg border-2 border-white whitespace-nowrap flex items-center justify-center"
           >
             Get started
-          </Link>
+          </Link> */}
         </div>
       </div>
       {/* <ConnectWalletModal open={walletModalOpen} onClose={() => setWalletModalOpen(false)} /> */}

@@ -7,7 +7,7 @@ export default function CenteredAppDownload() {
         {/* Left: Text and buttons */}
         <div className="flex-1 flex flex-col justify-center items-start px-8 py-10 md:py-16 md:ml-6 lg:ml-10 mt-4">
           <h2 className="text-3xl md:text-4xl font-medium text-white mb-6 leading-snug">
-            Download for seamless<br />web3 experience
+            Soon to be available on App Stores
           </h2>
           <div className="flex gap-4 mt-2">
             <a href="#" className="inline-block transition hover:scale-[1.02]">
