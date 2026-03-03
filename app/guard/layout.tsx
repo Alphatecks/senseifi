@@ -12,20 +12,20 @@ import senseiCardLogo from "@/assets/icons/Mono.png";
 const navItems = [
   { label: "Dashboard", href: "/guard", icon: "grid" },
   { label: "Wallet Security", href: "/guard/wallet-security", icon: "key" },
-  { label: "Activity Monitor", href: "#", icon: "chart" },
-  { label: "Threat Intelligence", href: "#", icon: "shield-check" },
-  { label: "Contract Scanner", href: "#", icon: "document" },
+  { label: "Activity Monitor", href: "/guard/activity-monitor", icon: "chart" },
+  { label: "Threat Intelligence", href: "/guard/threat-intelligence", icon: "shield-check" },
+  { label: "Contract Scanner", href: "/guard/contract-scanner", icon: "document" },
   { label: "SenseiCard", href: "#", icon: "card" },
   { label: "Chrome extension", href: "#", icon: "ext" },
   { label: "Settings", href: "#", icon: "settings" },
 ];
 
 const NOTIFICATIONS = [
-  { id: "1", type: "charity", unread: false, icon: "logo", title: "We've just reached out 30k goal raised for charity!", desc: "We're so proud of the team!", time: "8 min ago", button: null },
-  { id: "2", type: "suspicious", unread: true, icon: "dot", title: "Suspicious Transaction Detected", desc: "A transfer of 0.75 ETH to an unknown wallet was flagged.", time: "17 min ago", button: "Review Transaction" },
-  { id: "3", type: "security", unread: true, icon: "dot", title: "Strengthen Your Wallet Security", desc: "Enable 2FA on your Ethereum wallet.", time: "45 min ago", button: null, titleIcon: "lock" },
-  { id: "4", type: "token", unread: true, icon: "dot", title: "Token Risk Alert", desc: "$XYZ token has been flagged.", time: "1 day ago", button: null, titleIcon: "warning" },
-  { id: "5", type: "scam", unread: true, icon: "dot", title: "Potential Scam Contract Detected", desc: "Exercise caution before further interaction.", time: "2 day ago", button: "Review Analysis", titleIcon: "lightning" },
+  { id: "1", type: "charity", unread: false, icon: "logo", title: "We've just reached out 30k goal raised for charity! We're so proud of the team!", desc: "", time: "8 min ago", button: null },
+  { id: "2", type: "suspicious", unread: true, icon: "dot", title: "Suspicious Transaction Detected", desc: "A transfer of 0.75 ETH to an unknown wallet was flagged. Review and approve within 15 minutes to avoid potential loss.", time: "17 min ago", button: "Review Transaction" },
+  { id: "3", type: "security", unread: true, icon: "dot", title: "Strengthen Your Wallet Security 🔒", desc: "We noticed you haven't enabled 2FA on your Ethereum wallet. Protect your funds by activating it now.", time: "45 min ago", button: null, titleIcon: "lock" },
+  { id: "4", type: "token", unread: true, icon: "dot", title: "Token Risk Alert ⚠", desc: "$XYZ token has been flagged for high volatility and low liquidity. Consider reviewing your holdings.", time: "1 day ago", button: null, titleIcon: "warning" },
+  { id: "5", type: "scam", unread: true, icon: "dot", title: "Potential Scam Contract Detected ⚡", desc: "A smart contract you interacted with shows suspicious activity patterns. Exercise caution before further interaction.", time: "2 day ago", button: "Review Analysis", titleIcon: "lightning" },
 ];
 
 function NavIcon({ name, active }: { name: string; active?: boolean }) {
@@ -96,6 +96,7 @@ export default function GuardLayout({ children }: { children: React.ReactNode })
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const notificationRef = useRef<HTMLDivElement>(null);
   const mobileNotificationRef = useRef<HTMLDivElement>(null);
+  const mobileNotificationsPanelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!notificationsOpen) return;
@@ -103,13 +104,14 @@ export default function GuardLayout({ children }: { children: React.ReactNode })
       const target = e.target as Node;
       const inDesktop = notificationRef.current?.contains(target);
       const inMobile = mobileNotificationRef.current?.contains(target);
-      if (!inDesktop && !inMobile) setNotificationsOpen(false);
+      const inMobilePanel = mobileNotificationsPanelRef.current?.contains(target);
+      if (!inDesktop && !inMobile && !inMobilePanel) setNotificationsOpen(false);
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [notificationsOpen]);
 
-  const title = pathname === "/guard/wallet-security" ? "Wallet Security" : "Dashboard";
+  const title = pathname === "/guard/wallet-security" ? "Wallet Security" : pathname === "/guard/contract-scanner" ? "Contract Scanner" : "Dashboard";
 
   return (
     <div className="h-screen flex overflow-hidden bg-[#0a0a1a] text-white relative">
@@ -197,7 +199,7 @@ export default function GuardLayout({ children }: { children: React.ReactNode })
         </div>
       </aside>
       {/* Mobile nav drawer - visible only below lg */}
-      <div className={`lg:hidden fixed inset-y-0 left-0 z-50 w-[280px] bg-[#080a12] border-r border-slate-800/60 flex flex-col transform transition-transform duration-300 ease-out ${mobileNavOpen ? "translate-x-0" : "-translate-x-full"}`}>
+      <div className={`lg:hidden fixed inset-y-0 left-0 z-50 w-[280px] bg-[#080a12] border-r border-slate-800/60 flex flex-col transform transition-transform duration-150 ease-out will-change-transform ${mobileNavOpen ? "translate-x-0" : "-translate-x-full"}`}>
         <div className="pt-10 pb-4 px-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Image src="/images/scaled_logo.png" alt="SenseiFi" width={32} height={32} className="h-8 w-auto" />
@@ -224,7 +226,7 @@ export default function GuardLayout({ children }: { children: React.ReactNode })
           })}
         </nav>
       </div>
-      {mobileNavOpen && <div className="lg:hidden fixed inset-0 z-40 bg-black/60" onClick={() => setMobileNavOpen(false)} aria-hidden />}
+      <div className={`lg:hidden fixed inset-0 z-40 bg-black/60 transition-opacity duration-150 ${mobileNavOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`} onClick={() => setMobileNavOpen(false)} aria-hidden={!mobileNavOpen} />
       <main className="relative z-10 flex-1 flex flex-col min-w-0 min-h-0">
         {/* Mobile header - visible only below lg */}
         <header className="lg:hidden h-16 shrink-0 flex items-center justify-between px-4 bg-[#0a0a1a]">
@@ -234,50 +236,86 @@ export default function GuardLayout({ children }: { children: React.ReactNode })
           </div>
           <div className="flex items-center gap-2">
             <div className="relative" ref={mobileNotificationRef}>
-              <button type="button" onClick={() => setNotificationsOpen((v) => !v)} className="relative flex items-center justify-center w-10 h-10 rounded-lg text-slate-400 hover:text-white transition" aria-label="Notifications">
+              <button type="button" onClick={() => setNotificationsOpen((v) => !v)} className="relative flex items-center justify-center w-10 h-10 rounded-xl border-2 border-white/25 bg-[#0f1220] text-slate-400 hover:text-white transition" aria-label="Notifications">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
                 <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#2563EB]" aria-hidden />
               </button>
-              {notificationsOpen && (
-                <div className="absolute right-0 top-full mt-2 z-50 w-[calc(100vw-2rem)] max-w-[380px] max-h-[85vh] flex flex-col rounded-xl bg-[#1a1d24] border border-slate-700/60 shadow-xl overflow-hidden">
-                  <div className="p-4 border-b border-slate-700/60 flex items-center justify-between shrink-0">
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-white font-bold text-base">Notifications</h3>
-                      <span className="flex items-center justify-center min-w-[22px] h-[22px] rounded-full bg-[#2563EB] text-white text-xs font-semibold">2</span>
-                    </div>
-                    <button type="button" className="text-[#60a5fa] hover:text-[#93c5fd] text-sm font-medium transition">Mark all as read</button>
-                  </div>
-                  <div className="overflow-y-auto flex-1 min-h-0 max-h-[60vh]">
-                    {NOTIFICATIONS.map((n) => (
-                      <div key={n.id} className="p-4 border-b border-slate-700/50 last:border-b-0">
-                        <div className="flex gap-3">
-                          <div className="shrink-0 pt-0.5">
-                            {n.icon === "logo" ? (
-                              <div className="w-9 h-9 rounded-full bg-[#2563EB]/80 flex items-center justify-center overflow-hidden p-1.5">
-                                <Image src={senseiCardLogo} alt="SenseiFi" width={28} height={28} className="w-6 h-6 object-contain" />
-                              </div>
-                            ) : (
-                              <span className={`block w-2.5 h-2.5 rounded-full ${n.unread ? "bg-white" : "bg-transparent"}`} aria-hidden />
-                            )}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-white font-semibold text-sm leading-tight flex items-center gap-1.5">{n.title}</p>
-                            <p className="text-slate-300 text-sm mt-1">{n.desc}</p>
-                            {n.button && <button type="button" className="mt-2 rounded-lg bg-gradient-to-b from-[#4066FF] to-[#0026FF] text-white text-sm font-medium px-4 py-2">{n.button}</button>}
-                            <p className="text-slate-500 text-xs mt-2">{n.time}</p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
-            <button type="button" onClick={() => setMobileNavOpen(true)} className="flex items-center justify-center w-10 h-10 rounded-lg text-slate-400 hover:text-white transition" aria-label="Menu">
+            <button type="button" onClick={() => setMobileNavOpen(true)} className="flex items-center justify-center w-10 h-10 rounded-xl border-2 border-white/25 bg-[#0f1220] text-slate-400 hover:text-white transition" aria-label="Menu">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
             </button>
           </div>
         </header>
+
+        {/* Mobile full-screen notifications panel – when bell is tapped (always mounted to avoid open delay) */}
+        <div
+          ref={mobileNotificationsPanelRef}
+          className={`lg:hidden fixed inset-0 z-[60] flex flex-col bg-[#0a0a1a] transition-opacity duration-150 ${notificationsOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
+          aria-modal="true"
+          role="dialog"
+          aria-label="Notifications"
+          aria-hidden={!notificationsOpen}
+        >
+            <div className="h-16 shrink-0 flex items-center justify-between px-4 border-b border-white/10 bg-[#0a0a1a]">
+              <div className="flex items-center gap-2">
+                <Image src="/images/scaled_logo.png" alt="SenseiFi" width={28} height={28} className="h-7 w-auto" />
+                <span className="font-semibold text-white text-xl">SenseiFi</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => setNotificationsOpen(false)} className="flex items-center justify-center w-10 h-10 rounded-xl border-2 border-white/25 bg-[#0f1220] text-white hover:bg-white/10 transition" aria-label="Close notifications">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+                <button type="button" onClick={() => setMobileNavOpen(true)} className="flex items-center justify-center w-10 h-10 rounded-xl border-2 border-white/25 bg-[#0f1220] text-slate-400 hover:text-white transition" aria-label="Menu">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto px-4 py-4">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-xl font-bold text-white">Notifications</h2>
+                  <span className="flex items-center justify-center min-w-[22px] h-[22px] rounded-full bg-[#0026FF] text-white text-xs font-semibold">2</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button type="button" className="text-[#0026FF] text-sm font-medium">Mark all as read</button>
+                  <button type="button" className="p-1 text-white/70 hover:text-white" aria-label="More options">
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="19" r="1.5" /></svg>
+                  </button>
+                </div>
+              </div>
+              <ul className="space-y-4">
+                {NOTIFICATIONS.map((n) => (
+                  <li key={n.id} className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
+                    <div className="flex gap-3">
+                      <div className="shrink-0 w-10 h-10 rounded-lg bg-[#0026FF]/20 flex items-center justify-center overflow-hidden">
+                        {n.icon === "logo" ? (
+                          <Image src={senseiCardLogo} alt="" width={24} height={24} className="object-contain" />
+                        ) : (
+                          <span className="w-6 h-6 rounded-full bg-white/20" />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-white font-medium text-sm leading-snug flex items-center gap-1.5 flex-wrap">
+                          {n.titleIcon === "lock" && <span aria-hidden>🔒</span>}
+                          {n.titleIcon === "warning" && <span aria-hidden>⚠</span>}
+                          {n.titleIcon === "lightning" && <span aria-hidden>⚡</span>}
+                          {n.title}
+                        </p>
+                        {n.desc && <p className="text-white/70 text-xs mt-1 leading-relaxed">{n.desc}</p>}
+                        <p className="text-white/50 text-xs mt-2">{n.time}</p>
+                        {n.button && (
+                          <button type="button" className="mt-3 px-4 py-2 rounded-lg bg-[#0026FF] text-white text-sm font-medium hover:opacity-90 transition">
+                            {n.button}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
         {/* Desktop header - hidden on mobile */}
         <header className="hidden lg:flex h-20 shrink-0 border-b border-slate-800/60 items-center px-4 sm:px-6 gap-4 bg-[#0f1115]">
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">

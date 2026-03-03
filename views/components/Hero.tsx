@@ -338,7 +338,7 @@ export default function Hero() {
         {toast && (
           <div className="fixed top-20 left-0 right-0 z-50 px-4 flex justify-center" role="status" aria-live="polite">
             <div className={`rounded-2xl px-4 py-3 text-sm font-medium text-white shadow-2xl border backdrop-blur-sm transition duration-500 ease-out ${
-              toast.type === 'error' ? 'bg-blue-500/25 border-blue-300/50' : 'bg-emerald-500/25 border-emerald-300/50'
+              toast.type === 'error' ? 'bg-blue-500/25 border-blue-300/50' : 'bg-[#32BB1D]/25 border-[#32BB1D]/50'
             }`}>
               {toast.message}
             </div>

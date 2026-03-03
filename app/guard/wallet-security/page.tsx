@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
 
@@ -10,7 +10,7 @@ import vectorIcon from "@/assets/icons/Vector.png";
 import shieldIcon from "@/assets/icons/Shield.png";
 
 const CHECK_ICON = (
-  <svg className="w-5 h-5 shrink-0 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+  <svg className="w-5 h-5 shrink-0" style={{ color: "#32BB1D" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
   </svg>
 );
@@ -120,6 +120,17 @@ export default function WalletSecurityPage() {
   const [selectedWallet, setSelectedWallet] = useState<typeof WALLETS[0] | null>(null);
   const [walletModalTab, setWalletModalTab] = useState<"details" | "balance" | "security" | "activity" | "contract">("details");
   const [selectedApprovalIndex, setSelectedApprovalIndex] = useState<number | null>(null);
+  const [rescanModalOpen, setRescanModalOpen] = useState(false);
+  const [rescanProgress, setRescanProgress] = useState(0);
+
+  useEffect(() => {
+    if (!rescanModalOpen) return;
+    setRescanProgress(0);
+    const interval = setInterval(() => {
+      setRescanProgress((p) => (p >= 100 ? 100 : p + 2));
+    }, 120);
+    return () => clearInterval(interval);
+  }, [rescanModalOpen]);
 
   const toggleControl = (id: string) => {
     setControls((prev) => prev.map((c) => (c.id === id ? { ...c, on: !c.on } : c)));
@@ -197,6 +208,7 @@ export default function WalletSecurityPage() {
             <p className="text-base text-slate-400">Last Scan: 2 hrs ago</p>
             <button
               type="button"
+              onClick={() => setRescanModalOpen(true)}
               className="rounded-lg bg-gradient-to-b from-[#4066FF] to-[#0026FF] hover:from-[#3355FF] hover:to-[#001fcc] text-white text-base font-medium px-6 py-3 transition shadow-[0_4px_12px_rgba(0,38,255,0.25)] ring-1 ring-inset ring-[#4066FF]/90 shrink-0"
             >
               Rescan
@@ -255,7 +267,7 @@ export default function WalletSecurityPage() {
                     <td className="py-4 px-5 font-mono text-slate-200 whitespace-nowrap min-w-[7rem]">{row.contract}</td>
                     <td className="py-4 px-5 whitespace-nowrap">{row.type}</td>
                     <td className="py-4 px-5 whitespace-nowrap">
-                      <span className={`font-medium ${row.risk === "Low" ? "text-emerald-400" : row.risk === "Medium" ? "text-amber-500" : "text-red-400"}`}>{row.risk}</span>
+                      <span className={`font-medium ${row.risk === "Low" ? "text-[#32BB1D]" : row.risk === "Medium" ? "text-amber-500" : "text-[#F00500]"}`}>{row.risk}</span>
                     </td>
                     <td className="py-4 px-5 text-slate-400 whitespace-nowrap">{row.date}</td>
                     <td className="py-4 px-5">
@@ -378,7 +390,7 @@ export default function WalletSecurityPage() {
                 <span className="text-sm font-medium text-white flex items-center gap-1">
                   {m.value}
                   {m.trend && (
-                    <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4" style={{ color: "#32BB1D" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
                     </svg>
                   )}
@@ -462,7 +474,7 @@ export default function WalletSecurityPage() {
                   </div>
                   <span
                     className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                      a.risk === "Low" ? "bg-emerald-500/20 text-emerald-400" : a.risk === "Medium" ? "bg-amber-500/20 text-amber-400" : "bg-red-500/20 text-red-400"
+                      a.risk === "Low" ? "bg-[#32BB1D]/20 text-[#32BB1D]" : a.risk === "Medium" ? "bg-amber-500/20 text-amber-400" : "bg-[#F00500]/20 text-[#F00500]"
                     }`}
                   >
                     {a.risk} Risk
@@ -503,6 +515,59 @@ export default function WalletSecurityPage() {
           </div>
         </div>
       </div>
+
+      {/* Rescan modal - portaled to body */}
+      {rescanModalOpen && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" style={{ top: 0, left: 0, right: 0, bottom: 0, minHeight: "100vh" }} onClick={() => setRescanModalOpen(false)}>
+          <div
+            className="w-full max-w-md rounded-2xl border border-slate-700/60 shadow-2xl overflow-hidden bg-[#1a1d24]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-5 pb-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-bold text-white">Rescan</h2>
+                <button
+                  type="button"
+                  onClick={() => setRescanModalOpen(false)}
+                  className="w-9 h-9 rounded-full flex items-center justify-center text-white bg-slate-700/80 hover:bg-slate-600/80 border border-slate-600/50 transition"
+                  aria-label="Close"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="h-2 rounded-full bg-slate-600/60 overflow-hidden mb-6">
+                <div
+                  className="h-full rounded-full bg-[#0026FF] transition-all duration-300 ease-out"
+                  style={{ width: `${Math.min(100, rescanProgress)}%` }}
+                />
+              </div>
+              <h3 className="text-xl font-bold text-white text-center mb-2">Scanning Your Wallet</h3>
+              <p className="text-sm text-slate-400 text-center mb-8">Analyzing permissions, activity, and hidden risks in real time.</p>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setRescanModalOpen(false)}
+                  className="flex-1 rounded-xl font-bold text-white py-3 px-4 transition border border-[#222222] shadow-[0_1px_2px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.06)] hover:opacity-90"
+                  style={{ background: "linear-gradient(to bottom, #4a4a4a 0%, #414141 50%, #383838 100%)" }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRescanModalOpen(false)}
+                  className="flex-1 rounded-xl font-medium text-white py-3 px-4 transition border border-[#001a99] shadow-[0_1px_2px_rgba(0,0,0,0.25),inset_0_1px_0_rgba(255,255,255,0.15)] hover:opacity-95"
+                  style={{ background: "linear-gradient(to bottom, #3366ff 0%, #0026FF 50%, #001fcc 100%)" }}
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {/* Wallet Details Modal - portaled to body for full viewport coverage */}
       {selectedWallet && typeof document !== "undefined" && createPortal(
@@ -707,7 +772,7 @@ export default function WalletSecurityPage() {
                   </div>
                   <div>
                     <label className="block text-xs text-slate-400 mb-1.5">Unknown DApp</label>
-                    <div className="rounded-lg bg-slate-800/80 border border-slate-700/60 px-3 py-2.5 text-sm font-bold text-red-500">
+                    <div className="rounded-lg bg-slate-800/80 border border-slate-700/60 px-3 py-2.5 text-sm font-bold" style={{ color: "#F00500" }}>
                       High Risk
                     </div>
                   </div>
@@ -741,7 +806,7 @@ export default function WalletSecurityPage() {
       {/* Approval Details Modal - portaled to body for full viewport coverage */}
       {selectedApprovalIndex !== null && typeof document !== "undefined" && createPortal((() => {
         const d = APPROVAL_DETAILS[selectedApprovalIndex] ?? APPROVAL_DETAILS[0];
-        const riskColor = d.riskLevel === "Low" ? "text-emerald-400" : d.riskLevel === "Medium" ? "text-amber-500" : "text-red-400";
+        const riskColor = d.riskLevel === "Low" ? "text-[#32BB1D]" : d.riskLevel === "Medium" ? "text-amber-500" : "text-[#F00500]";
         return (
           <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" style={{ top: 0, left: 0, right: 0, bottom: 0, minHeight: "100vh" }} onClick={() => setSelectedApprovalIndex(null)}>
             <div className="w-full max-w-lg rounded-2xl border border-slate-700/60 shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>

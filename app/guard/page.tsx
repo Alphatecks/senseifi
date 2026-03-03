@@ -1,6 +1,7 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import Image from "next/image";
 import localFont from "next/font/local";
 
@@ -24,6 +25,18 @@ const beVietnamPro = localFont({
 });
 
 export default function GuardDashboardPage() {
+  const [rescanModalOpen, setRescanModalOpen] = useState(false);
+  const [rescanProgress, setRescanProgress] = useState(0);
+
+  useEffect(() => {
+    if (!rescanModalOpen) return;
+    setRescanProgress(0);
+    const interval = setInterval(() => {
+      setRescanProgress((p) => (p >= 100 ? 100 : p + 2));
+    }, 120);
+    return () => clearInterval(interval);
+  }, [rescanModalOpen]);
+
   const liveActivityItems = [
     { icon: "check" as const, title: "Outgoing Transaction Detected", desc: "0.42 ETH sent to 0x913...a21" },
     { icon: "warn" as const, title: "Suspicious Approval Request", desc: "Unlimited token approval requested by unknown contact" },
@@ -89,7 +102,7 @@ export default function GuardDashboardPage() {
           </div>
           <div className="flex items-center justify-between mt-4 pt-4">
             <p className="text-sm text-slate-400">Last Scan: 2 hrs ago</p>
-            <button type="button" className="rounded-lg bg-gradient-to-b from-[#4066FF] to-[#0026FF] text-white text-sm font-medium px-5 py-2.5 transition">Run Full Scan</button>
+            <button type="button" onClick={() => setRescanModalOpen(true)} className="rounded-lg bg-gradient-to-b from-[#4066FF] to-[#0026FF] text-white text-sm font-medium px-5 py-2.5 transition">Run Full Scan</button>
           </div>
         </div>
 
@@ -145,7 +158,7 @@ export default function GuardDashboardPage() {
                     </div>
                   </div>
                   <p className="text-white font-normal text-lg mt-3">{w.balance}</p>
-                  <span className="inline-flex items-center gap-0.5 text-xs font-medium text-emerald-200 mt-1">
+                  <span className="inline-flex items-center gap-0.5 text-xs font-medium mt-1" style={{ color: "#32BB1D" }}>
                     <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M7 14l5-5 5 5z" /></svg>
                     {w.change}
                   </span>
@@ -168,7 +181,7 @@ export default function GuardDashboardPage() {
             {liveActivityItems.map((a) => (
               <li key={a.title} className="flex items-center gap-3 p-3 rounded-lg bg-slate-800/80 border border-slate-700/40">
                 {a.icon === "check" && (
-                  <span className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-emerald-500/20">
+                  <span className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-[#32BB1D]/20">
                     <Image src={frameCheckIcon} alt="" width={24} height={24} className="w-6 h-6 object-contain" />
                   </span>
                 )}
@@ -290,6 +303,7 @@ export default function GuardDashboardPage() {
                 <div className="flex-1 min-w-4" />
                 <button
                   type="button"
+                  onClick={() => setRescanModalOpen(true)}
                   className="rounded-lg bg-gradient-to-b from-[#4066FF] to-[#0026FF] hover:from-[#3355FF] hover:to-[#001fcc] text-white text-base font-medium px-6 py-3 transition shadow-[0_4px_12px_rgba(0,38,255,0.25)] ring-1 ring-inset ring-[#4066FF]/90 shrink-0"
                 >
                   Run Full Scan
@@ -360,7 +374,7 @@ export default function GuardDashboardPage() {
                       </div>
                     </div>
                     <p className="text-white font-bold text-xl mt-3">{w.balance}</p>
-                    <span className="inline-flex items-center gap-1 rounded-md px-2 py-1 mt-2 text-xs font-medium bg-emerald-500/30 text-emerald-200 border border-emerald-400/40">
+                    <span className="inline-flex items-center gap-1 rounded-md px-2 py-1 mt-2 text-xs font-medium border border-[#32BB1D]/40" style={{ backgroundColor: "rgba(50,187,29,0.2)", color: "#32BB1D" }}>
                       <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M7 14l5-5 5 5z" /></svg>
                       {w.change}
                     </span>
@@ -391,9 +405,9 @@ export default function GuardDashboardPage() {
               </div>
               <ul className="flex-1 flex flex-col justify-between min-h-0 overflow-auto">
                 {[
-                  { icon: "check", color: "text-emerald-500", title: "Outgoing Transaction Detected", desc: "0.42 ETH sent to 0x9f3...a21" },
+                  { icon: "check", color: "text-[#32BB1D]", title: "Outgoing Transaction Detected", desc: "0.42 ETH sent to 0x9f3...a21" },
                   { icon: "warn", color: "text-amber-500", title: "Suspicious Approval Request", desc: "Unlimited token approval requested by unknown contract", descIcon: true },
-                  { icon: "block", color: "text-red-500", title: "High-Risk Contract Interaction Blocked", desc: "Interaction prevented with flagged contract" },
+                  { icon: "block", color: "text-[#F00500]", title: "High-Risk Contract Interaction Blocked", desc: "Interaction prevented with flagged contract" },
                 ].map((a) => (
                   <li key={a.title} className="emboss-inset-3d-input flex items-center gap-3 p-3.5 rounded-lg bg-slate-800/80 border border-slate-700/40 hover:border-slate-600 transition">
                     {a.icon === "check" && (
@@ -514,6 +528,36 @@ export default function GuardDashboardPage() {
             </div>
           </div>
       </div>
+
+      {/* Rescan modal - same as wallet-security page */}
+      {rescanModalOpen && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" style={{ top: 0, left: 0, right: 0, bottom: 0, minHeight: "100vh" }} onClick={() => setRescanModalOpen(false)}>
+          <div className="w-full max-w-md rounded-2xl border border-slate-700/60 shadow-2xl overflow-hidden bg-[#1a1d24]" onClick={(e) => e.stopPropagation()}>
+            <div className="p-5 pb-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-bold text-white">Rescan</h2>
+                <button type="button" onClick={() => setRescanModalOpen(false)} className="w-9 h-9 rounded-full flex items-center justify-center text-white bg-slate-700/80 hover:bg-slate-600/80 border border-slate-600/50 transition" aria-label="Close">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              <div className="h-2 rounded-full bg-slate-600/60 overflow-hidden mb-6">
+                <div className="h-full rounded-full bg-[#0026FF] transition-all duration-300 ease-out" style={{ width: `${Math.min(100, rescanProgress)}%` }} />
+              </div>
+              <h3 className="text-xl font-bold text-white text-center mb-2">Scanning Your Wallet</h3>
+              <p className="text-sm text-slate-400 text-center mb-8">Analyzing permissions, activity, and hidden risks in real time.</p>
+              <div className="flex gap-3">
+                <button type="button" onClick={() => setRescanModalOpen(false)} className="flex-1 rounded-xl font-bold text-white py-3 px-4 transition border border-[#222222] shadow-[0_1px_2px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.06)] hover:opacity-90" style={{ background: "linear-gradient(to bottom, #4a4a4a 0%, #414141 50%, #383838 100%)" }}>
+                  Cancel
+                </button>
+                <button type="button" onClick={() => setRescanModalOpen(false)} className="flex-1 rounded-xl font-medium text-white py-3 px-4 transition border border-[#001a99] shadow-[0_1px_2px_rgba(0,0,0,0.25),inset_0_1px_0_rgba(255,255,255,0.15)] hover:opacity-95" style={{ background: "linear-gradient(to bottom, #3366ff 0%, #0026FF 50%, #001fcc 100%)" }}>
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
@@ -583,7 +627,7 @@ function UnreadAlertsCard({ mobile }: { mobile?: boolean }) {
       </div>
       <div className={`flex items-baseline gap-2 ${mobile ? "mt-1" : "mt-3"}`}>
         <span className={`text-white font-normal ${mobile ? "text-xl" : "text-4xl"}`}>6</span>
-        <span className={`inline-flex items-center gap-0.5 rounded font-medium bg-red-900/50 text-red-400 ${mobile ? "px-1.5 py-0.5 text-[10px]" : "px-2 py-0.5 text-sm"}`}>
+        <span className={`inline-flex items-center gap-0.5 rounded font-medium ${mobile ? "px-1.5 py-0.5 text-[10px]" : "px-2 py-0.5 text-sm"}`} style={{ backgroundColor: "rgba(240,5,0,0.2)", color: "#F00500" }}>
           <svg className={`rotate-180 ${mobile ? "w-2.5 h-2.5" : "w-3 h-3"}`} fill="currentColor" viewBox="0 0 24 24"><path d="M7 14l5-5 5 5z" /></svg>
           -2.3%
         </span>
@@ -660,7 +704,7 @@ function StatCard({
       </div>
       <p className="text-2xl font-semibold text-white mt-1">{value}</p>
       {change && (
-        <p className={`text-sm mt-0.5 ${positive ? "text-emerald-400" : "text-red-400"}`}>{change}</p>
+        <p className={`text-sm mt-0.5 ${positive ? "text-[#32BB1D]" : "text-[#F00500]"}`}>{change}</p>
       )}
       <p className="text-xs text-slate-500 mt-1">{label}</p>
       <button type="button" className="mt-auto pt-3 rounded-xl bg-[#2563EB] hover:bg-[#1d4ed8] text-white text-sm font-medium py-2 w-full transition">
