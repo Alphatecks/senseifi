@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=480, initial-scale=1" />
+  <title>SenseiFi Trade Insight</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1 class="logo">SenseiFi</h1>
+      <span class="badge">Trade insight</span>
+    </header>
+
+    <section class="cards">
+      <div class="card">
+        <span class="card-label">Active Extensions</span>
+        <span class="card-value">3</span>
+        <span class="card-change positive">+2.3%</span>
+        <span class="card-meta">This month</span>
+      </div>
+      <div class="card">
+        <span class="card-label">Contract Scanned</span>
+        <span class="card-value">12</span>
+        <span class="card-change positive">+2.3%</span>
+        <span class="card-meta">This month</span>
+      </div>
+      <div class="card">
+        <span class="card-label">Connected Wallet</span>
+        <span class="card-value">6</span>
+        <span class="card-meta">This month</span>
+      </div>
+      <div class="card">
+        <span class="card-label">Unread Alerts</span>
+        <span class="card-value">6</span>
+        <span class="card-change negative">−2.3%</span>
+        <span class="card-meta">This month</span>
+        <span class="card-warning">1 high risk</span>
+      </div>
+    </section>
+
+    <section class="trade-insight">
+      <div class="trade-header">
+        <h2 class="trade-title">
+          <svg class="icon-envelope" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7L2 6"/></svg>
+          Trade insight
+        </h2>
+        <div class="trade-toolbar">
+          <div class="search-wrap">
+            <svg class="icon-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+            <input type="text" class="search-input" placeholder="Search" />
+          </div>
+          <button type="button" class="btn-icon" aria-label="Filter">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>
+          </button>
+          <select class="select-days" aria-label="Time range">
+            <option value="7">7 days</option>
+            <option value="14">14 days</option>
+            <option value="30">30 days</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="insight-table">
+          <thead>
+            <tr>
+              <th>Wallet / dApp</th>
+              <th>Network</th>
+              <th>Activity Type</th>
+              <th>Risk Level</th>
+              <th>AI Insight Shown</th>
+              <th>Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="wallet-name">MetaMask Wallet</span><span class="network-tag">Ethereum</span></td>
+              <td>Ethereum</td>
+              <td>Contract Approval</td>
+              <td><span class="risk risk-high">High</span></td>
+              <td class="insight-cell">Approval matches known drain-pattern contracts interacting with flagged wallets.</td>
+              <td>2hr ago</td>
+            </tr>
+            <tr>
+              <td><span class="wallet-name">Trust Wallet</span><span class="network-tag">Binance Smart Chain</span></td>
+              <td>Binance Smart Chain</td>
+              <td>Token Transfer</td>
+              <td><span class="risk risk-medium">Medium</span></td>
+              <td class="insight-cell">Transfer to a wallet associated with a high-risk project.</td>
+              <td>1hr ago</td>
+            </tr>
+            <tr>
+              <td><span class="wallet-name">Coinbase Wallet</span><span class="network-tag">Ethereum</span></td>
+              <td>Ethereum</td>
+              <td>Withdrawal</td>
+              <td><span class="risk risk-critical">Critical</span></td>
+              <td class="insight-cell">Withdrawal to unverified addresses flagged for suspicious activity.</td>
+              <td>30min ago</td>
+            </tr>
+            <tr>
+              <td><span class="wallet-name">Ledger Wallet</span><span class="network-tag">Bitcoin</span></td>
+              <td>Bitcoin</td>
+              <td>Transaction Confirmation</td>
+              <td><span class="risk risk-medium">Medium</span></td>
+              <td class="insight-cell">Transaction confirmed on a blockchain with a history of hacks.</td>
+              <td>15min ago</td>
+            </tr>
+            <tr>
+              <td><span class="wallet-name">Exodus Wallet</span><span class="network-tag">Litecoin</span></td>
+              <td>Litecoin</td>
+              <td>Address Generation</td>
+              <td><span class="risk risk-high">High</span></td>
+              <td class="insight-cell">Generated addresses closely matching known scam patterns.</td>
+              <td>5min ago</td>
+            </tr>
+            <tr>
+              <td><span class="wallet-name">Atomic Wallet</span><span class="network-tag">Ripple</span></td>
+              <td>Ripple</td>
+              <td>Deposit Alert</td>
+              <td><span class="risk risk-critical">Critical</span></td>
+              <td class="insight-cell">High-value deposit to an account linked with fraudulent schemes.</td>
+              <td>10min ago</td>
+            </tr>
+            <tr>
+              <td><span class="wallet-name">MyEtherWallet</span><span class="network-tag">Ethereum Classic</span></td>
+              <td>Ethereum Classic</td>
+              <td>Smart Contract Interaction</td>
+              <td><span class="risk risk-high">High</span></td>
+              <td class="insight-cell">Interaction with a contract flagged for vulnerabilities.</td>
+              <td>1hr 30min</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

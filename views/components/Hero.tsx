@@ -373,7 +373,7 @@ export default function Hero() {
                 {/* Discord */}
                 <button
                   type="button"
-                  onClick={() => window.open('https://discord.gg/gW9hezfk', '_blank')}
+                  onClick={() => window.open('https://discord.gg/vk7hnScb4K', '_blank')}
                   className="w-full flex items-center justify-between rounded-lg bg-[#020617] hover:bg-[#020617]/80 px-4 py-3 md:px-5 md:py-3.5 transition emboss-internal-3d-dark"
                 >
                   <div className="flex items-center gap-3">

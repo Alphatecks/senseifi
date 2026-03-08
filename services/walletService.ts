@@ -23,6 +23,69 @@ export interface WalletResponse {
   is_active: boolean;
 }
 
+export interface DashboardUser {
+  user_id: string;
+  display_name: string;
+  user_number: number;
+  user_label: string;
+}
+
+export interface ConnectWalletResponse {
+  success: boolean;
+  data: WalletResponse;
+  dashboard_user: DashboardUser;
+}
+
+export interface WalletModalDetails {
+  provider: string;
+  wallet_address: string;
+  network: string;
+  connected_at: string;
+  wallet_type: string;
+  connected_via: string;
+  security_status: string;
+}
+
+export interface WalletModalAsset {
+  symbol: string;
+  name: string;
+  balance: string;
+  usd_value: number;
+  change_percent: number;
+}
+
+export interface WalletModalBalance {
+  total_usd: number;
+  native_balance_eth: number;
+  native_balance_wei: string;
+  assets: WalletModalAsset[];
+}
+
+export interface WalletModalSecurity {
+  two_fa: string | null;
+  active_approvals: number;
+  last_scan_at: string;
+  last_scan_ago: string;
+  threat_level: string;
+  risk_exposure_percent: number;
+}
+
+export interface WalletModalActivityItem {
+  id: string;
+  wallet_id: string;
+  activity_type: string;
+  title: string;
+  description: string | null;
+  created_at: string;
+}
+
+export interface WalletModalData {
+  details: WalletModalDetails;
+  balance: WalletModalBalance;
+  security: WalletModalSecurity;
+  activity: WalletModalActivityItem[];
+}
+
 // Create a wallet-specific API service instance with the correct base URL
 const WALLET_API_BASE_URL = process.env.NEXT_PUBLIC_WALLET_API_URL || 'https://senseifi-backend.onrender.com/api';
 const walletApiService = new ApiService(WALLET_API_BASE_URL);
@@ -32,8 +95,8 @@ export class WalletService {
     address: string,
     chainId: number,
     walletType: 'metamask' | 'coinbase'
-  ): Promise<WalletResponse> {
-    const response = await walletApiService.post<{ success: boolean; data: WalletResponse }>(
+  ): Promise<{ data: WalletResponse; dashboard_user: DashboardUser }> {
+    const response = await walletApiService.post<ConnectWalletResponse>(
       '/wallets/connect',
       {
         address,
@@ -46,7 +109,7 @@ export class WalletService {
       throw new Error('Failed to connect wallet');
     }
 
-    return response.data;
+    return { data: response.data, dashboard_user: response.dashboard_user };
   }
 
   async getWalletStatus(address: string): Promise<WalletStatusResponse> {
@@ -70,6 +133,17 @@ export class WalletService {
       throw new Error('Failed to get wallet');
     }
 
+    return response.data;
+  }
+
+  /** Wallet modal: details, balance, security, activity for Connected Wallet modal */
+  async getWalletModal(walletAddress: string): Promise<WalletModalData | null> {
+    if (!walletAddress?.trim()) return null;
+    const encoded = encodeURIComponent(walletAddress.trim());
+    const response = await walletApiService.get<{ success: boolean; data: WalletModalData }>(
+      `/wallets/${encoded}/modal`
+    );
+    if (!response.success || !response.data) return null;
     return response.data;
   }
 

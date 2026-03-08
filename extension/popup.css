@@ -1,0 +1,310 @@
+/* SenseiFi Trade Insight – Chrome extension popup (dark theme) */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #e2e8f0;
+  background: #0a0a1a;
+  min-width: 480px;
+  max-width: 480px;
+  min-height: 520px;
+  max-height: 600px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-font-smoothing: antialiased;
+}
+
+.container {
+  padding: 12px 14px 16px;
+}
+
+/* Header */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.logo {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.02em;
+}
+
+.badge {
+  font-size: 11px;
+  font-weight: 500;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Summary cards – 2x2 grid */
+.cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.card {
+  background: linear-gradient(145deg, #191d35 0%, #151829 100%);
+  border: 1px solid rgba(30, 41, 59, 0.8);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  position: relative;
+}
+
+.card-label {
+  font-size: 10px;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.card-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.card-change {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.card-change.positive {
+  color: #32bb1d;
+}
+
+.card-change.negative {
+  color: #f00500;
+}
+
+.card-meta {
+  font-size: 10px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.card-warning {
+  font-size: 10px;
+  color: #f59e0b;
+  font-weight: 600;
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.card-warning::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #f59e0b;
+}
+
+/* Trade insight section */
+.trade-insight {
+  background: #191d35;
+  border: 1px solid rgba(30, 41, 59, 0.8);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.trade-header {
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(51, 65, 85, 0.6);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.trade-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.icon-envelope {
+  width: 18px;
+  height: 18px;
+  color: #94a3b8;
+}
+
+.trade-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.search-wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #0f1220;
+  border: 1px solid rgba(51, 65, 85, 0.6);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.icon-search {
+  width: 16px;
+  height: 16px;
+  color: #64748b;
+  flex-shrink: 0;
+}
+
+.search-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: #e2e8f0;
+  font-size: 12px;
+  outline: none;
+}
+
+.search-input::placeholder {
+  color: #64748b;
+}
+
+.btn-icon {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #25283d;
+  border: 1px solid rgba(51, 65, 85, 0.6);
+  border-radius: 8px;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.btn-icon:hover {
+  color: #e2e8f0;
+  background: #2c2c34;
+}
+
+.btn-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.select-days {
+  padding: 8px 10px;
+  font-size: 12px;
+  color: #e2e8f0;
+  background: #25283d;
+  border: 1px solid rgba(51, 65, 85, 0.6);
+  border-radius: 8px;
+  cursor: pointer;
+  outline: none;
+}
+
+/* Table */
+.table-wrap {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: 320px;
+}
+
+.insight-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.insight-table th {
+  text-align: left;
+  padding: 10px 12px;
+  font-weight: 600;
+  color: #94a3b8;
+  background: #1e293b;
+  border-bottom: 1px solid rgba(51, 65, 85, 0.6);
+  white-space: nowrap;
+}
+
+.insight-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(51, 65, 85, 0.4);
+  color: #cbd5e1;
+  vertical-align: top;
+}
+
+.insight-table tbody tr:hover {
+  background: rgba(30, 41, 59, 0.5);
+}
+
+.wallet-name {
+  display: block;
+  font-weight: 600;
+  color: #fff;
+}
+
+.network-tag {
+  display: block;
+  font-size: 10px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.risk {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.risk-high {
+  color: #f00500;
+  background: rgba(240, 5, 0, 0.15);
+}
+
+.risk-medium {
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.15);
+}
+
+.risk-critical {
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.2);
+}
+
+.insight-cell {
+  max-width: 180px;
+  font-size: 10px;
+  color: #94a3b8;
+  line-height: 1.35;
+}
+
+.insight-table td:last-child {
+  color: #64748b;
+  white-space: nowrap;
+}

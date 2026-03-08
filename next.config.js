@@ -37,6 +37,38 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'cryptologos.cc',
       },
+      {
+        protocol: 'https',
+        hostname: 'raw.githubusercontent.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'cdn.jsdelivr.net',
+      },
+      {
+        protocol: 'https',
+        hostname: 'rabby.io',
+      },
+      {
+        protocol: 'https',
+        hostname: 'phantom.imgix.net',
+      },
+      {
+        protocol: 'https',
+        hostname: 'phantom.app',
+      },
+      {
+        protocol: 'https',
+        hostname: 'avatars.githubusercontent.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'brave.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'trustwallet.com',
+      },
     ],
   },
   webpack: (config, { isServer }) => {

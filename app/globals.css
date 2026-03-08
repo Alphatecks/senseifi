@@ -127,14 +127,14 @@
   animation: arc-rotate 8s linear infinite;
 }
 
-/* Wallet health speedometer: arc fill and needle sweep */
+/* Wallet health speedometer: arc fill and needle sweep (driven by --gauge-percent 0-100) */
 @keyframes gauge-arc-fill {
   from { stroke-dashoffset: 126; }
-  to { stroke-dashoffset: 28; }
+  to { stroke-dashoffset: calc(126 - (var(--gauge-percent, 78) / 100) * 126); }
 }
 @keyframes gauge-needle-sweep {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(50.4deg); }
+  from { transform: rotate(-90deg); }
+  to { transform: rotate(calc(-90deg + (var(--gauge-percent, 78) / 100) * 180deg)); }
 }
 .animate-gauge-arc-fill {
   stroke-dasharray: 126 126;

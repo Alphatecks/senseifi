@@ -3,7 +3,11 @@
 import React, { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useDashboardUser } from "@/context/DashboardUserContext";
+import { RescanModalProvider } from "@/context/RescanModalContext";
+import { useWallet } from "@/hooks/useWallet";
+import { getDashboardSummary } from "@/services/dashboardService";
 
 import chromeIcon from "@/assets/icons/chrome.png";
 import needHelpBackground from "@/assets/icons/Background.png";
@@ -16,7 +20,7 @@ const navItems = [
   { label: "Threat Intelligence", href: "/guard/threat-intelligence", icon: "shield-check" },
   { label: "Contract Scanner", href: "/guard/contract-scanner", icon: "document" },
   { label: "SenseiCard", href: "#", icon: "card" },
-  { label: "Chrome extension", href: "#", icon: "ext" },
+  { label: "Chrome extension", href: "/guard/chrome-extension", icon: "ext" },
   { label: "Settings", href: "#", icon: "settings" },
 ];
 
@@ -90,13 +94,43 @@ function NavIcon({ name, active }: { name: string; active?: boolean }) {
   return <span className={cls} />;
 }
 
+function formatBalance(totalAssetUsd: string | null | undefined): string {
+  if (totalAssetUsd == null || totalAssetUsd === "") return "—";
+  return totalAssetUsd.startsWith("$") ? totalAssetUsd : `$${totalAssetUsd}`;
+}
+
 export default function GuardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { address } = useWallet();
+  const { dashboardUser } = useDashboardUser();
+  const [totalAssetUsd, setTotalAssetUsd] = useState<string | null>(null);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
+
+  useEffect(() => {
+    if (!address) {
+      setTotalAssetUsd(null);
+      return;
+    }
+    getDashboardSummary(address).then((s) => setTotalAssetUsd(s?.total_asset_usd ?? null));
+  }, [address]);
   const notificationRef = useRef<HTMLDivElement>(null);
   const mobileNotificationRef = useRef<HTMLDivElement>(null);
   const mobileNotificationsPanelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setIsNavigating(false);
+  }, [pathname]);
+
+  const handleNavClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
+    if (href.startsWith("#")) return;
+    e.preventDefault();
+    setMobileNavOpen(false);
+    setIsNavigating(true);
+    router.push(href);
+  };
 
   useEffect(() => {
     if (!notificationsOpen) return;
@@ -111,9 +145,10 @@ export default function GuardLayout({ children }: { children: React.ReactNode })
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [notificationsOpen]);
 
-  const title = pathname === "/guard/wallet-security" ? "Wallet Security" : pathname === "/guard/contract-scanner" ? "Contract Scanner" : "Dashboard";
+  const title = pathname === "/guard/wallet-security" ? "Wallet Security" : pathname === "/guard/contract-scanner" ? "Contract Scanner" : pathname === "/guard/chrome-extension" ? "Chrome extension" : pathname === "/guard/activity-monitor" ? "Activity Monitor" : pathname === "/guard/threat-intelligence" ? "Threat Intelligence" : "Dashboard";
 
   return (
+    <RescanModalProvider>
     <div className="h-screen flex overflow-hidden bg-[#0a0a1a] text-white relative">
       <div className="dashboard-hack-bg fixed inset-0 pointer-events-none z-0" aria-hidden />
       {/* Mobile only: visible blockchain / crypto background animation */}
@@ -163,10 +198,12 @@ export default function GuardLayout({ children }: { children: React.ReactNode })
         <nav className="pt-6 pb-0 px-3 space-y-3 shrink-0">
           {navItems.map((item) => {
             const active = pathname === item.href;
+            const isHash = item.href.startsWith("#");
             return (
               <Link
                 key={item.label}
                 href={item.href}
+                onClick={(e) => !isHash && handleNavClick(e, item.href)}
                 className={`flex items-center gap-4 px-4 py-4 text-lg font-medium transition ${
                   active
                     ? "bg-slate-800/90 text-white border border-blue-500/40 shadow-[0_0_20px_rgba(37,99,235,0.18),inset_0_-4px_12px_rgba(67,56,202,0.4)] rounded-lg"
@@ -212,11 +249,12 @@ export default function GuardLayout({ children }: { children: React.ReactNode })
         <nav className="px-3 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
             const active = pathname === item.href;
+            const isHash = item.href.startsWith("#");
             return (
               <Link
                 key={item.label}
                 href={item.href}
-                onClick={() => setMobileNavOpen(false)}
+                onClick={(e) => !isHash && handleNavClick(e, item.href)}
                 className={`flex items-center gap-4 px-4 py-3 text-base font-medium transition rounded-lg ${active ? "bg-slate-800/90 text-white border border-blue-500/40" : "text-slate-400 hover:text-slate-300 hover:bg-slate-800/40"}`}
               >
                 <NavIcon name={item.icon} active={active} />
@@ -227,6 +265,12 @@ export default function GuardLayout({ children }: { children: React.ReactNode })
         </nav>
       </div>
       <div className={`lg:hidden fixed inset-0 z-40 bg-black/60 transition-opacity duration-150 ${mobileNavOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`} onClick={() => setMobileNavOpen(false)} aria-hidden={!mobileNavOpen} />
+      {/* Route change loading bar - instant feedback so one tap feels responsive */}
+      {isNavigating && (
+        <div className="fixed top-0 left-0 right-0 z-[100] h-0.5 bg-slate-800/90 overflow-hidden" aria-hidden>
+          <div className="h-full w-1/2 bg-[#4066FF] animate-pulse rounded-r" />
+        </div>
+      )}
       <main className="relative z-10 flex-1 flex flex-col min-w-0 min-h-0">
         {/* Mobile header - visible only below lg */}
         <header className="lg:hidden h-16 shrink-0 flex items-center justify-between px-4 bg-[#0a0a1a]">
@@ -341,7 +385,7 @@ export default function GuardLayout({ children }: { children: React.ReactNode })
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <button type="button" className="emboss-inset-3d-input flex items-center gap-2 rounded-lg bg-[#1a1d24] px-3 py-3 sm:px-4 sm:py-3.5 text-white text-sm font-medium hover:bg-[#1e2128] transition border border-slate-800/50">
               <Image src="/images/icons/wallet-header.png" alt="" width={24} height={24} className="w-5 h-5 sm:w-6 sm:h-6 opacity-80" />
-              <span className="hidden min-[400px]:inline">$450,000.43</span>
+              <span className="hidden min-[400px]:inline">{formatBalance(totalAssetUsd)}</span>
             </button>
             <button type="button" className="emboss-raised flex items-center justify-center w-10 h-11 sm:w-11 sm:h-12 rounded-lg bg-[#1a1d24] hover:bg-[#1e2128] transition shrink-0" aria-label="Network">
               <Image src="/images/icons/wifi-icon.png" alt="" width={22} height={22} className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -399,8 +443,8 @@ export default function GuardLayout({ children }: { children: React.ReactNode })
             <button type="button" className="emboss-inset-3d-input flex items-center gap-2 sm:gap-3 rounded-lg bg-[#1a1d24] pl-1.5 pr-2 sm:pl-2 sm:pr-3 py-3 sm:py-3.5 hover:bg-[#1e2128] transition shrink-0 border border-slate-800/50">
               <Image src="/images/icons/avatar-boy.png" alt="" width={36} height={36} className="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover shrink-0" />
               <div className="hidden sm:block text-left min-w-0">
-                <p className="text-sm font-medium text-white truncate">User 2314</p>
-                <p className="text-xs text-slate-500 truncate max-w-[100px]">fetrtwgebejhssnskey</p>
+                <p className="text-sm font-medium text-white truncate">{dashboardUser ? `User ${dashboardUser.user_number}` : "User"}</p>
+                <p className="text-xs text-slate-500 truncate max-w-[100px]">{dashboardUser?.display_name ?? "—"}</p>
               </div>
               <svg className="w-4 h-4 text-slate-500 shrink-0 hidden sm:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
             </button>
@@ -409,5 +453,6 @@ export default function GuardLayout({ children }: { children: React.ReactNode })
         <div className="flex-1 min-h-0 overflow-auto p-6">{children}</div>
       </main>
     </div>
+    </RescanModalProvider>
   );
 }

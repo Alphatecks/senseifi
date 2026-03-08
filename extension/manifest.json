@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "SenseiFi Trade Insight",
+  "version": "1.0.0",
+  "description": "Wallet and dApp activity insights with risk alerts",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "SenseiFi Trade Insight"
+  },
+  "permissions": []
+}

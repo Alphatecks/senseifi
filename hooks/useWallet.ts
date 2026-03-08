@@ -2,13 +2,22 @@
 
 import { useAccount, useConnect, useDisconnect, useChainId } from 'wagmi';
 import { walletService } from '../services/walletService';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useDashboardUser } from '@/context/DashboardUserContext';
 
 export function useWallet() {
-  const { address, isConnected } = useAccount();
+  const { setDashboardUser } = useDashboardUser();
+  const { address, isConnected, connector } = useAccount();
   const { connect, connectors, isPending } = useConnect();
   const { disconnect } = useDisconnect();
   const chainId = useChainId();
+
+  const walletType: 'metamask' | 'coinbase' = (() => {
+    const id = connector?.id ?? '';
+    const name = (connector?.name ?? '').toLowerCase();
+    if (id === 'coinbaseWalletSDK' || id === 'coinbaseWallet' || name.includes('coinbase')) return 'coinbase';
+    return 'metamask';
+  })();
   const [isRegistering, setIsRegistering] = useState(false);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
   const [registrationError, setRegistrationError] = useState<string | null>(null);
@@ -51,6 +60,7 @@ export function useWallet() {
           console.error('Failed to disconnect wallet from backend:', error);
         }
       }
+      setDashboardUser(null);
       disconnect();
     } finally {
       setIsDisconnecting(false);
@@ -66,7 +76,8 @@ export function useWallet() {
     setRegistrationError(null);
 
     try {
-      await walletService.connectWallet(address, chainId, walletType);
+      const { dashboard_user } = await walletService.connectWallet(address, chainId, walletType);
+      if (dashboard_user) setDashboardUser(dashboard_user);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to register wallet';
       setRegistrationError(errorMessage);
@@ -80,6 +91,7 @@ export function useWallet() {
     address,
     isConnected,
     chainId,
+    walletType,
     connectMetaMask,
     connectCoinbase,
     disconnectWallet,
