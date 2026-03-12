@@ -6,7 +6,7 @@ import Footer from '@/views/components/Footer';
 export default function WaitlistPage() {
   return (
     <main className="min-h-screen bg-[#0a0a1a]">
-      <Header />
+      <Header hideGetStarted />
       <Hero />
       <AppDownload />
       <Footer />
