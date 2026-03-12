@@ -4,6 +4,8 @@ import React, { useState } from "react";
 
 const CARD_STYLE = "rounded-2xl border p-5 flex flex-col shadow-sm";
 const CARD_BG = { backgroundColor: "#191D35", borderColor: "#191D35" };
+/** Dashboard overview stat card gradient (from guard page) */
+const STAT_CARD_CLASS = "rounded-xl flex flex-col bg-gradient-to-br from-blue-950 to-slate-900 p-5 min-h-[140px]";
 
 const TRADE_ROWS = [
   { wallet: "MetaMask Wallet", network: "Ethereum", activity: "Contract Approval", risk: "High" as const, insight: "Approval matches known drain-pattern contracts interacting with flagged wallets.", time: "2hr ago" },
@@ -23,54 +25,63 @@ export default function ChromeExtensionPage() {
     <div className="rounded-2xl bg-blue-950/25 border border-blue-900/40 p-6 space-y-6">
       {/* Summary cards — icon style matches wallet security (boxed w-9 h-9) */}
       <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className={`${CARD_STYLE}`} style={CARD_BG}>
+        <div className={STAT_CARD_CLASS}>
           <span className="text-xs text-slate-400 uppercase tracking-wide flex items-center gap-2">
             <span className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-slate-700/80 border border-slate-600/60 shrink-0">
               <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v1a2 2 0 01-2 2h-3a1 1 0 01-1-1v-4a1 1 0 00-1-1h-2a1 1 0 00-1 1v4a1 1 0 01-1 1H7a2 2 0 01-2-2v-1a1 1 0 00-1-1H4a2 2 0 010-4h1a1 1 0 001-1V7a1 1 0 011-1h3a2 2 0 012-2V4z" /></svg>
             </span>
             Active Extensions
           </span>
-          <div className="flex items-baseline gap-2 mt-1">
+          <div className="flex items-baseline gap-2 mt-3">
             <span className="text-2xl font-bold text-white">3</span>
-            <span className="text-sm font-semibold text-[#32BB1D]">+2.3%</span>
+            <span className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs font-medium bg-[#2F4F2F] text-[#A0E0A0]">
+              <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24"><path d="M7 14l5-5 5 5z" /></svg>
+              +2.3%
+            </span>
           </div>
-          <span className="text-xs text-slate-500 mt-1">This month</span>
+          <span className="text-sm text-slate-400 mt-auto pt-4">This month</span>
         </div>
-        <div className={`${CARD_STYLE}`} style={CARD_BG}>
+        <div className={STAT_CARD_CLASS}>
           <span className="text-xs text-slate-400 uppercase tracking-wide flex items-center gap-2">
             <span className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-slate-700/80 border border-slate-600/60 shrink-0">
               <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
             </span>
             Contract Scanned
           </span>
-          <div className="flex items-baseline gap-2 mt-1">
+          <div className="flex items-baseline gap-2 mt-3">
             <span className="text-2xl font-bold text-white">12</span>
-            <span className="text-sm font-semibold text-[#32BB1D]">+2.3%</span>
+            <span className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs font-medium bg-[#2F4F2F] text-[#A0E0A0]">
+              <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24"><path d="M7 14l5-5 5 5z" /></svg>
+              +2.3%
+            </span>
           </div>
-          <span className="text-xs text-slate-500 mt-1">This month</span>
+          <span className="text-sm text-slate-400 mt-auto pt-4">This month</span>
         </div>
-        <div className={`${CARD_STYLE}`} style={CARD_BG}>
+        <div className={STAT_CARD_CLASS}>
           <span className="text-xs text-slate-400 uppercase tracking-wide flex items-center gap-2">
             <span className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-slate-700/80 border border-slate-600/60 shrink-0">
               <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
             </span>
             Connected Wallet
           </span>
-          <span className="text-2xl font-bold text-white mt-1">6</span>
-          <span className="text-xs text-slate-500 mt-2">This month</span>
+          <span className="text-2xl font-bold text-white mt-3">6</span>
+          <span className="text-sm text-slate-400 mt-auto pt-4">This month</span>
         </div>
-        <div className={`${CARD_STYLE}`} style={CARD_BG}>
+        <div className={STAT_CARD_CLASS}>
           <span className="text-xs text-slate-400 uppercase tracking-wide flex items-center gap-2">
             <span className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-slate-700/80 border border-slate-600/60 shrink-0">
               <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
             </span>
             Unread Alerts
           </span>
-          <div className="flex items-baseline gap-2 mt-1">
+          <div className="flex items-baseline gap-2 mt-3">
             <span className="text-2xl font-bold text-white">6</span>
-            <span className="text-sm font-semibold text-[#F00500]">−2.3%</span>
+            <span className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs font-medium" style={{ backgroundColor: "rgba(240,5,0,0.2)", color: "#F00500" }}>
+              <svg className="w-2.5 h-2.5 rotate-180" fill="currentColor" viewBox="0 0 24 24"><path d="M7 14l5-5 5 5z" /></svg>
+              −2.3%
+            </span>
           </div>
-          <span className="text-xs text-slate-500 mt-1">This month</span>
+          <span className="text-sm text-slate-400 mt-1">This month</span>
           <span className="text-xs font-semibold text-amber-500 mt-2 flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-amber-500" aria-hidden />
             1 high risk

@@ -110,7 +110,6 @@ export default function Header({ hideGetStarted }: HeaderProps) {
               </span>
             )}
           </button>
-          {/* Get started button – commented out for waitlist page
           {!hideGetStarted && (
             <Link
               href="/connect-wallet"
@@ -119,7 +118,6 @@ export default function Header({ hideGetStarted }: HeaderProps) {
               Get started
             </Link>
           )}
-          */}
         </div>
       </nav>
 
@@ -156,7 +154,6 @@ export default function Header({ hideGetStarted }: HeaderProps) {
           ))}
         </ul>
 
-        {/* Get started button – commented out for waitlist page
         {!hideGetStarted && (
           <div className="mt-8">
             <Link
@@ -167,7 +164,6 @@ export default function Header({ hideGetStarted }: HeaderProps) {
             </Link>
           </div>
         )}
-        */}
       </div>
 
       {/* Mobile notifications panel – full screen when bell is tapped */}

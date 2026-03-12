@@ -106,6 +106,43 @@ export async function getThreatIntelligence(): Promise<ThreatIntelligenceItem[] 
   return data.data;
 }
 
+// --- Security Overview (Threat Intelligence) ---
+export interface SecurityOverviewData {
+  overall_risk: { risk_score: number; risk_level: string };
+  active_threats: { networks_affected: number; count: number };
+  scam_pattern_insights: {
+    period: string;
+    daily: Array<{ day: string; count: number }>;
+  };
+  scam_patterns: { status: string; detected_count: number };
+  reported_threats: { verified: number; detected: number };
+  live_scam_signals: Array<{
+    address: string;
+    threat_type: string;
+    detected_at: string;
+    risk_level: string;
+  }>;
+  ai_threat_explanation?: {
+    description: string;
+    risk_level: string;
+    view_summary_available: boolean;
+    reasons: string[];
+    signals: string[];
+  };
+}
+
+export async function getSecurityOverview(walletAddress: string): Promise<SecurityOverviewData | null> {
+  if (!walletAddress?.trim()) return null;
+  const params = new URLSearchParams({ wallet_address: walletAddress.trim() });
+  const { ok, status, data } = await dashboardFetch<{ success: boolean; data: SecurityOverviewData }>(
+    `/dashboard/security-overview?${params}`
+  );
+  if (status === 404 || !ok) return null;
+  const parsed = data as { success?: boolean; data?: SecurityOverviewData } | null;
+  if (parsed?.success && parsed.data) return parsed.data;
+  return null;
+}
+
 export async function getUnreadAlerts(address: string, limit: number = 20): Promise<UnreadAlertsData | null> {
   if (!address) return null;
   const params = new URLSearchParams({ limit: String(limit) });
@@ -246,6 +283,33 @@ export async function getTransactionMonitoring(address: string, page: number = 1
   if (status === 404) return null;
   if (!ok || !data?.success) return null;
   return { data: Array.isArray(data.data) ? data.data : [], pagination: data.pagination ?? { page: 1, per_page: perPage, total: 0 } };
+}
+
+// --- Risky Tokens ---
+export interface RiskyTokenItem {
+  id: string;
+  wallet_id: string;
+  severity: string;
+  title: string;
+  source_contract: string;
+  detected_at: string;
+  created_at: string;
+  threat_type: string;
+  surface: string;
+  explanation: string | null;
+  risk_breakdown: Record<string, unknown> | null;
+}
+
+export async function getRiskyTokens(walletAddress: string, limit: number = 20): Promise<RiskyTokenItem[]> {
+  if (!walletAddress?.trim()) return [];
+  const params = new URLSearchParams({ limit: String(limit) });
+  const { ok, data } = await dashboardFetch<{ success: boolean; data: RiskyTokenItem[] }>(
+    `/dashboard/${encodeURIComponent(walletAddress.trim())}/risky-tokens?${params}`
+  );
+  if (!ok || !data) return [];
+  const parsed = data as { success?: boolean; data?: RiskyTokenItem[] } | null;
+  const list = parsed?.data ?? (Array.isArray(data) ? data : []);
+  return Array.isArray(list) ? list : [];
 }
 
 // --- Analyze Transaction (Protection) ---

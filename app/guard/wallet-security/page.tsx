@@ -3,10 +3,10 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
-
 import { useWallet } from "@/hooks/useWallet";
-import { getDashboardSummary, getDashboardMetrics, getDashboardApprovals, getWalletsForAddress, getTransactionMonitoring, runFullScan, getScanContractDetails, scanContract, getProtectionSettings, updateProtectionSettings, setEmergencyLock, protectionSettingsToControls, getSecurityAlerts, getAddressSafety, analyzeTransaction } from "@/services/dashboardService";
-import type { DashboardSummaryData, DashboardMetricsData, DashboardApproval, WalletListItem, WalletsPagination, TransactionMonitoringItem, RunFullScanData, ScanContractResult, ScanContractDetailResponse, SecurityAlertItem, AddressSafetyItem, AnalyzeTransactionResponse } from "@/services/dashboardService";
+import { useConnectWalletsModal } from "@/context/ConnectWalletsModalContext";
+import { getDashboardSummary, getDashboardMetrics, getDashboardApprovals, getWalletsForAddress, getTransactionMonitoring, runFullScan, getScanContractDetails, scanContract, getProtectionSettings, updateProtectionSettings, setEmergencyLock, protectionSettingsToControls, getSecurityAlerts, getAddressSafety, analyzeTransaction, getRiskyTokens } from "@/services/dashboardService";
+import type { DashboardSummaryData, DashboardMetricsData, DashboardApproval, WalletListItem, WalletsPagination, TransactionMonitoringItem, RunFullScanData, ScanContractResult, ScanContractDetailResponse, SecurityAlertItem, AddressSafetyItem, AnalyzeTransactionResponse, RiskyTokenItem } from "@/services/dashboardService";
 import { walletService } from "@/services/walletService";
 import type { WalletModalData } from "@/services/walletService";
 
@@ -66,18 +66,6 @@ function getWalletLogoUrl(w: WalletListItem): string {
   const key = (w.provider || "").toLowerCase().trim();
   return PROVIDER_LOGOS[key] ?? WALLET_ICON;
 }
-
-/** Popular DEX / crypto wallets for "Connect other wallets" modal. Use <img referrerPolicy="no-referrer"> so external logos load. */
-const POPULAR_DEX_WALLETS = [
-  { name: "MetaMask", logo: "https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Fox.svg" },
-  { name: "Coinbase Wallet", logo: "https://images.ctfassets.net/q5ulk4bp65r7/3TBS4oVkD1ghowTqVQJlqj/2dfd4ea3b623a7c0d8deb2ff445dee9e/Consumer_Product_Wallet.svg" },
-  { name: "WalletConnect", logo: "https://cdn.jsdelivr.net/gh/WalletConnect/walletconnect-assets@master/Logo/Blue%20(Default)/Logo.svg" },
-  { name: "Rabby", logo: "https://rabby.io/assets/images/logo-128.png" },
-  { name: "Phantom", logo: "https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/phantom.svg" },
-  { name: "Trust Wallet", logo: "https://trustwallet.com/assets/images/media/assets/TWT.png" },
-  { name: "Rainbow", logo: "https://avatars.githubusercontent.com/u/31578401?s=200&v=4" },
-  { name: "Brave Wallet", logo: "https://brave.com/static-assets/images/brave-logo-sans-text.svg" },
-];
 
 const PROTECTION_CONTROLS = [
   { id: "auto-scan", label: "Auto Security Scan", on: true },
@@ -182,7 +170,7 @@ export default function WalletSecurityPage() {
   const [securityAlertsLoading, setSecurityAlertsLoading] = useState(false);
   const [addressSafety, setAddressSafety] = useState<AddressSafetyItem[] | null>(null);
   const [addressSafetyLoading, setAddressSafetyLoading] = useState(false);
-  const [connectOtherWalletsModalOpen, setConnectOtherWalletsModalOpen] = useState(false);
+  const connectWalletsModal = useConnectWalletsModal();
   const [analyzeTxModalOpen, setAnalyzeTxModalOpen] = useState(false);
   const [analyzeTxLoading, setAnalyzeTxLoading] = useState(false);
   const [analyzeTxResult, setAnalyzeTxResult] = useState<AnalyzeTransactionResponse | null>(null);
@@ -191,6 +179,9 @@ export default function WalletSecurityPage() {
   const [analyzeTxValue, setAnalyzeTxValue] = useState("");
   const [analyzeTxData, setAnalyzeTxData] = useState("");
   const [analyzeTxChainId, setAnalyzeTxChainId] = useState("");
+  const [riskyTokensModalOpen, setRiskyTokensModalOpen] = useState(false);
+  const [riskyTokensLoading, setRiskyTokensLoading] = useState(false);
+  const [riskyTokensList, setRiskyTokensList] = useState<RiskyTokenItem[] | null>(null);
 
   const openAnalyzeTxModal = () => {
     setAnalyzeTxResult(null);
@@ -200,6 +191,11 @@ export default function WalletSecurityPage() {
     setAnalyzeTxData("");
     setAnalyzeTxChainId("");
     setAnalyzeTxModalOpen(true);
+  };
+
+  const openRiskyTokensModal = () => {
+    setRiskyTokensList(null);
+    setRiskyTokensModalOpen(true);
   };
 
   const runAnalyzeTransaction = () => {
@@ -371,6 +367,15 @@ export default function WalletSecurityPage() {
   }, [address]);
 
   useEffect(() => {
+    if (!riskyTokensModalOpen || !address?.trim()) return;
+    setRiskyTokensLoading(true);
+    setRiskyTokensList(null);
+    getRiskyTokens(address, 20)
+      .then((list) => setRiskyTokensList(list))
+      .finally(() => setRiskyTokensLoading(false));
+  }, [riskyTokensModalOpen, address]);
+
+  useEffect(() => {
     if (!selectedWallet?.address) {
       setWalletModalData(null);
       return;
@@ -521,7 +526,7 @@ export default function WalletSecurityPage() {
         <div className="grid grid-cols-2 gap-4">
           <MetricCard icon={<Image src={alertIcon} alt="" width={28} height={28} className="w-7 h-7 shrink-0 object-contain" />} title="Malicious Transaction" value={metricsLoading ? "—" : (metrics ? String(metrics.malicious_transaction.value) : "0")} change={metrics ? formatMetricChange(metrics.malicious_transaction.change_percent) : "—"} titleClassName="text-lg font-semibold" action={<button type="button" onClick={openAnalyzeTxModal} className="rounded bg-gradient-to-b from-[#4066FF] to-[#0026FF] text-white font-medium transition text-sm px-4 py-2.5">Analyze transaction</button>} />
           <MetricCard icon={<Image src={scanIcon} alt="" width={28} height={28} className="w-7 h-7 shrink-0 object-contain" />} title="Phishing Indicators" value={metricsLoading ? "—" : (metrics ? String(metrics.phishing_indicators.value) : "0")} change={metrics ? formatMetricChange(metrics.phishing_indicators.change_percent) : "—"} titleClassName="text-lg font-semibold" />
-          <MetricCard icon={WARN_ICON} title="Risky Tokens" value={metricsLoading ? "—" : (metrics ? String(metrics.risky_tokens.value) : "0")} change={metrics ? formatMetricChange(metrics.risky_tokens.change_percent) : "—"} titleClassName="text-lg font-semibold" />
+          <MetricCard icon={WARN_ICON} title="Risky Tokens" value={metricsLoading ? "—" : (metrics ? String(metrics.risky_tokens.value) : "0")} change={metrics ? formatMetricChange(metrics.risky_tokens.change_percent) : "—"} titleClassName="text-lg font-semibold" action={<button type="button" onClick={openRiskyTokensModal} className="rounded bg-gradient-to-b from-[#4066FF] to-[#0026FF] text-white font-medium transition text-sm px-4 py-2.5">View risky tokens</button>} />
           <MetricCard icon={SHIELD_ICON} title="Active Threat level" value={metricsLoading ? "—" : (metrics ? String(metrics.active_threat_level.value) : "Low")} change={metrics ? formatMetricChange(metrics.active_threat_level.change_percent) : "—"} titleClassName="text-lg font-semibold" />
         </div>
       </div>
@@ -647,7 +652,7 @@ export default function WalletSecurityPage() {
           </ul>
           <button
             type="button"
-            onClick={() => setConnectOtherWalletsModalOpen(true)}
+            onClick={() => connectWalletsModal?.openConnectWalletsModal()}
             className="mt-4 w-full rounded-lg bg-gradient-to-b from-[#4066FF] to-[#0026FF] hover:from-[#3355FF] hover:to-[#001fcc] text-white text-sm font-medium py-3 transition shrink-0"
           >
             Connect other wallets
@@ -1416,46 +1421,6 @@ export default function WalletSecurityPage() {
         document.body
       )}
 
-      {/* Connect other wallets modal - popular DEX wallets */}
-      {connectOtherWalletsModalOpen && typeof document !== "undefined" && createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" style={{ top: 0, left: 0, right: 0, bottom: 0, minHeight: "100vh" }} onClick={() => setConnectOtherWalletsModalOpen(false)}>
-          <div className="w-full max-w-md rounded-2xl border border-slate-700/60 shadow-2xl overflow-hidden bg-[#1A1E2E]" onClick={(e) => e.stopPropagation()}>
-            <div className="bg-[#2D2F3C] px-5 py-4 flex items-center justify-between">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center bg-slate-700/80 border border-slate-600/50 text-white">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
-                </span>
-                <h2 className="text-lg font-bold text-white truncate">Connect other wallets</h2>
-              </div>
-              <button type="button" onClick={() => setConnectOtherWalletsModalOpen(false)} className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-white bg-slate-700/80 hover:bg-slate-600/80 border border-slate-600/50 transition" aria-label="Close">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
-            </div>
-            <div className="p-4 max-h-[60vh] overflow-y-auto hide-scrollbar space-y-2">
-              {POPULAR_DEX_WALLETS.map((wallet) => (
-                <button
-                  key={wallet.name}
-                  type="button"
-                  className="w-full rounded-lg p-3 flex items-center gap-3 bg-[#262938]/90 border border-slate-700/40 hover:border-slate-600/60 hover:bg-[#262938] transition text-left"
-                >
-                  <span className="w-10 h-10 rounded-lg bg-white flex items-center justify-center p-1.5 shrink-0 overflow-hidden">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={wallet.logo} alt="" width={32} height={32} className="w-8 h-8 object-contain" referrerPolicy="no-referrer" />
-                  </span>
-                  <span className="text-white font-medium text-sm">{wallet.name}</span>
-                </button>
-              ))}
-            </div>
-            <div className="p-5 border-t border-slate-700/50">
-              <button type="button" onClick={() => setConnectOtherWalletsModalOpen(false)} className="w-full rounded-xl font-bold text-white py-3 px-4 transition hover:opacity-90" style={{ background: "linear-gradient(to bottom, #4a4a4a 0%, #414141 50%, #383838 100%)" }}>
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
-
       {/* Analyze Transaction modal - uses POST /protection/transaction/analyze (env base URL) */}
       {analyzeTxModalOpen && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" style={{ top: 0, left: 0, right: 0, bottom: 0, minHeight: "100vh" }} onClick={() => setAnalyzeTxModalOpen(false)}>
@@ -1516,6 +1481,49 @@ export default function WalletSecurityPage() {
                   {analyzeTxLoading ? "Analyzing…" : "Analyze"}
                 </button>
               )}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Risky tokens modal */}
+      {riskyTokensModalOpen && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" style={{ top: 0, left: 0, right: 0, bottom: 0, minHeight: "100vh" }} onClick={() => setRiskyTokensModalOpen(false)}>
+          <div className="w-full max-w-lg rounded-2xl border border-slate-700/60 shadow-2xl overflow-hidden bg-[#1A1E2E]" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-[#2D2F3C] px-5 py-4 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-white">Risky tokens</h2>
+              <button type="button" onClick={() => setRiskyTokensModalOpen(false)} className="w-9 h-9 rounded-full flex items-center justify-center text-white bg-slate-700/80 hover:bg-slate-600/80 border border-slate-600/50 transition" aria-label="Close">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <div className="p-5 max-h-[70vh] overflow-y-auto">
+              {!address ? (
+                <p className="text-slate-400 text-sm">Connect your wallet to view risky tokens.</p>
+              ) : riskyTokensLoading ? (
+                <p className="text-slate-400 text-sm">Loading…</p>
+              ) : !riskyTokensList?.length ? (
+                <p className="text-slate-400 text-sm">No risky tokens detected.</p>
+              ) : (
+                <ul className="space-y-3">
+                  {riskyTokensList.map((item) => (
+                    <li key={item.id} className="rounded-lg border border-slate-600/50 bg-slate-800/40 p-4 text-sm">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="font-medium text-white">{item.title}</p>
+                        <span className={`shrink-0 capitalize px-2 py-0.5 rounded text-xs font-medium ${item.severity === "high" ? "bg-red-500/20 text-red-400" : item.severity === "medium" ? "bg-amber-500/20 text-amber-400" : "bg-slate-600/60 text-slate-300"}`}>{item.severity}</span>
+                      </div>
+                      {item.source_contract && <p className="mt-1.5 font-mono text-slate-400 text-xs break-all">{item.source_contract}</p>}
+                      {item.explanation && <p className="mt-2 text-slate-400 text-xs">{item.explanation}</p>}
+                      <p className="mt-2 text-slate-500 text-xs">{formatApprovalDate(item.detected_at)}</p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div className="p-5 border-t border-slate-700/50">
+              <button type="button" onClick={() => setRiskyTokensModalOpen(false)} className="w-full rounded-xl font-bold text-white py-3 px-4 transition hover:opacity-90" style={{ background: "linear-gradient(to bottom, #4a4a4a 0%, #414141 50%, #383838 100%)" }}>
+                Close
+              </button>
             </div>
           </div>
         </div>,

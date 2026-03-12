@@ -1,7 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Image from "next/image";
+
+import { useWallet } from "@/hooks/useWallet";
+import { getSecurityOverview } from "@/services/dashboardService";
+import type { SecurityOverviewData } from "@/services/dashboardService";
 
 import alertIcon from "@/assets/icons/alert.png";
 import scanIcon from "@/assets/icons/scan.png";
@@ -17,6 +21,15 @@ const ENVELOPE_ICON = (
   </span>
 );
 
+/** Overall Risk – shield / risk gauge */
+const RISK_ICON = (
+  <span className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-slate-700/80 border border-slate-600/60 shrink-0">
+    <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+    </svg>
+  </span>
+);
+
 const ALERT_ICON = (
   <span className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-slate-700/80 border border-slate-600/60 shrink-0">
     <Image src={alertIcon} alt="" width={20} height={20} className="w-5 h-5 object-contain opacity-90" />
@@ -26,6 +39,24 @@ const ALERT_ICON = (
 const SCAN_ICON = (
   <span className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-slate-700/80 border border-slate-600/60 shrink-0">
     <Image src={scanIcon} alt="" width={20} height={20} className="w-5 h-5 object-contain opacity-90" />
+  </span>
+);
+
+/** Scam Patterns – document/magnify */
+const SCAM_PATTERN_ICON = (
+  <span className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-slate-700/80 border border-slate-600/60 shrink-0">
+    <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    </svg>
+  </span>
+);
+
+/** Reported Threats – flag / report */
+const REPORTED_ICON = (
+  <span className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-slate-700/80 border border-slate-600/60 shrink-0">
+    <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9" />
+    </svg>
   </span>
 );
 
@@ -60,8 +91,6 @@ const RISK_CLASS: Record<string, string> = {
   Medium: "text-amber-500",
 };
 
-const SCAM_FREQUENCY_DATA = [60, 220, 280, 100, 260, 80, 140];
-const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const CHART_W = 280;
 const CHART_H = 100;
 
@@ -82,38 +111,52 @@ function smoothCurvePath(points: Array<{ x: number; y: number }>, tension: numbe
   return path.join(" ");
 }
 
-function scamChartPath(): string {
-  const xs = DAYS.map((_, i) => (i / (DAYS.length - 1)) * CHART_W);
-  const max = 300;
-  const points = SCAM_FREQUENCY_DATA.map((y, i) => ({
-    x: xs[i],
-    y: CHART_H - (y / max) * CHART_H,
-  }));
-  return smoothCurvePath(points);
-}
-
-function scamChartAreaPath(): string {
-  const xs = DAYS.map((_, i) => (i / (DAYS.length - 1)) * CHART_W);
-  const max = 300;
-  const points = SCAM_FREQUENCY_DATA.map((y, i) => ({
-    x: xs[i],
-    y: CHART_H - (y / max) * CHART_H,
-  }));
-  const curvePath = smoothCurvePath(points);
-  return `${curvePath} L ${CHART_W},${CHART_H} L 0,${CHART_H} Z`;
+function chartPathFromDaily(daily: Array<{ day: string; count: number }>): { path: string; areaPath: string; dayLabels: string[]; values: number[] } {
+  const values = daily.length ? daily.map((d) => d.count) : [0];
+  const dayLabels = daily.length ? daily.map((d) => new Date(d.day).toLocaleDateString("en-US", { weekday: "short" })) : ["—"];
+  const max = Math.max(1, ...values);
+  const n = values.length;
+  const xs = n > 1 ? values.map((_, i) => (i / (n - 1)) * CHART_W) : [0];
+  const points = values.map((y, i) => ({ x: xs[i], y: CHART_H - (y / max) * CHART_H }));
+  const path = smoothCurvePath(points);
+  const basePath = path || `M 0,${CHART_H}`;
+  const areaPath = `${basePath} L ${CHART_W},${CHART_H} L 0,${CHART_H} Z`;
+  return { path: basePath, areaPath, dayLabels, values };
 }
 
 export default function ThreatIntelligencePage() {
+  const { address } = useWallet();
+  const [mounted, setMounted] = useState(false);
+  const [securityOverview, setSecurityOverview] = useState<SecurityOverviewData | null>(null);
+  const [securityOverviewLoading, setSecurityOverviewLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [riskFilter, setRiskFilter] = useState("Low");
   const [page, setPage] = useState(12);
   const totalPages = 78;
-  const [highlightDayIndex, setHighlightDayIndex] = useState(2); // which day shows the blue highlight (0–6)
+  const [highlightDayIndex, setHighlightDayIndex] = useState(0);
   const [summaryModalOpen, setSummaryModalOpen] = useState(false);
 
-  const highlightX = (highlightDayIndex / (DAYS.length - 1)) * CHART_W;
-  const highlightY = CHART_H - (SCAM_FREQUENCY_DATA[highlightDayIndex] / 300) * CHART_H;
-  const highlightValue = `$${Number(SCAM_FREQUENCY_DATA[highlightDayIndex]).toFixed(2)}`;
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted || !address?.trim()) {
+      setSecurityOverview(null);
+      return;
+    }
+    setSecurityOverviewLoading(true);
+    getSecurityOverview(address)
+      .then(setSecurityOverview)
+      .finally(() => setSecurityOverviewLoading(false));
+  }, [mounted, address]);
+
+  const daily = securityOverview?.scam_pattern_insights?.daily ?? [];
+  const chartData = chartPathFromDaily(daily);
+  const safeHighlightIndex = Math.min(highlightDayIndex, Math.max(0, chartData.values.length - 1));
+  const highlightX = chartData.values.length > 1 ? (safeHighlightIndex / (chartData.values.length - 1)) * CHART_W : 0;
+  const highlightY = chartData.values.length ? CHART_H - (chartData.values[safeHighlightIndex] / Math.max(1, ...chartData.values)) * CHART_H : CHART_H;
+  const highlightValue = chartData.values.length ? String(chartData.values[safeHighlightIndex]) : "0";
 
   return (
     <div className="rounded-2xl bg-blue-950/25 border border-blue-900/40 p-6 space-y-6">
@@ -124,15 +167,15 @@ export default function ThreatIntelligencePage() {
           <div className={`${CARD_STYLE} min-h-[200px] flex flex-col`} style={CARD_BG}>
             <div className="flex items-center justify-between gap-3 mb-3">
               <div className="flex items-center gap-2">
-                {ENVELOPE_ICON}
+                {RISK_ICON}
                 <h2 className="text-lg font-medium text-slate-200 whitespace-nowrap">Overall Risk</h2>
               </div>
-              <span className="rounded-lg px-3 py-1.5 text-sm font-medium text-orange-400 shrink-0 whitespace-nowrap bg-slate-700/70 border border-slate-600/50">Elevated</span>
+              <span className="rounded-lg px-3 py-1.5 text-sm font-medium text-orange-400 shrink-0 whitespace-nowrap bg-slate-700/70 border border-slate-600/50">{securityOverviewLoading ? "—" : (securityOverview?.overall_risk?.risk_level ?? "—")}</span>
             </div>
             <div className="mt-auto">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-4xl font-normal text-slate-200">68/<span className="text-2xl">100</span></span>
+                  <span className="text-4xl font-normal text-slate-200">{securityOverviewLoading ? "—" : `${securityOverview?.overall_risk?.risk_score ?? "—"}/`}<span className="text-2xl">100</span></span>
                   <p className="text-sm text-slate-500 self-end pb-1">Risk Score</p>
                 </div>
                 <div className="w-[28%] min-w-[70px] h-11 shrink-0 self-center">
@@ -148,13 +191,13 @@ export default function ThreatIntelligencePage() {
                 {ALERT_ICON}
                 <h2 className="text-lg font-medium text-slate-200 whitespace-nowrap">Active Threats</h2>
               </div>
-              <span className="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-300 bg-slate-700/70 border border-slate-600/50 shrink-0 whitespace-nowrap">Networks Affected: 2</span>
+              <span className="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-300 bg-slate-700/70 border border-slate-600/50 shrink-0 whitespace-nowrap">Networks Affected: {securityOverviewLoading ? "—" : (securityOverview?.active_threats?.networks_affected ?? "—")}</span>
             </div>
             <div className="mt-auto">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-4xl font-normal text-slate-200">3</span>
-                  <p className="text-sm text-slate-500 self-end pb-1">Currently Detected:</p>
+                  <span className="text-4xl font-normal text-slate-200">{securityOverviewLoading ? "—" : (securityOverview?.active_threats?.count ?? "—")}</span>
+                  <p className="text-sm text-slate-500 self-end pb-1">Currently Detected</p>
                 </div>
                 <div className="w-[28%] min-w-[70px] h-11 shrink-0 self-center">
                   {MINI_CHART}
@@ -166,15 +209,15 @@ export default function ThreatIntelligencePage() {
           <div className={`${CARD_STYLE} min-h-[200px] flex flex-col`} style={CARD_BG}>
             <div className="flex items-center justify-between gap-3 mb-3">
               <div className="flex items-center gap-2">
-                {ENVELOPE_ICON}
+                {SCAM_PATTERN_ICON}
                 <h2 className="text-lg font-medium text-slate-200 whitespace-nowrap">Scam Patterns</h2>
               </div>
-              <span className="rounded-lg px-3 py-1.5 text-sm font-medium shrink-0 whitespace-nowrap bg-slate-700/70 border border-slate-600/50" style={{ color: "#32BB1D" }}>High</span>
+              <span className="rounded-lg px-3 py-1.5 text-sm font-medium shrink-0 whitespace-nowrap bg-slate-700/70 border border-slate-600/50" style={{ color: "#32BB1D" }}>{securityOverviewLoading ? "—" : (securityOverview?.scam_patterns?.status ?? "—")}</span>
             </div>
             <div className="mt-auto">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-4xl font-normal text-slate-200">4</span>
+                  <span className="text-4xl font-normal text-slate-200">{securityOverviewLoading ? "—" : (securityOverview?.scam_patterns?.detected_count ?? "—")}</span>
                   <p className="text-sm text-slate-500 self-end pb-1">Detected Patterns</p>
                 </div>
                 <div className="w-[28%] min-w-[70px] h-11 shrink-0 self-center">
@@ -187,16 +230,16 @@ export default function ThreatIntelligencePage() {
           <div className={`${CARD_STYLE} min-h-[200px] flex flex-col`} style={CARD_BG}>
             <div className="flex items-center justify-between gap-3 mb-3">
               <div className="flex items-center gap-2">
-                {ALERT_ICON}
+                {REPORTED_ICON}
                 <h2 className="text-lg font-medium text-slate-200 whitespace-nowrap">Reported Threats</h2>
               </div>
-              <span className="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-300 bg-slate-700/70 border border-slate-600/50 shrink-0 whitespace-nowrap">4 Verified</span>
+              <span className="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-300 bg-slate-700/70 border border-slate-600/50 shrink-0 whitespace-nowrap">{securityOverviewLoading ? "—" : `${securityOverview?.reported_threats?.verified ?? "—"} Verified`}</span>
             </div>
             <div className="mt-auto">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-4xl font-normal text-slate-200">7</span>
-                  <p className="text-sm text-slate-500 self-end pb-1">Currently Detected:</p>
+                  <span className="text-4xl font-normal text-slate-200">{securityOverviewLoading ? "—" : ((securityOverview?.reported_threats?.verified ?? 0) + (securityOverview?.reported_threats?.detected ?? 0))}</span>
+                  <p className="text-sm text-slate-500 self-end pb-1">Currently Detected</p>
                 </div>
                 <div className="w-[28%] min-w-[70px] h-11 shrink-0 self-center">
                   {MINI_CHART}
@@ -213,7 +256,7 @@ export default function ThreatIntelligencePage() {
               <h2 className="text-lg font-medium text-slate-200">AI Threat Explanation</h2>
             </div>
             <p className="text-base text-slate-400 leading-relaxed flex-1">
-              SenseiGuard uses AI to analyze transaction patterns, contract behavior, and community reports to identify potential threats. Risk levels are updated in real time based on verified reports and on-chain activity.
+              {securityOverviewLoading ? "—" : (securityOverview?.ai_threat_explanation?.description ?? "SenseiGuard uses AI to analyze transaction patterns, contract behavior, and community reports to identify potential threats. Risk levels are updated in real time based on verified reports and on-chain activity.")}
             </p>
             <div className="mt-4 flex items-center justify-between gap-4 flex-wrap">
               <div
@@ -225,7 +268,7 @@ export default function ThreatIntelligencePage() {
                   border: "1px solid rgba(0,0,0,0.15)",
                 }}
               >
-                Risk Level: Elevated
+                Risk Level: {securityOverviewLoading ? "—" : (securityOverview?.ai_threat_explanation?.risk_level ?? securityOverview?.overall_risk?.risk_level ?? "—")}
               </div>
               <button
                 type="button"
@@ -245,16 +288,14 @@ export default function ThreatIntelligencePage() {
               {SCAN_ICON}
               <h2 className="text-lg font-medium text-slate-200">Scam Pattern Insights</h2>
             </div>
-            <span className="text-sm text-slate-500">Last 7 days</span>
+            <span className="text-sm text-slate-500">{securityOverview?.scam_pattern_insights?.period?.replace(/_/g, " ") ?? "Last 7 days"}</span>
           </div>
           <div className="flex-1 min-h-[220px] flex flex-col xl:min-h-0">
             <p className="text-base font-medium text-slate-400 mb-2">Scam Frequency</p>
             <div className="relative flex-1 min-h-[180px] flex gap-2 items-stretch mt-6 overflow-visible" style={{ maxHeight: 260 }}>
               {/* Y-axis labels */}
               <div className="flex flex-col justify-between py-0.5 text-slate-400 text-xs font-medium shrink-0 w-8">
-                <span>300</span>
-                <span>200</span>
-                <span>100</span>
+                <span>{chartData.values.length ? Math.max(1, ...chartData.values) : 1}</span>
                 <span>0</span>
               </div>
               <div className="flex-1 min-w-0 relative overflow-visible">
@@ -271,8 +312,8 @@ export default function ThreatIntelligencePage() {
                     strokeWidth="0.8"
                   />
                 ))}
-                <path fill="rgba(64,102,255,0.2)" d={scamChartAreaPath()} />
-                <path fill="none" stroke="#4066FF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d={scamChartPath()} />
+                <path fill="rgba(64,102,255,0.2)" d={chartData.areaPath} />
+                <path fill="none" stroke="#4066FF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d={chartData.path} />
                 {/* Dynamic highlight: vertical line + dot (tooltip is HTML overlay below) */}
                 <line x1={highlightX} y1={highlightY} x2={highlightX} y2={CHART_H} stroke="#0026FF" strokeWidth="1" strokeDasharray="2 2" />
               </svg>
@@ -300,16 +341,11 @@ export default function ThreatIntelligencePage() {
             <div className="flex gap-2 mt-2 items-center">
               <div className="w-8 shrink-0" aria-hidden />
               <div className="flex justify-between text-sm text-slate-500 w-[92%] min-w-0 tracking-tight">
-                {DAYS.map((d, i) => (
-                  <button
-                    key={d}
-                    type="button"
-                    onClick={() => setHighlightDayIndex(i)}
-                    className={`shrink-0 transition ${highlightDayIndex === i ? "text-[#0026FF] font-semibold" : "text-slate-500 hover:text-slate-300"}`}
-                  >
+                {chartData.dayLabels.length ? chartData.dayLabels.map((d, i) => (
+                  <button key={`${d}-${i}`} type="button" onClick={() => setHighlightDayIndex(i)} className={`shrink-0 transition ${highlightDayIndex === i ? "text-[#0026FF] font-semibold" : "text-slate-500 hover:text-slate-300"}`}>
                     {d}
                   </button>
-                ))}
+                )) : <span>—</span>}
               </div>
             </div>
           </div>
@@ -320,30 +356,28 @@ export default function ThreatIntelligencePage() {
               <button type="button" className="text-sm font-medium text-white hover:underline">View all</button>
             </div>
             <ul className="space-y-3">
-              <li className="rounded-xl p-4 bg-[#25283D] border border-slate-700/50">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex flex-col gap-0.5 min-w-0">
-                    <p className="text-base font-semibold text-white" style={{ fontFamily: "'Satoshi', sans-serif" }}>0xA34...92F</p>
-                    <p className="text-sm text-slate-400">Phishing</p>
-                  </div>
-                  <div className="flex flex-col items-end gap-0.5 shrink-0">
-                    <span className="text-sm text-slate-400" style={{ fontFamily: "'Satoshi', sans-serif" }}>14:35</span>
-                    <span className="text-sm font-bold text-[#F00500]">High Risk</span>
-                  </div>
-                </div>
-              </li>
-              <li className="rounded-xl p-4 bg-[#25283D] border border-slate-700/50">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex flex-col gap-0.5 min-w-0">
-                    <p className="text-base font-semibold text-white" style={{ fontFamily: "'Satoshi', sans-serif" }}>0xB12...47A</p>
-                    <p className="text-sm text-slate-400">Malware</p>
-                  </div>
-                  <div className="flex flex-col items-end gap-0.5 shrink-0">
-                    <span className="text-sm text-slate-400" style={{ fontFamily: "'Satoshi', sans-serif" }}>09:12</span>
-                    <span className="text-sm font-bold text-[#F00500]">Critical</span>
-                  </div>
-                </div>
-              </li>
+              {!mounted || !address ? (
+                <li className="rounded-xl p-4 bg-[#25283D] border border-slate-700/50 text-slate-500 text-sm">Connect your wallet to see live scam signals.</li>
+              ) : securityOverviewLoading || securityOverview === null ? (
+                <li className="rounded-xl p-4 bg-[#25283D] border border-slate-700/50 text-slate-500 text-sm">Loading…</li>
+              ) : !securityOverview.live_scam_signals?.length ? (
+                <li className="rounded-xl p-4 bg-[#25283D] border border-slate-700/50 text-slate-500 text-sm">No live scam signals.</li>
+              ) : (
+                securityOverview.live_scam_signals.map((signal, i) => (
+                  <li key={`${signal.address}-${i}`} className="rounded-xl p-4 bg-[#25283D] border border-slate-700/50">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex flex-col gap-0.5 min-w-0">
+                        <p className="text-base font-semibold text-white" style={{ fontFamily: "'Satoshi', sans-serif" }}>{signal.address}</p>
+                        <p className="text-sm text-slate-400">{signal.threat_type}</p>
+                      </div>
+                      <div className="flex flex-col items-end gap-0.5 shrink-0">
+                        <span className="text-sm text-slate-400" style={{ fontFamily: "'Satoshi', sans-serif" }}>{signal.detected_at}</span>
+                        <span className="text-sm font-bold text-[#F00500]">{signal.risk_level}</span>
+                      </div>
+                    </div>
+                  </li>
+                ))
+              )}
             </ul>
           </div>
         </div>
@@ -457,11 +491,22 @@ export default function ThreatIntelligencePage() {
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
-            {/* Body - same bg as wallet modal, title white / body text slate-400 */}
+            {/* Body - reasons from api ai_threat_explanation */}
             <div className="p-5" style={{ backgroundColor: "#191b28" }}>
               <p className="text-base font-medium text-white mb-3">AI-Detected Scam-Like Behavior Summary</p>
+              {securityOverview?.ai_threat_explanation?.description && (
+                <p className="text-sm text-slate-400 mb-4">{securityOverview.ai_threat_explanation.description}</p>
+              )}
               <div className="rounded-lg p-4 pl-5 mb-6 text-sm text-slate-400 font-normal leading-relaxed text-left border border-slate-700/60 border-l-4" style={{ backgroundColor: "#25283D", borderLeftColor: "#0026FF" }}>
-                SenseiGuard&apos;s AI has identified behavior patterns in this wallet that closely resemble known scam activity. These signals are derived from repeated transaction behavior over time, not from a single action or isolated interaction. The analysis shows recurring interactions with wallets previously flagged for malicious activity, alongside transaction patterns commonly associated with fund-draining schemes. These include coordinated transfers, abnormal approval usage, and timing patterns that mirror historical scam playbooks. While no confirmed exploit has occurred yet, the behavioral similarity increases the risk profile of the wallet. SenseiGuard classifies this as a pattern-based risk signal, meaning continued monitoring is strongly advised. Users are encouraged to review active approvals, limit exposure, and enable alerts to respond quickly if the behavior escalates. This assessment is preventive, not accusatory, and is designed to help users act before losses occur.
+                {securityOverview?.ai_threat_explanation?.reasons?.length ? (
+                  <ul className="space-y-2 list-disc list-inside">
+                    {securityOverview.ai_threat_explanation.reasons.map((reason, i) => (
+                      <li key={i}>{reason}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p>No reasons available. Review your wallet activity and approvals.</p>
+                )}
               </div>
               <div className="flex gap-4 justify-center w-full">
                 <button

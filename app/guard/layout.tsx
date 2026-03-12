@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useDashboardUser } from "@/context/DashboardUserContext";
 import { RescanModalProvider } from "@/context/RescanModalContext";
+import { ConnectWalletsModalProvider } from "@/context/ConnectWalletsModalContext";
 import { useWallet } from "@/hooks/useWallet";
 import { getDashboardSummary } from "@/services/dashboardService";
 
@@ -21,7 +22,7 @@ const navItems = [
   { label: "Contract Scanner", href: "/guard/contract-scanner", icon: "document" },
   { label: "SenseiCard", href: "#", icon: "card" },
   { label: "Chrome extension", href: "/guard/chrome-extension", icon: "ext" },
-  { label: "Settings", href: "#", icon: "settings" },
+  { label: "Settings", href: "/guard/settings", icon: "settings" },
 ];
 
 const NOTIFICATIONS = [
@@ -145,10 +146,11 @@ export default function GuardLayout({ children }: { children: React.ReactNode })
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [notificationsOpen]);
 
-  const title = pathname === "/guard/wallet-security" ? "Wallet Security" : pathname === "/guard/contract-scanner" ? "Contract Scanner" : pathname === "/guard/chrome-extension" ? "Chrome extension" : pathname === "/guard/activity-monitor" ? "Activity Monitor" : pathname === "/guard/threat-intelligence" ? "Threat Intelligence" : "Dashboard";
+  const title = pathname === "/guard/wallet-security" ? "Wallet Security" : pathname === "/guard/contract-scanner" ? "Contract Scanner" : pathname === "/guard/chrome-extension" ? "Chrome extension" : pathname === "/guard/activity-monitor" ? "Activity Monitor" : pathname === "/guard/threat-intelligence" ? "Threat Intelligence" : pathname === "/guard/settings" ? "Settings" : "Dashboard";
 
   return (
     <RescanModalProvider>
+    <ConnectWalletsModalProvider>
     <div className="h-screen flex overflow-hidden bg-[#0a0a1a] text-white relative">
       <div className="dashboard-hack-bg fixed inset-0 pointer-events-none z-0" aria-hidden />
       {/* Mobile only: visible blockchain / crypto background animation */}
@@ -450,9 +452,10 @@ export default function GuardLayout({ children }: { children: React.ReactNode })
             </button>
           </div>
         </header>
-        <div className="flex-1 min-h-0 overflow-auto p-6">{children}</div>
+        <div className={`flex-1 min-h-0 overflow-auto p-6 ${["/guard", "/guard/wallet-security", "/guard/activity-monitor", "/guard/threat-intelligence", "/guard/contract-scanner", "/guard/settings"].includes(pathname) ? "hide-scrollbar" : ""}`}>{children}</div>
       </main>
     </div>
+    </ConnectWalletsModalProvider>
     </RescanModalProvider>
   );
 }

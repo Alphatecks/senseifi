@@ -85,7 +85,8 @@ const SCAN_HISTORY_PAGE_SIZE = 5;
 export default function ContractScannerPage() {
   const { address } = useWallet();
   const [contractLink, setContractLink] = useState("");
-  const [chainId, setChainId] = useState(1);
+  const [chainIdInput, setChainIdInput] = useState("");
+  const [lastScanChainId, setLastScanChainId] = useState<number>(1);
   const [scanLoading, setScanLoading] = useState(false);
   const [currentScan, setCurrentScan] = useState<ScanContractResult | null>(null);
   const [scanDetails, setScanDetails] = useState<ScanContractDetailResponse | null>(null);
@@ -120,17 +121,23 @@ export default function ContractScannerPage() {
     getContractCommunitySignals(contractAddress).then(setCommunitySignals);
   }, []);
 
+  const chainIdParsed = chainIdInput.trim() === "" ? null : parseInt(chainIdInput.trim(), 10);
+  const chainIdValid = chainIdParsed != null && !Number.isNaN(chainIdParsed) && chainIdParsed > 0;
+  const scanDisabled = scanLoading || !contractLink.trim() || !chainIdValid;
+
   const handleScan = () => {
     const addr = contractLink.trim();
-    if (!addr) return;
+    const cid = chainIdValid ? chainIdParsed! : 1;
+    if (!addr || !cid) return;
     setScanLoading(true);
+    setLastScanChainId(cid);
     setCurrentScan(null);
     setScanDetails(null);
     setScamPattern(null);
     setActivity(null);
     setLiquidity(null);
     setCommunitySignals(null);
-    scanContract(addr, address ?? undefined, chainId)
+    scanContract(addr, address ?? undefined, cid)
       .then((result) => {
         setCurrentScan(result ?? null);
         if (result?.scan_id && result?.contract_address) {
@@ -179,7 +186,8 @@ export default function ContractScannerPage() {
       ].filter((r) => r.value > 0)
     : [];
   const maxRiskVal = Math.max(10, ...riskDistributionList.map((r) => r.value));
-  const networkName = CHAIN_ID_TO_NETWORK[chainId] ?? "Ethereum Mainnet";
+  const chainIdForDisplay = currentScan ? lastScanChainId : (chainIdValid ? chainIdParsed! : 1);
+  const networkName = CHAIN_ID_TO_NETWORK[chainIdForDisplay] ?? (chainIdForDisplay ? `Chain ${chainIdForDisplay}` : "—");
 
   return (
     <div className="rounded-2xl bg-blue-950/25 border border-blue-900/40 p-6 space-y-6">
@@ -192,25 +200,38 @@ export default function ContractScannerPage() {
               {ENVELOPE_ICON}
               <h2 className="text-lg font-medium text-white">Contract Scanner</h2>
             </div>
-            <div className="mb-4">
-              <label className="block text-sm text-slate-400 mb-2">Smart Contract Link</label>
-              <div className="relative flex items-stretch rounded-lg border focus-within:ring-1 focus-within:ring-slate-500 emboss-inset-3d-input" style={{ borderColor: "#25283D", backgroundColor: "#25283D" }}>
+            <div className="mb-3">
+              <label className="block text-sm text-slate-400 mb-2">Smart Contract Address</label>
+              <div className="rounded-lg border focus-within:ring-1 focus-within:ring-slate-500 emboss-inset-3d-input" style={{ borderColor: "#25283D", backgroundColor: "#25283D" }}>
                 <input
                   type="text"
-                  placeholder="Enter Smart Contract Link"
+                  placeholder="Enter contract address (0x…)"
                   value={contractLink}
                   onChange={(e) => setContractLink(e.target.value)}
-                  className="flex-1 min-w-0 rounded-l-lg bg-transparent text-white text-sm pl-3 py-3 focus:outline-none placeholder:text-slate-500 border-0"
+                  className="w-full rounded-lg bg-transparent text-white text-sm pl-3 py-3 focus:outline-none placeholder:text-slate-500 border-0"
                 />
-                <button
-                  type="button"
-                  onClick={handleScan}
-                  disabled={scanLoading || !contractLink.trim()}
-                  className="rounded-r-lg bg-gradient-to-b from-[#4066FF] to-[#0026FF] hover:from-[#3355FF] hover:to-[#001fcc] disabled:opacity-60 text-white text-sm font-medium px-5 py-3 transition shrink-0 border-0"
-                >
-                  {scanLoading ? "Scanning…" : "Scan"}
-                </button>
               </div>
+            </div>
+            <div className="mb-4">
+              <label className="block text-sm text-slate-400 mb-2">Chain ID</label>
+              <div className="rounded-lg border focus-within:ring-1 focus-within:ring-slate-500 emboss-inset-3d-input" style={{ borderColor: "#25283D", backgroundColor: "#25283D" }}>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="e.g. 1 (Ethereum)"
+                  value={chainIdInput}
+                  onChange={(e) => setChainIdInput(e.target.value)}
+                  className="w-full rounded-lg bg-transparent text-white text-sm pl-3 py-3 focus:outline-none placeholder:text-slate-500 border-0"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleScan}
+                disabled={scanDisabled}
+                className="mt-3 w-full rounded-lg bg-gradient-to-b from-[#4066FF] to-[#0026FF] hover:from-[#3355FF] hover:to-[#001fcc] disabled:opacity-60 text-white text-sm font-medium py-3 transition"
+              >
+                {scanLoading ? "Scanning…" : "Scan"}
+              </button>
             </div>
             {currentScan && (
               <div className="rounded-lg border p-5 space-y-0 text-sm min-h-[200px]" style={{ ...INNER_BG, backgroundColor: "#0d1029" }}>
