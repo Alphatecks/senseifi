@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
 import { useWallet } from "@/hooks/useWallet";
-import { useConnectWalletsModal } from "@/context/ConnectWalletsModalContext";
+import { useConnectNetworksModal } from "@/context/ConnectWalletsModalContext";
 import { getDashboardSummary, getDashboardMetrics, getDashboardApprovals, getWalletsForAddress, getTransactionMonitoring, runFullScan, getScanContractDetails, scanContract, getProtectionSettings, updateProtectionSettings, setEmergencyLock, protectionSettingsToControls, getSecurityAlerts, getAddressSafety, analyzeTransaction, getRiskyTokens } from "@/services/dashboardService";
 import type { DashboardSummaryData, DashboardMetricsData, DashboardApproval, WalletListItem, WalletsPagination, TransactionMonitoringItem, RunFullScanData, ScanContractResult, ScanContractDetailResponse, SecurityAlertItem, AddressSafetyItem, AnalyzeTransactionResponse, RiskyTokenItem } from "@/services/dashboardService";
 import { walletService } from "@/services/walletService";
@@ -111,6 +111,25 @@ function formatApprovalDate(iso: string): string {
   return d.toLocaleDateString();
 }
 
+function formatApprovalDateShort(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  const now = Date.now();
+  const diffMs = now - d.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHrs = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+  if (diffMins < 60) return `${diffMins}min`;
+  if (diffHrs < 24) return `${diffHrs}hr${diffHrs !== 1 ? "s" : ""}`;
+  if (diffDays < 30) return `${diffDays}day${diffDays !== 1 ? "s" : ""}`;
+  return d.toLocaleDateString();
+}
+
+function truncateAddress(addr: string, start = 5, end = 4): string {
+  if (!addr || addr.length <= start + end) return addr;
+  return `${addr.slice(0, start)}...${addr.slice(-end)}`;
+}
+
 function capitalize(s: string): string {
   if (!s) return s;
   return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
@@ -170,7 +189,7 @@ export default function WalletSecurityPage() {
   const [securityAlertsLoading, setSecurityAlertsLoading] = useState(false);
   const [addressSafety, setAddressSafety] = useState<AddressSafetyItem[] | null>(null);
   const [addressSafetyLoading, setAddressSafetyLoading] = useState(false);
-  const connectWalletsModal = useConnectWalletsModal();
+  const connectNetworksModal = useConnectNetworksModal();
   const [analyzeTxModalOpen, setAnalyzeTxModalOpen] = useState(false);
   const [analyzeTxLoading, setAnalyzeTxLoading] = useState(false);
   const [analyzeTxResult, setAnalyzeTxResult] = useState<AnalyzeTransactionResponse | null>(null);
@@ -443,11 +462,51 @@ export default function WalletSecurityPage() {
   };
 
   return (
-    <div className="rounded-2xl bg-blue-950/25 border border-blue-900/40 p-6 space-y-6">
+    <div className="rounded-none lg:rounded-2xl bg-transparent lg:bg-blue-950/25 border-0 lg:border border-blue-900/40 p-6 space-y-6">
       {/* Top row: Security Status + 4 metric cards */}
       <div className="grid grid-cols-1 lg:grid-cols-[auto_1fr] gap-4">
-        {/* Security Status */}
-        <div className="rounded-2xl bg-gradient-to-br from-blue-950 to-slate-900 border border-slate-700/80 p-5 flex flex-col shadow-[inset_1px_1px_0_0_rgba(255,255,255,0.06)] lg:max-w-lg">
+        {/* Security Status - mobile: match dashboard UI */}
+        <div className="lg:hidden -mx-6 w-[calc(100%+3rem)] rounded-2xl bg-gradient-to-br from-blue-950 to-slate-900 border border-slate-700/80 p-5 flex flex-col shadow-[inset_1px_1px_0_0_rgba(255,255,255,0.06)]">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Image src={vectorIcon} alt="" width={20} height={20} className="w-5 h-5 opacity-90" />
+              <h2 className="text-base font-semibold text-white">Security Status</h2>
+            </div>
+          </div>
+          <div className="flex gap-4">
+            <div className="relative w-32 h-32 shrink-0 rounded-full gauge-emboss-inset">
+              <svg className="w-full h-full -rotate-90 absolute inset-0" viewBox="0 0 36 36">
+                <defs>
+                  <radialGradient id="wsMobileProgressGrad" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
+                    <stop offset="0%" stopColor="#4066FF" />
+                    <stop offset="100%" stopColor="#0026FF" />
+                  </radialGradient>
+                  <filter id="wsMobileArcGlow" x="-50%" y="-50%" width="200%" height="200%">
+                    <feGaussianBlur in="SourceGraphic" stdDeviation="1.8" result="blur" />
+                    <feMerge>
+                      <feMergeNode in="blur" />
+                      <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                  </filter>
+                </defs>
+                <path fill="none" stroke="currentColor" strokeWidth="3.5" className="text-slate-700" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                <path fill="none" stroke="url(#wsMobileProgressGrad)" strokeWidth="3.5" strokeDasharray={`${summary?.security_status?.score ?? 0}, 100`} strokeLinecap="round" filter="url(#wsMobileArcGlow)" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+              </svg>
+              <span className="absolute inset-0 flex items-center justify-center text-2xl font-bold text-white">{summaryLoading || summary?.security_status?.score == null ? "—" : `${summary.security_status.score}%`}</span>
+            </div>
+            <div className="flex-1 min-w-0 flex flex-col justify-center">
+              <p className="text-sm text-slate-300">Status: <span className="inline-flex items-center px-3 py-1 rounded-lg bg-[#0026FF] text-white font-medium text-xs capitalize">{summary?.security_status?.status ?? "—"}</span></p>
+              <p className="text-xs text-slate-400 mt-2 leading-snug">{summary?.security_status?.message ?? ""}</p>
+            </div>
+          </div>
+          <div className="flex items-center justify-between mt-4 pt-4">
+            <p className="text-sm text-slate-400">Last Scan: {formatLastScan(summary?.security_status?.last_scan_at ?? null)}</p>
+            <button type="button" onClick={() => setRescanModalOpen(true)} className="rounded-lg bg-gradient-to-b from-[#4066FF] to-[#0026FF] text-white text-sm font-medium px-5 py-2.5 transition">Rescan</button>
+          </div>
+        </div>
+
+        {/* Security Status - desktop */}
+        <div className="hidden lg:flex rounded-2xl bg-gradient-to-br from-blue-950 to-slate-900 border border-slate-700/80 p-5 flex-col shadow-[inset_1px_1px_0_0_rgba(255,255,255,0.06)] max-w-lg">
           <div className="flex items-center gap-2 mb-4">
             {SECURITY_STATUS_ICON}
             <h2 className="text-lg font-semibold text-white">Security Status</h2>
@@ -522,8 +581,15 @@ export default function WalletSecurityPage() {
           </div>
         </div>
 
-        {/* Four metric cards */}
-        <div className="grid grid-cols-2 gap-4">
+        {/* Four metric cards - mobile: same alignment as dashboard 4-card grid */}
+        <div className="lg:hidden grid grid-cols-2 gap-3 -mx-6 w-[calc(100%+3rem)]">
+          <MetricCard mobile icon={<Image src={alertIcon} alt="" width={28} height={28} className="w-7 h-7 shrink-0 object-contain" />} title="Malicious Transaction" value={metricsLoading ? "—" : (metrics ? String(metrics.malicious_transaction.value) : "0")} change={metrics ? formatMetricChange(metrics.malicious_transaction.change_percent) : "—"} titleClassName="text-lg font-semibold" action={<button type="button" onClick={openAnalyzeTxModal} className="rounded bg-gradient-to-b from-[#4066FF] to-[#0026FF] text-white font-medium transition">Analyze transaction</button>} />
+          <MetricCard mobile icon={<Image src={scanIcon} alt="" width={28} height={28} className="w-7 h-7 shrink-0 object-contain" />} title="Phishing Indicators" value={metricsLoading ? "—" : (metrics ? String(metrics.phishing_indicators.value) : "0")} change={metrics ? formatMetricChange(metrics.phishing_indicators.change_percent) : "—"} titleClassName="text-lg font-semibold" />
+          <MetricCard mobile icon={WARN_ICON} title="Risky Tokens" value={metricsLoading ? "—" : (metrics ? String(metrics.risky_tokens.value) : "0")} change={metrics ? formatMetricChange(metrics.risky_tokens.change_percent) : "—"} titleClassName="text-lg font-semibold" action={<button type="button" onClick={openRiskyTokensModal} className="rounded bg-gradient-to-b from-[#4066FF] to-[#0026FF] text-white font-medium transition">View risky tokens</button>} />
+          <MetricCard mobile icon={SHIELD_ICON} title="Active Threat level" value={metricsLoading ? "—" : (metrics ? String(metrics.active_threat_level.value) : "Low")} change={metrics ? formatMetricChange(metrics.active_threat_level.change_percent) : "—"} titleClassName="text-lg font-semibold" />
+        </div>
+        {/* Four metric cards - desktop */}
+        <div className="hidden lg:grid grid-cols-2 gap-4">
           <MetricCard icon={<Image src={alertIcon} alt="" width={28} height={28} className="w-7 h-7 shrink-0 object-contain" />} title="Malicious Transaction" value={metricsLoading ? "—" : (metrics ? String(metrics.malicious_transaction.value) : "0")} change={metrics ? formatMetricChange(metrics.malicious_transaction.change_percent) : "—"} titleClassName="text-lg font-semibold" action={<button type="button" onClick={openAnalyzeTxModal} className="rounded bg-gradient-to-b from-[#4066FF] to-[#0026FF] text-white font-medium transition text-sm px-4 py-2.5">Analyze transaction</button>} />
           <MetricCard icon={<Image src={scanIcon} alt="" width={28} height={28} className="w-7 h-7 shrink-0 object-contain" />} title="Phishing Indicators" value={metricsLoading ? "—" : (metrics ? String(metrics.phishing_indicators.value) : "0")} change={metrics ? formatMetricChange(metrics.phishing_indicators.change_percent) : "—"} titleClassName="text-lg font-semibold" />
           <MetricCard icon={WARN_ICON} title="Risky Tokens" value={metricsLoading ? "—" : (metrics ? String(metrics.risky_tokens.value) : "0")} change={metrics ? formatMetricChange(metrics.risky_tokens.change_percent) : "—"} titleClassName="text-lg font-semibold" action={<button type="button" onClick={openRiskyTokensModal} className="rounded bg-gradient-to-b from-[#4066FF] to-[#0026FF] text-white font-medium transition text-sm px-4 py-2.5">View risky tokens</button>} />
@@ -531,10 +597,60 @@ export default function WalletSecurityPage() {
         </div>
       </div>
 
-      {/* Bottom row: Approval & Permission, Connected Wallet, Transaction monitoring */}
+      {/* Bottom row: Approval & Permission, Connected networks, Transaction monitoring */}
       <div className="grid grid-cols-1 xl:grid-cols-[1.4fr_1fr_1fr] gap-4">
-        {/* Approval & Permission */}
-        <div className="rounded-2xl border p-5 flex flex-col min-h-[320px] shadow-sm" style={{ backgroundColor: "#191D35", borderColor: "#191D35" }}>
+        {/* Approval & Permission - mobile: list layout matching reference */}
+        <div className="xl:hidden -mx-6 w-[calc(100%+3rem)] rounded-2xl border border-transparent flex flex-col min-h-[200px] p-5" style={{ backgroundColor: "#191D35" }}>
+          <div className="flex items-center justify-between gap-2 mb-4">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-slate-700/80 border border-slate-600/60 shrink-0 overflow-hidden p-1">
+                <Image src={vectorIcon} alt="" width={14} height={14} className="w-3.5 h-3.5 object-contain" />
+              </span>
+              <h2 className="text-sm font-semibold text-white truncate">Approval & Permission</h2>
+            </div>
+            <div className="relative flex items-center shrink-0">
+              <select value={approvalPeriod} onChange={(e) => setApprovalPeriod(e.target.value)} className="rounded-lg border text-white text-xs font-medium pl-2.5 pr-7 py-2 appearance-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-slate-500 min-w-0 whitespace-nowrap" style={{ backgroundColor: "#25283D", borderColor: "#25283D" }}>
+                <option value="this_month">This month</option>
+                <option value="last_month">Last month</option>
+                <option value="last_3_months">Last 3 months</option>
+              </select>
+              <svg className="absolute right-2 w-3.5 h-3.5 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+          </div>
+          <div className="flex-1 min-h-0 overflow-y-auto space-y-3">
+            {approvalsLoading ? (
+              <p className="py-6 text-center text-slate-400 text-sm">Loading…</p>
+            ) : !approvals || approvals.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 px-4">
+                <p className="text-slate-400 text-sm font-medium">No approvals in this period</p>
+                <p className="text-slate-500 text-xs mt-1 text-center">Token approvals will appear here when detected</p>
+              </div>
+            ) : (
+              approvals.map((row, i) => (
+                <button
+                  key={row.id}
+                  type="button"
+                  onClick={() => setSelectedApprovalIndex(i)}
+                  className="w-full flex items-center justify-between gap-4 py-3 px-0 text-left rounded-lg transition-colors hover:bg-slate-800/50 active:bg-slate-800/70"
+                >
+                  <div className="min-w-0 flex flex-col items-start gap-0.5">
+                    <span className="font-mono text-sm font-medium text-white truncate max-w-[180px]">{truncateAddress(row.contract_address)}</span>
+                    <span className="text-xs text-white/90">{capitalize(row.approval_type)}</span>
+                  </div>
+                  <div className="flex flex-col items-end gap-0.5 shrink-0">
+                    <span className={`text-sm font-medium ${capitalize(row.risk_level) === "Low" ? "text-[#32BB1D]" : capitalize(row.risk_level) === "Medium" ? "text-amber-500" : "text-[#F00500]"}`}>{capitalize(row.risk_level)}</span>
+                    <span className="text-xs text-white/80 whitespace-nowrap">{formatApprovalDateShort(row.detected_at)}</span>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Approval & Permission - desktop: table */}
+        <div className="hidden xl:flex rounded-2xl border p-5 flex-col min-h-[320px] shadow-sm" style={{ backgroundColor: "#191D35", borderColor: "#191D35" }}>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               {APPROVAL_HEADER_ICON}
@@ -610,11 +726,71 @@ export default function WalletSecurityPage() {
           </div>
         </div>
 
-        {/* Connected Wallet */}
-        <div className="rounded-2xl border p-5 flex flex-col min-h-[320px] shadow-sm" style={{ backgroundColor: "#191D35", borderColor: "#191D35" }}>
+        {/* Connected networks - mobile: card list + pagination */}
+        <div className="xl:hidden -mx-6 w-[calc(100%+3rem)] rounded-2xl flex flex-col min-h-[200px] p-5" style={{ backgroundColor: "#191D35" }}>
+          <div className="flex items-center gap-1.5 mb-4">
+            <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-slate-700/80 border border-slate-600/60 shrink-0 overflow-hidden p-1">
+              <Image src={vectorIcon} alt="" width={14} height={14} className="w-3.5 h-3.5 object-contain" />
+            </span>
+            <h2 className="text-sm font-semibold text-white">Connected networks</h2>
+          </div>
+          <ul className="space-y-3 flex-1 min-h-0 overflow-y-auto">
+            {walletsLoading ? (
+              <li className="py-6 text-center text-slate-400 text-sm">Loading…</li>
+            ) : walletsList.length === 0 ? (
+              <li className="flex flex-col items-center justify-center py-8 px-4">
+                <p className="text-slate-400 text-sm font-medium">No connected networks</p>
+                <p className="text-slate-500 text-xs mt-1 text-center">Your networks will appear after you connect</p>
+              </li>
+            ) : (
+              walletsList.map((w) => (
+                <li
+                  key={w.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setSelectedWallet(w)}
+                  onKeyDown={(e) => e.key === "Enter" && setSelectedWallet(w)}
+                  className="flex items-center gap-3 p-3 rounded-xl border border-slate-600/50 bg-slate-800/60 shadow-sm transition cursor-pointer active:bg-slate-800/80"
+                >
+                  <span className="w-10 h-10 rounded-lg bg-white flex items-center justify-center p-1.5 shrink-0 overflow-hidden">
+                    <Image src={getWalletLogoUrl(w)} alt="" width={32} height={32} className="w-8 h-8 rounded object-contain" unoptimized={getWalletLogoUrl(w).startsWith("http")} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-white truncate">{w.provider} • {w.currency}</p>
+                    <p className="text-xs text-slate-400 font-mono truncate mt-0.5">{w.address}</p>
+                  </div>
+                </li>
+              ))
+            )}
+          </ul>
+          {walletsPagination && walletsPagination.total > walletsPagination.per_page && (
+            <div className="flex gap-2 mt-4 justify-center shrink-0">
+              {Array.from({ length: Math.ceil(walletsPagination.total / walletsPagination.per_page) }, (_, i) => i + 1).map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => {}}
+                  className={`w-9 h-9 rounded-lg text-sm font-medium transition ${walletsPagination.page === n ? "bg-[#4066FF] text-white" : "bg-slate-700/60 text-slate-400"}`}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => connectNetworksModal?.openConnectNetworksModal()}
+            className="mt-4 w-full rounded-lg bg-gradient-to-b from-[#4066FF] to-[#0026FF] hover:from-[#3355FF] hover:to-[#001fcc] text-white text-sm font-medium py-3 transition shrink-0"
+          >
+            Connect other networks
+          </button>
+        </div>
+
+        {/* Connected networks - desktop */}
+        <div className="hidden xl:flex rounded-2xl border p-5 flex-col min-h-[320px] shadow-sm" style={{ backgroundColor: "#191D35", borderColor: "#191D35" }}>
           <div className="flex items-center gap-2 mb-4">
             {APPROVAL_HEADER_ICON}
-            <h2 className="text-lg font-normal text-white">Connected Wallet</h2>
+            <h2 className="text-lg font-normal text-white">Connected networks</h2>
           </div>
           <ul className="space-y-3 flex-1 overflow-y-auto">
             {walletsLoading ? (
@@ -626,8 +802,8 @@ export default function WalletSecurityPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                   </svg>
                 </div>
-                <p className="text-slate-400 text-sm font-medium">No connected wallets</p>
-                <p className="text-slate-500 text-xs mt-1 max-w-[200px] text-center">Connect a wallet to see it here</p>
+                <p className="text-slate-400 text-sm font-medium">No connected networks</p>
+                <p className="text-slate-500 text-xs mt-1 max-w-[200px] text-center">Your networks will appear after you connect</p>
               </li>
             ) : (
               walletsList.map((w) => (
@@ -652,15 +828,64 @@ export default function WalletSecurityPage() {
           </ul>
           <button
             type="button"
-            onClick={() => connectWalletsModal?.openConnectWalletsModal()}
+            onClick={() => connectNetworksModal?.openConnectNetworksModal()}
             className="mt-4 w-full rounded-lg bg-gradient-to-b from-[#4066FF] to-[#0026FF] hover:from-[#3355FF] hover:to-[#001fcc] text-white text-sm font-medium py-3 transition shrink-0"
           >
-            Connect other wallets
+            Connect other networks
           </button>
         </div>
 
-        {/* Transaction monitoring */}
-        <div className="rounded-2xl border p-5 flex flex-col min-h-[320px] shadow-sm" style={{ backgroundColor: "#191D35", borderColor: "#191D35" }}>
+        {/* Transaction monitoring - mobile: card list + pagination */}
+        <div className="xl:hidden -mx-6 w-[calc(100%+3rem)] rounded-2xl flex flex-col min-h-[200px] p-5" style={{ backgroundColor: "#191D35" }}>
+          <div className="flex items-center gap-1.5 mb-4">
+            <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-slate-700/80 border border-slate-600/60 shrink-0 overflow-hidden p-1">
+              <Image src={vectorIcon} alt="" width={14} height={14} className="w-3.5 h-3.5 object-contain" />
+            </span>
+            <h2 className="text-sm font-semibold text-white">Transaction monitoring</h2>
+          </div>
+          <ul className="space-y-3 flex-1 min-h-0 overflow-y-auto">
+            {txLoading ? (
+              <li className="py-6 text-center text-slate-400 text-sm">Loading…</li>
+            ) : txList.length === 0 ? (
+              <li className="flex flex-col items-center justify-center py-8 px-4">
+                <p className="text-slate-400 text-sm font-medium">No transactions</p>
+                <p className="text-slate-500 text-xs mt-1 text-center">Monitored transactions will appear here</p>
+              </li>
+            ) : (
+              txList.map((t) => {
+                const riskLabel = capitalize(t.risk_level);
+                return (
+                  <li key={t.id} className="flex items-center justify-between gap-3 p-3 rounded-xl border border-slate-600/50 bg-slate-800/60 shadow-sm">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-white truncate">{t.title}</p>
+                      <p className="text-xs text-slate-400 truncate mt-0.5">{t.title}</p>
+                    </div>
+                    <span className="shrink-0 rounded-lg px-2.5 py-1 text-xs font-medium bg-slate-700/80 text-white">
+                      Risk: {riskLabel}
+                    </span>
+                  </li>
+                );
+              })
+            )}
+          </ul>
+          {txPagination && txPagination.total > txPagination.per_page && (
+            <div className="flex gap-2 mt-4 justify-center shrink-0">
+              {Array.from({ length: Math.ceil(txPagination.total / txPagination.per_page) }, (_, i) => i + 1).map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setTxPage(n)}
+                  className={`w-9 h-9 rounded-lg text-sm font-medium transition ${txPage === n ? "bg-[#4066FF] text-white" : "bg-slate-700/60 text-slate-400"}`}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Transaction monitoring - desktop */}
+        <div className="hidden xl:flex rounded-2xl border p-5 flex-col min-h-[320px] shadow-sm" style={{ backgroundColor: "#191D35", borderColor: "#191D35" }}>
           <div className="flex items-center gap-2 mb-4">
             {APPROVAL_HEADER_ICON}
             <h2 className="text-lg font-normal text-white">Transaction monitoring</h2>
@@ -712,8 +937,73 @@ export default function WalletSecurityPage() {
 
       {/* New section: Smart Wallet Scanner, Protection Control, Security Alerts + Address Safety */}
       <div className="grid grid-cols-1 xl:grid-cols-[1.4fr_1fr_1fr] gap-4">
-        {/* Smart Wallet Scanner */}
-        <div className="rounded-2xl border p-5 flex flex-col min-h-[320px] shadow-sm" style={{ backgroundColor: "#191D35", borderColor: "#191D35" }}>
+        {/* Smart Wallet Scanner - mobile */}
+        <div className="xl:hidden -mx-6 w-[calc(100%+3rem)] rounded-2xl flex flex-col p-5" style={{ backgroundColor: "#191D35" }}>
+          <div className="flex items-center gap-1.5 mb-4">
+            <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-slate-700/80 border border-slate-600/60 shrink-0 overflow-hidden p-1">
+              <Image src={vectorIcon} alt="" width={14} height={14} className="w-3.5 h-3.5 object-contain" />
+            </span>
+            <h2 className="text-sm font-semibold text-white">Smart Wallet Scanner</h2>
+          </div>
+          <label className="text-sm text-white font-medium mb-2 block">Smart Wallet Link</label>
+          <div className="flex gap-2 rounded-xl border mb-4 overflow-hidden" style={{ backgroundColor: "#25283D", borderColor: "#25283D" }}>
+            <input
+              type="text"
+              placeholder="Enter Smart Contract Link"
+              value={contractScannerAddress}
+              onChange={(e) => setContractScannerAddress(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && runContractScan()}
+              className="flex-1 min-w-0 bg-transparent text-white text-sm pl-3 py-3 focus:outline-none placeholder:text-slate-500"
+            />
+            <button
+              type="button"
+              disabled={scannerLoading || !contractScannerAddress.trim()}
+              onClick={runContractScan}
+              className="rounded-lg bg-[#4066FF] hover:bg-[#3355FF] disabled:opacity-50 disabled:pointer-events-none text-white text-sm font-medium px-5 py-3 transition shrink-0 my-1 mr-1"
+            >
+              {scannerLoading ? "Scanning…" : "Scan"}
+            </button>
+          </div>
+          {!lastContractScanResult ? (
+            <p className="text-sm text-slate-500 py-3">Enter a contract address and click Scan.</p>
+          ) : (
+            <>
+              <div className="rounded-xl border overflow-hidden mb-4" style={{ backgroundColor: "rgba(45, 55, 72, 0.9)", borderColor: "rgba(71, 85, 105, 0.5)" }}>
+                <ul className="p-4 space-y-3">
+                  {[
+                    { label: "Trust Score", value: `${lastContractScanResult.trust_score}%`, trend: lastContractScanResult.trust_score >= 50 },
+                    { label: "Critical Risk Flags", value: String(lastContractScanResult.critical_risk_flags) },
+                    { label: "Token Controlled", value: lastContractScanResult.token_controlled || "—" },
+                    { label: "OWNER / ADMIN", value: String(lastContractScanResult.owner_admin_count) },
+                  ].map((m, i) => (
+                    <li key={i} className="flex items-center justify-between gap-3 py-1">
+                      <span className="text-sm text-white">{m.label}</span>
+                      <span className="text-sm font-medium text-white flex items-center gap-1">
+                        {m.value}
+                        {m.trend && (
+                          <svg className="w-4 h-4 shrink-0" style={{ color: "#32BB1D" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                          </svg>
+                        )}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <button
+                type="button"
+                disabled={!lastContractScanResult?.scan_id}
+                onClick={openScanDetailsModal}
+                className="w-full rounded-xl border py-3 text-sm font-medium text-white bg-slate-700/80 border-slate-600/60 hover:bg-slate-700 disabled:opacity-50 disabled:pointer-events-none transition"
+              >
+                View Details
+              </button>
+            </>
+          )}
+        </div>
+
+        {/* Smart Wallet Scanner - desktop */}
+        <div className="hidden xl:flex rounded-2xl border p-5 flex-col min-h-[320px] shadow-sm" style={{ backgroundColor: "#191D35", borderColor: "#191D35" }}>
           <div className="flex items-center gap-2 mb-4">
             {SECURITY_STATUS_ICON}
             <h2 className="text-lg font-normal text-white">Contract scanner <span className="text-sm italic text-slate-400">(Only supports Ethereum and BSC)</span></h2>
@@ -771,8 +1061,49 @@ export default function WalletSecurityPage() {
           </button>
         </div>
 
-        {/* Protection Control */}
-        <div className="rounded-2xl border p-5 flex flex-col min-h-[320px] shadow-sm" style={{ backgroundColor: "#191D35", borderColor: "#191D35" }}>
+        {/* Protection Control - mobile */}
+        <div className="xl:hidden -mx-6 w-[calc(100%+3rem)] rounded-2xl flex flex-col p-5" style={{ backgroundColor: "#191D35" }}>
+          <div className="flex items-center gap-1.5 mb-4">
+            <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-slate-700/80 border border-slate-600/60 shrink-0 overflow-hidden p-1">
+              <Image src={vectorIcon} alt="" width={14} height={14} className="w-3.5 h-3.5 object-contain" />
+            </span>
+            <h2 className="text-sm font-semibold text-white">Protection Control</h2>
+          </div>
+          <ul className="space-y-3 flex-1 min-h-0 overflow-y-auto">
+            {protectionLoading ? (
+              <li className="py-4 text-center text-slate-400 text-sm">Loading…</li>
+            ) : (
+              controls.map((c) => (
+                <li key={c.id} className="flex items-center justify-between gap-3 p-3 rounded-xl border shrink-0" style={{ backgroundColor: "#25283D", borderColor: "rgba(51, 65, 85, 0.6)" }}>
+                  <span className="text-sm font-medium text-white">{c.label}</span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={c.on}
+                    disabled={protectionSavingId !== null}
+                    onClick={() => toggleControl(c.id)}
+                    className={`relative w-11 h-6 rounded-full transition shrink-0 disabled:opacity-60 disabled:pointer-events-none ${c.on ? "bg-[#4066FF]" : "bg-slate-600"}`}
+                  >
+                    <span
+                      className="absolute top-1 w-4 h-4 rounded-full bg-white transition"
+                      style={{ left: c.on ? "calc(100% - 20px)" : "4px" }}
+                    />
+                  </button>
+                </li>
+              ))
+            )}
+          </ul>
+          <button
+            type="button"
+            className="mt-4 w-full rounded-xl border py-3 text-sm font-medium text-white transition"
+            style={{ backgroundColor: "#25283D", borderColor: "rgba(71, 85, 105, 0.5)" }}
+          >
+            Add new control
+          </button>
+        </div>
+
+        {/* Protection Control - desktop */}
+        <div className="hidden xl:flex rounded-2xl border p-5 flex-col min-h-[320px] shadow-sm" style={{ backgroundColor: "#191D35", borderColor: "#191D35" }}>
           <div className="flex items-center gap-2 mb-4">
             {SECURITY_STATUS_ICON}
             <h2 className="text-lg font-normal text-white">Protection Control</h2>
@@ -805,7 +1136,58 @@ export default function WalletSecurityPage() {
 
         {/* Security Alerts + Address Safety */}
         <div className="flex flex-col gap-4">
-          <div className="rounded-2xl border p-5 flex flex-col shadow-sm flex-1 min-h-[320px]" style={{ backgroundColor: "#191D35", borderColor: "#191D35" }}>
+          {/* Security Alerts - mobile */}
+          <div className="xl:hidden -mx-6 w-[calc(100%+3rem)] rounded-2xl flex flex-col p-5" style={{ backgroundColor: "#191D35" }}>
+            <div className="flex items-center gap-1.5 mb-4">
+              <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-slate-700/80 border border-slate-600/60 shrink-0 overflow-hidden p-1">
+                <Image src={vectorIcon} alt="" width={14} height={14} className="w-3.5 h-3.5 object-contain" />
+              </span>
+              <h2 className="text-sm font-semibold text-white">Security Alerts</h2>
+            </div>
+            {securityAlertsLoading ? (
+              <p className="py-6 text-center text-slate-400 text-sm">Loading…</p>
+            ) : !securityAlerts || securityAlerts.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 px-4">
+                <p className="text-slate-400 text-sm font-medium">No security alerts</p>
+                <p className="text-slate-500 text-xs mt-1 text-center">Alerts will appear here when detected</p>
+              </div>
+            ) : (
+              <ul className="space-y-3">
+                {securityAlerts.map((alert) => (
+                  <li key={alert.id} className="flex items-stretch rounded-xl overflow-hidden border" style={{ backgroundColor: "#25283D", borderColor: "rgba(51, 65, 85, 0.6)" }}>
+                    <div className="flex-1 min-w-0 p-4 flex flex-col justify-between">
+                      <div>
+                        <p className="text-sm font-bold text-white mb-1">{alert.title}</p>
+                        {alert.type === "high_risk_approval" ? (
+                          <p className="text-xs text-white/80 font-mono">Contract: {alert.contract_truncated}</p>
+                        ) : (
+                          <p className="text-xs text-white/80 line-clamp-2">{alert.body}</p>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        className="mt-3 w-fit rounded-lg border py-2 px-4 text-xs font-medium text-white transition"
+                        style={{ backgroundColor: "#1e293b", borderColor: "rgba(71, 85, 105, 0.5)" }}
+                      >
+                        View Details
+                      </button>
+                    </div>
+                    <div className="w-[38%] min-w-[100px] flex items-center justify-center py-4 pr-2" style={{ backgroundColor: "rgba(30, 41, 59, 0.5)" }}>
+                      <svg className="w-full h-14" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden>
+                        {[0, 25, 50, 75, 100].map((x) => (
+                          <line key={x} x1={x} y1="0" x2={x} y2="40" stroke="rgba(71, 85, 105, 0.35)" strokeWidth="0.4" />
+                        ))}
+                        <path d="M0,20 L12,28 L25,12 L37,25 L50,15 L62,28 L75,10 L87,22 L100,18" fill="none" stroke="#4066FF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {/* Security Alerts - desktop */}
+          <div className="hidden xl:flex rounded-2xl border p-5 flex-col shadow-sm flex-1 min-h-[320px]" style={{ backgroundColor: "#191D35", borderColor: "#191D35" }}>
             <div className="flex items-center gap-2 mb-4">
               {SECURITY_STATUS_ICON}
               <h2 className="text-lg font-normal text-white">Security Alerts</h2>
@@ -849,7 +1231,36 @@ export default function WalletSecurityPage() {
               </ul>
             )}
           </div>
-          <div className="rounded-2xl border p-5 flex flex-col shadow-sm flex-1 min-h-[320px]" style={{ backgroundColor: "#191D35", borderColor: "#191D35" }}>
+          {/* Address Safety - mobile */}
+          <div className="xl:hidden -mx-6 w-[calc(100%+3rem)] rounded-2xl flex flex-col p-5" style={{ backgroundColor: "#191D35" }}>
+            <div className="flex items-center gap-1.5 mb-4">
+              <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-slate-700/80 border border-slate-600/60 shrink-0 overflow-hidden p-1">
+                <Image src={vectorIcon} alt="" width={14} height={14} className="w-3.5 h-3.5 object-contain" />
+              </span>
+              <h2 className="text-sm font-semibold text-white">Address Safety</h2>
+            </div>
+            {addressSafetyLoading ? (
+              <p className="py-6 text-center text-slate-400 text-sm">Loading…</p>
+            ) : !addressSafety || addressSafety.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 px-4">
+                <p className="text-slate-400 text-sm font-medium">No addresses to show</p>
+                <p className="text-slate-500 text-xs mt-1 text-center">Address safety data will appear here</p>
+              </div>
+            ) : (
+              <ul className="space-y-3">
+                {addressSafety.map((a) => (
+                  <li key={a.address} className="p-4 rounded-xl border" style={{ backgroundColor: "#25283D", borderColor: "rgba(51, 65, 85, 0.6)" }}>
+                    <p className="text-sm font-mono text-white">{a.address_truncated}</p>
+                    <p className="text-xs text-slate-400 mt-1">Safety Score: {a.safety_score}/100</p>
+                    <p className="text-xs text-slate-400 mt-0.5">{a.risk_level}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {/* Address Safety - desktop */}
+          <div className="hidden xl:flex rounded-2xl border p-5 flex-col shadow-sm flex-1 min-h-[320px]" style={{ backgroundColor: "#191D35", borderColor: "#191D35" }}>
             <div className="flex items-center gap-2 mb-4">
               {SECURITY_STATUS_ICON}
               <h2 className="text-lg font-normal text-white">Address Safety</h2>
@@ -891,7 +1302,28 @@ export default function WalletSecurityPage() {
 
       {/* Security Tip + Emergency Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="rounded-2xl border p-5 flex flex-col shadow-sm" style={{ backgroundColor: "#191D35", borderColor: "#191D35" }}>
+        {/* Security Tip - mobile */}
+        <div className="lg:hidden -mx-6 w-[calc(100%+3rem)] rounded-2xl flex flex-col p-5" style={{ backgroundColor: "#191D35" }}>
+          <div className="flex items-center gap-1.5 mb-4">
+            <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-slate-700/80 border border-slate-600/60 shrink-0">
+              <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+              </svg>
+            </span>
+            <h2 className="text-sm font-semibold text-white">Security Tip</h2>
+          </div>
+          <h3 className="text-base font-bold text-white mb-2">Revoke What You Don&apos;t Use</h3>
+          <p className="text-sm text-slate-400 leading-relaxed">
+            Old approvals stay active even when you stop using a dApp. Clearing them removes hidden access and keeps your wallet secure. 🔒
+          </p>
+          <div className="mt-4 flex items-end">
+            <div className="w-20 h-20 rounded-xl flex items-center justify-center overflow-hidden shrink-0 p-1">
+              <Image src={shieldIcon} alt="" width={80} height={80} className="w-full h-full object-contain" />
+            </div>
+          </div>
+        </div>
+        {/* Security Tip - desktop */}
+        <div className="hidden lg:flex rounded-2xl border p-5 flex-col shadow-sm" style={{ backgroundColor: "#191D35", borderColor: "#191D35" }}>
           <div className="flex items-center gap-2 mb-4">
             {KEY_ICON}
             <h2 className="text-lg font-normal text-white">Security Tip</h2>
@@ -908,7 +1340,34 @@ export default function WalletSecurityPage() {
             </div>
           </div>
         </div>
-        <div className="rounded-2xl border p-5 flex flex-col min-h-[140px] shadow-sm" style={{ backgroundColor: "#191D35", borderColor: "#191D35" }}>
+        {/* Emergency Actions - mobile */}
+        <div className="lg:hidden -mx-6 w-[calc(100%+3rem)] rounded-2xl overflow-hidden flex flex-col" style={{ backgroundColor: "#191D35" }}>
+          <div className="p-5">
+            <div className="flex items-center gap-1.5 mb-4">
+              <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-slate-700/80 border border-slate-600/60 shrink-0 overflow-hidden p-1">
+                <Image src={vectorIcon} alt="" width={14} height={14} className="w-3.5 h-3.5 object-contain" />
+              </span>
+              <h2 className="text-sm font-semibold text-white">Emergency Actions</h2>
+            </div>
+            <div className="relative rounded-xl border overflow-hidden min-h-[120px] flex flex-col items-center justify-center py-6 px-4" style={{ backgroundColor: "rgba(34, 197, 94, 0.06)", borderColor: "rgba(34, 197, 94, 0.2)", boxShadow: "inset 0 0 0 1px rgba(34, 197, 94, 0.08)" }}>
+              <div className="absolute top-3 right-3">
+                <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-[#22c55e] bg-[#22c55e]/15 border border-[#22c55e]/30">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] animate-pulse" />
+                  All clear
+                </span>
+              </div>
+              <div className="w-14 h-14 rounded-full flex items-center justify-center mb-3" style={{ backgroundColor: "rgba(34, 197, 94, 0.15)", border: "1px solid rgba(34, 197, 94, 0.35)" }}>
+                <svg className="w-7 h-7 text-[#22c55e]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+              </div>
+              <p className="text-sm font-medium text-white">No actions required</p>
+              <p className="text-xs text-slate-400 mt-0.5 text-center max-w-[200px]">Your wallet is secure. We&apos;ll alert you if anything needs attention.</p>
+            </div>
+          </div>
+        </div>
+        {/* Emergency Actions - desktop */}
+        <div className="hidden lg:flex rounded-2xl border p-5 flex-col min-h-[140px] shadow-sm" style={{ backgroundColor: "#191D35", borderColor: "#191D35" }}>
           <div className="flex items-center gap-2">
             {SECURITY_STATUS_ICON}
             <h2 className="text-lg font-normal text-white">Emergency Actions</h2>
@@ -1560,6 +2019,7 @@ function MetricCard({
   change,
   titleClassName,
   action,
+  mobile,
 }: {
   icon: React.ReactNode;
   title: string;
@@ -1567,29 +2027,30 @@ function MetricCard({
   change: string;
   titleClassName?: string;
   action?: React.ReactNode;
+  mobile?: boolean;
 }) {
   return (
-    <div className="rounded-xl p-5 flex flex-col min-h-[160px] bg-gradient-to-br from-blue-950 to-slate-900 border border-slate-700/80 shadow-[inset_1px_1px_0_0_rgba(255,255,255,0.06)]">
+    <div className={`rounded-xl flex flex-col bg-gradient-to-br from-blue-950 to-slate-900 ${mobile ? "p-2.5 min-h-[115px]" : "p-5 min-h-[160px] border border-slate-700/80 shadow-[inset_1px_1px_0_0_rgba(255,255,255,0.06)]"}`}>
       <div className="flex items-center gap-2">
-        {icon}
-        <p className={titleClassName ? `text-white ${titleClassName}` : "text-white font-medium text-sm"}>{title}</p>
+        <span className={mobile ? "w-4 h-4 flex items-center justify-center shrink-0 [&>svg]:w-4 [&>svg]:h-4 [&>img]:w-4 [&>img]:h-4" : "shrink-0"}>{icon}</span>
+        <p className={mobile ? "text-white font-medium text-xs" : titleClassName ? `text-white ${titleClassName}` : "text-white font-medium text-sm"}>{title}</p>
       </div>
-      <div className="flex items-baseline gap-2 mt-3">
-        <span className="text-white font-normal text-3xl">{value}</span>
-        <span className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-sm font-medium bg-[#2F4F2F] text-[#A0E0A0]">
-          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+      <div className={`flex items-baseline gap-2 ${mobile ? "mt-1" : "mt-3"}`}>
+        <span className={`text-white font-normal ${mobile ? "text-xl" : "text-3xl"}`}>{value}</span>
+        <span className={`inline-flex items-center gap-0.5 rounded font-medium bg-[#2F4F2F] text-[#A0E0A0] ${mobile ? "px-1.5 py-0.5 text-[10px]" : "px-2 py-0.5 text-sm"}`}>
+          <svg className={mobile ? "w-2.5 h-2.5" : "w-3 h-3"} fill="currentColor" viewBox="0 0 24 24">
             <path d="M7 14l5-5 5 5z" />
           </svg>
           {change}
         </span>
       </div>
       {action ? (
-        <div className="flex items-center justify-between mt-auto pt-4">
-          <p className="text-base text-slate-400">This month</p>
-          {action}
+        <div className={`flex items-center justify-between gap-2 mt-auto ${mobile ? "pt-2" : "pt-4"}`}>
+          <p className={`text-slate-400 shrink-0 ${mobile ? "text-[10px] whitespace-nowrap" : "text-base"}`}>This month</p>
+          <span className={mobile ? "shrink-0 [&>button]:text-[10px] [&>button]:px-2.5 [&>button]:py-1.5 [&>button]:whitespace-nowrap" : ""}>{action}</span>
         </div>
       ) : (
-        <p className="text-base text-slate-400 mt-auto pt-3">This month</p>
+        <p className={`text-slate-400 mt-auto whitespace-nowrap ${mobile ? "pt-2 text-[10px]" : "pt-3 text-base"}`}>This month</p>
       )}
     </div>
   );

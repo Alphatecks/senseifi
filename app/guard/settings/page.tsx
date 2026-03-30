@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import { useWallet } from "@/hooks/useWallet";
 import { useDashboardUser } from "@/context/DashboardUserContext";
-import { useConnectWalletsModal } from "@/context/ConnectWalletsModalContext";
+import { useConnectNetworksModal } from "@/context/ConnectWalletsModalContext";
 import { getWalletsForAddress, getActivityMonitorDapps } from "@/services/dashboardService";
 import type { WalletListItem, ActivityMonitorDappItem } from "@/services/dashboardService";
 
@@ -113,7 +113,7 @@ const navItems: Array<{ id: SettingsSection; label: string; icon: (active: boole
 export default function SettingsPage() {
   const { address } = useWallet();
   const { dashboardUser } = useDashboardUser();
-  const connectWalletsModal = useConnectWalletsModal();
+  const connectNetworksModal = useConnectNetworksModal();
   const [section, setSection] = useState<SettingsSection>("profile");
   const [username, setUsername] = useState("Zeeno");
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -282,10 +282,10 @@ export default function SettingsPage() {
                   <h3 className="text-base font-semibold text-white">Connected wallets</h3>
                   <button
                     type="button"
-                    onClick={() => connectWalletsModal?.openConnectWalletsModal()}
+                    onClick={() => connectNetworksModal?.openConnectNetworksModal()}
                     className="rounded-lg border border-slate-600/60 px-3 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800/50 transition"
                   >
-                    + Add wallets
+                    + Add networks
                   </button>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

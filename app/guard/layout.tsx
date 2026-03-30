@@ -6,7 +6,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useDashboardUser } from "@/context/DashboardUserContext";
 import { RescanModalProvider } from "@/context/RescanModalContext";
-import { ConnectWalletsModalProvider } from "@/context/ConnectWalletsModalContext";
+import { ConnectNetworksModalProvider } from "@/context/ConnectWalletsModalContext";
 import { useWallet } from "@/hooks/useWallet";
 import { getDashboardSummary } from "@/services/dashboardService";
 
@@ -150,7 +150,7 @@ export default function GuardLayout({ children }: { children: React.ReactNode })
 
   return (
     <RescanModalProvider>
-    <ConnectWalletsModalProvider>
+    <ConnectNetworksModalProvider>
     <div className="h-screen flex overflow-hidden bg-[#0a0a1a] text-white relative">
       <div className="dashboard-hack-bg fixed inset-0 pointer-events-none z-0" aria-hidden />
       {/* Mobile only: visible blockchain / crypto background animation */}
@@ -455,7 +455,7 @@ export default function GuardLayout({ children }: { children: React.ReactNode })
         <div className={`flex-1 min-h-0 overflow-auto p-6 ${["/guard", "/guard/wallet-security", "/guard/activity-monitor", "/guard/threat-intelligence", "/guard/contract-scanner", "/guard/settings"].includes(pathname) ? "hide-scrollbar" : ""}`}>{children}</div>
       </main>
     </div>
-    </ConnectWalletsModalProvider>
+    </ConnectNetworksModalProvider>
     </RescanModalProvider>
   );
 }

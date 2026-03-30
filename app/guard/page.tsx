@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation";
 import { useWallet } from "@/hooks/useWallet";
 import { useDashboardUser } from "@/context/DashboardUserContext";
 import { useRescanModal } from "@/context/RescanModalContext";
-import { getDashboardSummary, getWalletAssets, getDashboardActivity, getWalletsForAddress, scanContract, getScanContractDetails, getUnreadAlerts, getThreatIntelligence } from "@/services/dashboardService";
+import { getDashboardSummary, getWalletAssets, syncWalletAssets, getDashboardActivity, getWalletsForAddress, scanContract, getScanContractDetails, getUnreadAlerts, getThreatIntelligence } from "@/services/dashboardService";
 import type { DashboardSummaryData, WalletAsset, DashboardActivity, WalletListItem, ScanContractResult, ScanContractDetailResponse, UnreadAlertsData, ThreatIntelligenceItem } from "@/services/dashboardService";
 
 /** Resolve logo URL for connected wallet: API logo_url, known provider logo, or default icon. */
@@ -93,8 +93,36 @@ export default function GuardDashboardPage() {
   const [connectedWalletModalOpen, setConnectedWalletModalOpen] = useState(false);
   const [connectedWalletsList, setConnectedWalletsList] = useState<WalletListItem[] | null>(null);
   const [connectedWalletsLoading, setConnectedWalletsLoading] = useState(false);
+  const [assetsSyncLoading, setAssetsSyncLoading] = useState(false);
+  const [assetsSyncMessage, setAssetsSyncMessage] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+
+  const handleSyncTokens = () => {
+    if (!address || assetsSyncLoading) return;
+    setAssetsSyncLoading(true);
+    setAssetsSyncMessage(null);
+    syncWalletAssets(address)
+      .then((res) => {
+        if (res.ok) {
+          const upserted = res.data.chains.reduce((s, c) => s + (c.tokens_upserted ?? 0), 0);
+          const okChains = res.data.chains.filter((c) => c.status === "ok").length;
+          const errChains = res.data.chains.filter((c) => c.status === "error");
+          const skipped = res.data.chains.filter((c) => c.status === "skipped").length;
+          let text = `${upserted} token(s) updated`;
+          if (okChains) text += ` · ${okChains} chain(s) ok`;
+          if (skipped) text += ` · ${skipped} skipped`;
+          if (errChains.length) {
+            const first = errChains[0].detail ?? errChains[0].status;
+            text += ` · ${errChains.length} error(s)${first ? `: ${first}` : ""}`;
+          }
+          setAssetsSyncMessage({ tone: errChains.length ? "err" : "ok", text });
+          return getWalletAssets(address).then((data) => setWalletAssets(data ?? null));
+        }
+        setAssetsSyncMessage({ tone: "err", text: res.message });
+      })
+      .finally(() => setAssetsSyncLoading(false));
+  };
 
   const runContractScan = () => {
     if (!contractScannerAddress.trim()) return;
@@ -309,8 +337,18 @@ export default function GuardDashboardPage() {
               <Image src="/images/icons/wallets.png" alt="" width={20} height={20} className="w-5 h-5 opacity-90" />
               <h2 className="text-base font-semibold text-white">Wallet Assets</h2>
             </div>
-            <button type="button" onClick={() => setConnectedWalletModalOpen(true)} className="text-sm text-slate-400 hover:text-white transition">View wallets</button>
+            <button
+              type="button"
+              onClick={handleSyncTokens}
+              disabled={!address || assetsSyncLoading}
+              className="text-sm text-slate-400 hover:text-white transition disabled:opacity-40 disabled:pointer-events-none"
+            >
+              {assetsSyncLoading ? "Syncing…" : "Sync tokens"}
+            </button>
           </div>
+          {assetsSyncMessage ? (
+            <p className={`text-xs mb-2 ${assetsSyncMessage.tone === "err" ? "text-amber-400" : "text-slate-400"}`}>{assetsSyncMessage.text}</p>
+          ) : null}
           <div className="flex gap-3 overflow-x-auto hide-scrollbar pb-1 -mx-1">
             {assetsLoading ? (
               <p className="text-slate-400 text-sm py-4">Loading assets…</p>
@@ -538,13 +576,17 @@ export default function GuardDashboardPage() {
               </div>
               <button
                 type="button"
-                onClick={() => setConnectedWalletModalOpen(true)}
-                className="rounded-lg px-5 py-2.5 text-sm font-medium text-white transition hover:opacity-90"
+                onClick={handleSyncTokens}
+                disabled={!address || assetsSyncLoading}
+                className="rounded-lg px-5 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-40 disabled:pointer-events-none"
                 style={{ backgroundColor: "#27283B" }}
               >
-                View wallets
+                {assetsSyncLoading ? "Syncing…" : "Sync tokens"}
               </button>
             </div>
+            {assetsSyncMessage ? (
+              <p className={`text-xs mb-3 -mt-2 ${assetsSyncMessage.tone === "err" ? "text-amber-400" : "text-slate-400"}`}>{assetsSyncMessage.text}</p>
+            ) : null}
             <div className="flex gap-4 overflow-x-auto hide-scrollbar pb-2">
               {assetsLoading ? (
                 <p className="text-slate-400 text-sm py-4">Loading assets…</p>

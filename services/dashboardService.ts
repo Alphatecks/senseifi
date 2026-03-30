@@ -176,6 +176,33 @@ export async function getWalletAssets(address: string): Promise<WalletAsset[] | 
   return data.data ?? null;
 }
 
+/** Moralis → DB token sync per chain (POST /dashboard/:address/assets/sync). */
+export interface IndexedTokenSyncChainOutcome {
+  chain_id: number;
+  status: string;
+  tokens_upserted: number;
+  detail?: string;
+}
+
+export interface WalletAssetsSyncData {
+  chains: IndexedTokenSyncChainOutcome[];
+}
+
+export async function syncWalletAssets(
+  address: string
+): Promise<{ ok: true; data: WalletAssetsSyncData } | { ok: false; message: string }> {
+  if (!address) return { ok: false, message: "Connect a wallet first." };
+  const { ok, status, data } = await dashboardFetch<{ success: boolean; data?: WalletAssetsSyncData }>(
+    `/dashboard/${encodeURIComponent(address)}/assets/sync`,
+    { method: "POST", body: "{}" }
+  );
+  if (status === 404) return { ok: false, message: "Sync endpoint not found." };
+  if (!ok || !data?.success || !data.data?.chains) {
+    return { ok: false, message: "Token sync failed. Try again." };
+  }
+  return { ok: true, data: data.data };
+}
+
 export interface DashboardActivity {
   id?: string;
   activity_type: string;

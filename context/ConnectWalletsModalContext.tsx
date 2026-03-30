@@ -3,27 +3,30 @@
 import React, { createContext, useContext, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 
-const POPULAR_DEX_WALLETS = [
-  { name: "MetaMask", logo: "https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Fox.svg" },
-  { name: "Coinbase Wallet", logo: "https://images.ctfassets.net/q5ulk4bp65r7/3TBS4oVkD1ghowTqVQJlqj/2dfd4ea3b623a7c0d8deb2ff445dee9e/Consumer_Product_Wallet.svg" },
-  { name: "WalletConnect", logo: "https://cdn.jsdelivr.net/gh/WalletConnect/walletconnect-assets@master/Logo/Blue%20(Default)/Logo.svg" },
-  { name: "Rabby", logo: "https://rabby.io/assets/images/logo-128.png" },
-  { name: "Phantom", logo: "https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/phantom.svg" },
-  { name: "Trust Wallet", logo: "https://trustwallet.com/assets/images/media/assets/TWT.png" },
-  { name: "Rainbow", logo: "https://avatars.githubusercontent.com/u/31578401?s=200&v=4" },
-  { name: "Brave Wallet", logo: "https://brave.com/static-assets/images/brave-logo-sans-text.svg" },
+/** Major networks users can browse from the guard “connect” modal (logos via Trust Wallet assets). */
+const POPULAR_NETWORKS = [
+  { name: "Ethereum", logo: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png" },
+  { name: "BNB Smart Chain", logo: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/smartchain/info/logo.png" },
+  { name: "Polygon", logo: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygon/info/logo.png" },
+  { name: "Arbitrum", logo: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/arbitrum/info/logo.png" },
+  { name: "Optimism", logo: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/optimism/info/logo.png" },
+  { name: "Base", logo: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png" },
+  { name: "Avalanche", logo: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/avalanchec/info/logo.png" },
+  { name: "Solana", logo: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/solana/info/logo.png" },
+  { name: "Fantom", logo: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/fantom/info/logo.png" },
+  { name: "Linea", logo: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/linea/info/logo.png" },
 ];
 
-type ConnectWalletsModalContextValue = {
-  openConnectWalletsModal: () => void;
+type ConnectNetworksModalContextValue = {
+  openConnectNetworksModal: () => void;
 };
 
-const ConnectWalletsModalContext = createContext<ConnectWalletsModalContextValue | null>(null);
+const ConnectNetworksModalContext = createContext<ConnectNetworksModalContextValue | null>(null);
 
-export function ConnectWalletsModalProvider({ children }: { children: React.ReactNode }) {
+export function ConnectNetworksModalProvider({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
 
-  const openConnectWalletsModal = useCallback(() => setOpen(true), []);
+  const openConnectNetworksModal = useCallback(() => setOpen(true), []);
   const close = useCallback(() => setOpen(false), []);
 
   const modal =
@@ -42,11 +45,16 @@ export function ConnectWalletsModalProvider({ children }: { children: React.Reac
           <div className="bg-[#2D2F3C] px-5 py-4 flex items-center justify-between">
             <div className="flex items-center gap-2 min-w-0">
               <span className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center bg-slate-700/80 border border-slate-600/50 text-white">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"
+                  />
                 </svg>
               </span>
-              <h2 className="text-lg font-bold text-white truncate">Connect other wallets</h2>
+              <h2 className="text-lg font-bold text-white truncate">Connect other networks</h2>
             </div>
             <button
               type="button"
@@ -60,17 +68,17 @@ export function ConnectWalletsModalProvider({ children }: { children: React.Reac
             </button>
           </div>
           <div className="p-4 max-h-[60vh] overflow-y-auto hide-scrollbar space-y-2">
-            {POPULAR_DEX_WALLETS.map((wallet) => (
+            {POPULAR_NETWORKS.map((network) => (
               <button
-                key={wallet.name}
+                key={network.name}
                 type="button"
                 className="w-full rounded-lg p-3 flex items-center gap-3 bg-[#262938]/90 border border-slate-700/40 hover:border-slate-600/60 hover:bg-[#262938] transition text-left"
               >
                 <span className="w-10 h-10 rounded-lg bg-white flex items-center justify-center p-1.5 shrink-0 overflow-hidden">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={wallet.logo} alt="" width={32} height={32} className="w-8 h-8 object-contain" referrerPolicy="no-referrer" />
+                  <img src={network.logo} alt="" width={32} height={32} className="w-8 h-8 object-contain" referrerPolicy="no-referrer" />
                 </span>
-                <span className="text-white font-medium text-sm">{wallet.name}</span>
+                <span className="text-white font-medium text-sm">{network.name}</span>
               </button>
             ))}
           </div>
@@ -90,14 +98,14 @@ export function ConnectWalletsModalProvider({ children }: { children: React.Reac
     );
 
   return (
-    <ConnectWalletsModalContext.Provider value={{ openConnectWalletsModal }}>
+    <ConnectNetworksModalContext.Provider value={{ openConnectNetworksModal }}>
       {children}
       {modal}
-    </ConnectWalletsModalContext.Provider>
+    </ConnectNetworksModalContext.Provider>
   );
 }
 
-export function useConnectWalletsModal() {
-  const ctx = useContext(ConnectWalletsModalContext);
+export function useConnectNetworksModal() {
+  const ctx = useContext(ConnectNetworksModalContext);
   return ctx;
 }

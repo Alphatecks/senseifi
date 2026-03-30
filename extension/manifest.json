@@ -3,9 +3,54 @@
   "name": "SenseiFi Trade Insight",
   "version": "1.0.0",
   "description": "Wallet and dApp activity insights with risk alerts",
+  "icons": {
+    "16": "assets/scaled_logo.png",
+    "32": "assets/scaled_logo.png",
+    "48": "assets/scaled_logo.png",
+    "128": "assets/scaled_logo.png"
+  },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "SenseiFi Trade Insight"
+    "default_title": "SenseiFi Trade Insight",
+    "default_icon": {
+      "16": "assets/scaled_logo.png",
+      "32": "assets/scaled_logo.png",
+      "48": "assets/scaled_logo.png",
+      "128": "assets/scaled_logo.png"
+    }
   },
-  "permissions": []
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "tabs",
+    "webNavigation",
+    "notifications",
+    "alarms"
+  ],
+  "host_permissions": [
+    "http://*/*",
+    "https://*/*",
+    "https://senseifi-backend.onrender.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content-script.js"],
+      "all_frames": true,
+      "run_at": "document_start"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["inpage-hook.js", "assets/scaled_logo.png"],
+      "matches": ["http://*/*", "https://*/*"]
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://senseifi-backend.onrender.com; img-src 'self' data: https://upload.wikimedia.org https://pbs.twimg.com https://api.qrserver.com;"
+  }
 }

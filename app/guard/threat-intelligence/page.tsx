@@ -11,11 +11,20 @@ import alertIcon from "@/assets/icons/alert.png";
 import scanIcon from "@/assets/icons/scan.png";
 
 const CARD_STYLE = "rounded-2xl border p-5 flex flex-col shadow-sm";
-const CARD_BG = { backgroundColor: "#191D35", borderColor: "#191D35" };
+const CARD_BG = { backgroundColor: "transparent", borderColor: "rgba(148,163,184,0.2)" };
 
 const ENVELOPE_ICON = (
   <span className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-slate-700/80 border border-slate-600/60 shrink-0">
     <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+    </svg>
+  </span>
+);
+
+/** Mobile: same envelope icon for all metric cards per design */
+const MOBILE_CARD_ICON = (
+  <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-slate-700/80 border border-slate-600/60 shrink-0">
+    <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
     </svg>
   </span>
@@ -159,10 +168,112 @@ export default function ThreatIntelligencePage() {
   const highlightValue = chartData.values.length ? String(chartData.values[safeHighlightIndex]) : "0";
 
   return (
-    <div className="rounded-2xl bg-blue-950/25 border border-blue-900/40 p-6 space-y-6">
+    <div className="rounded-2xl p-6 space-y-6 xl:bg-blue-950/25 xl:border xl:border-blue-900/40">
       {/* Top: 2x2 stat grid + AI (left) | Scam Pattern Insights stretches (right) */}
       <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_0.8fr] gap-4 items-stretch">
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-4 min-w-0">
+        {/* Mobile: 2x2 metric cards + AI Threat Explanation (envelope icon on all cards) */}
+        <div className="xl:hidden flex flex-col gap-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-xl border p-4 flex flex-col min-h-[180px]" style={CARD_BG}>
+              <div className="flex items-center gap-2 mb-2">
+                {MOBILE_CARD_ICON}
+                <h2 className="text-sm font-medium text-white whitespace-nowrap">Overall Risk</h2>
+              </div>
+              <span className="rounded-lg px-2.5 py-1 text-xs font-medium text-orange-400 shrink-0 w-fit bg-slate-700/70 border border-slate-600/50 mb-auto">{securityOverviewLoading ? "—" : (securityOverview?.overall_risk?.risk_level ?? "—")}</span>
+              <div className="flex items-end justify-between gap-2 mt-2">
+                <div className="flex items-baseline gap-1.5 flex-wrap min-w-0">
+                  <span className="text-2xl font-normal text-white">{securityOverviewLoading ? "—" : `${securityOverview?.overall_risk?.risk_score ?? "—"}/`}<span className="text-lg">100</span></span>
+                  <p className="text-xs text-slate-500 self-end pb-0.5">Risk Score</p>
+                </div>
+                <div className="w-[26%] min-w-[56px] h-9 shrink-0 self-center">
+                  {MINI_CHART}
+                </div>
+              </div>
+            </div>
+            <div className="rounded-xl border p-4 flex flex-col min-h-[180px]" style={CARD_BG}>
+              <div className="flex items-center gap-2 mb-2">
+                {MOBILE_CARD_ICON}
+                <h2 className="text-sm font-medium text-white whitespace-nowrap">Active Threats</h2>
+              </div>
+              <span className="text-xs text-slate-400 shrink-0 mb-auto">Networks Affected: {securityOverviewLoading ? "—" : (securityOverview?.active_threats?.networks_affected ?? "—")}</span>
+              <div className="flex items-end justify-between gap-2 mt-2">
+                <div className="flex items-baseline gap-1.5 flex-wrap min-w-0">
+                  <span className="text-2xl font-normal text-white">{securityOverviewLoading ? "—" : (securityOverview?.active_threats?.count ?? "—")}</span>
+                  <p className="text-xs text-slate-500 self-end pb-0.5">Currently Detected:</p>
+                </div>
+                <div className="w-[26%] min-w-[56px] h-9 shrink-0 self-center">
+                  {MINI_CHART}
+                </div>
+              </div>
+            </div>
+            <div className="rounded-xl border p-4 flex flex-col min-h-[180px]" style={CARD_BG}>
+              <div className="flex items-center gap-2 mb-2">
+                {MOBILE_CARD_ICON}
+                <h2 className="text-sm font-medium text-white whitespace-nowrap">Scam Patterns</h2>
+              </div>
+              <span className="rounded-lg px-2.5 py-1 text-xs font-medium shrink-0 w-fit bg-slate-700/70 border border-slate-600/50 mb-auto" style={{ color: "#32BB1D" }}>{securityOverviewLoading ? "—" : (securityOverview?.scam_patterns?.status ?? "—")}</span>
+              <div className="flex items-end justify-between gap-2 mt-2">
+                <div className="flex items-baseline gap-1.5 flex-wrap min-w-0">
+                  <span className="text-2xl font-normal text-white">{securityOverviewLoading ? "—" : (securityOverview?.scam_patterns?.detected_count ?? "—")}</span>
+                  <p className="text-xs text-slate-500 self-end pb-0.5">Detected Patterns</p>
+                </div>
+                <div className="w-[26%] min-w-[56px] h-9 shrink-0 self-center">
+                  {MINI_CHART}
+                </div>
+              </div>
+            </div>
+            <div className="rounded-xl border p-4 flex flex-col min-h-[180px]" style={CARD_BG}>
+              <div className="flex items-center gap-2 mb-2">
+                {MOBILE_CARD_ICON}
+                <h2 className="text-sm font-medium text-white whitespace-nowrap">Reported Threats</h2>
+              </div>
+              <span className="text-xs text-slate-400 shrink-0 mb-auto">{securityOverviewLoading ? "—" : `${securityOverview?.reported_threats?.verified ?? "—"} Verified`}</span>
+              <div className="flex items-end justify-between gap-2 mt-2">
+                <div className="flex items-baseline gap-1.5 flex-wrap min-w-0">
+                  <span className="text-2xl font-normal text-white">{securityOverviewLoading ? "—" : ((securityOverview?.reported_threats?.verified ?? 0) + (securityOverview?.reported_threats?.detected ?? 0))}</span>
+                  <p className="text-xs text-slate-500 self-end pb-0.5">Currently Detected:</p>
+                </div>
+                <div className="w-[26%] min-w-[56px] h-9 shrink-0 self-center">
+                  {MINI_CHART}
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="rounded-xl border p-4 flex flex-col" style={CARD_BG}>
+            <div className="flex items-center gap-2 mb-3">
+              {MOBILE_CARD_ICON}
+              <h2 className="text-base font-medium text-white">AI Threat Explanation</h2>
+            </div>
+            <p className="text-sm text-slate-400 leading-relaxed">
+              {securityOverviewLoading ? "—" : (securityOverview?.ai_threat_explanation?.description ?? "SenseiGuard's AI detected behavior patterns that closely match known scam activities. These signals are based on repeated transaction behavior and interactions with flagged wallets, not a single event.")}
+            </p>
+            <div className="mt-4 flex items-center gap-3 flex-wrap">
+              <div
+                className="rounded-lg px-4 py-2.5 w-fit font-medium text-sm"
+                style={{
+                  backgroundColor: "#25283D",
+                  color: "#F00500",
+                  boxShadow: "inset 1px 1px 0 rgba(255,255,255,0.06), 0 2px 4px rgba(0,0,0,0.2)",
+                  border: "1px solid rgba(0,0,0,0.15)",
+                }}
+              >
+                Risk Level: {securityOverviewLoading ? "—" : (securityOverview?.ai_threat_explanation?.risk_level ?? securityOverview?.overall_risk?.risk_level ?? "—")}
+              </div>
+              <button
+                type="button"
+                onClick={() => setSummaryModalOpen(true)}
+                className="rounded-lg font-medium text-white py-3 px-5 transition text-center shrink-0"
+                style={{ background: "linear-gradient(to bottom, #5b7cff 0%, #4066FF 35%, #0026FF 70%, #001a99 100%)", boxShadow: "0 2px 10px rgba(0,38,255,0.4)" }}
+              >
+                View Summary
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Desktop: 2x2 stat grid + AI Threat Explanation */}
+        <div className="hidden xl:flex flex-col gap-4">
           <div className="grid grid-cols-2 gap-4">
           <div className={`${CARD_STYLE} min-h-[200px] flex flex-col`} style={CARD_BG}>
             <div className="flex items-center justify-between gap-3 mb-3">
@@ -280,6 +391,8 @@ export default function ThreatIntelligencePage() {
               </button>
             </div>
           </div>
+        </div>
+
         </div>
 
         <div className={`${CARD_STYLE} flex flex-col min-h-[320px] xl:h-full xl:min-h-0`} style={CARD_BG}>

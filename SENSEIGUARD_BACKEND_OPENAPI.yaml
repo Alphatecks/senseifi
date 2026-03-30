@@ -1,0 +1,560 @@
+openapi: 3.1.0
+info:
+  title: SenseiGuard Extension Backend API
+  version: 1.0.0
+  summary: Backend contracts required by the SenseiGuard background service worker
+  description: |
+    Formal API specification for the SenseiGuard Chrome extension runtime.
+    This spec defines the real-time risk analysis, threat feed sync, telemetry ingestion,
+    and wallet connect endpoints used by the extension popup and background service worker.
+
+servers:
+  - url: https://senseifi-backend.onrender.com/api
+    description: Production
+  - url: https://staging.senseifi.com/api
+    description: Staging (example)
+
+tags:
+  - name: Protection
+  - name: Telemetry
+  - name: Wallet
+
+paths:
+  /protection/transaction/analyze:
+    post:
+      tags: [Protection]
+      operationId: analyzeTransactionRisk
+      summary: Analyze transaction/signing payload risk in real time
+      description: |
+        Called by SenseiGuard background worker on intercepted wallet methods.
+        Expected p95 latency <= 400ms.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransactionAnalyzeRequest"
+            examples:
+              sendTransaction:
+                value:
+                  method: eth_sendTransaction
+                  params:
+                    - from: "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed"
+                      to: "0x000000000000000000000000000000000000dead"
+                      data: "0x095ea7b30000000000000000000000001234123412341234123412341234123412341234ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+                      value: "0x0"
+                  url: "https://app.uniswap.org/#/swap"
+                  domain: "app.uniswap.org"
+                  wallet_address: "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed"
+                  chain_id: 1
+                  source: senseiguard_extension
+      responses:
+        "200":
+          description: Risk analysis response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransactionAnalyzeResponse"
+              examples:
+                warning:
+                  value:
+                    risk_score: 35
+                    riskScore: 35
+                    findings:
+                      - Unlimited or high-value approval detected.
+                      - Unlimited approval pattern detected
+                      - Risk context includes domain app.uniswap.org
+                    breakdown:
+                      approval_risk: 35
+                      contract_reputation_risk: 41
+                      behavioral_risk: 20
+                    band: Block
+                    recommendation: Reject transaction
+                    chain_id: 1
+                    url: "https://app.uniswap.org/#/swap"
+                    domain: "app.uniswap.org"
+                    malicious_contract_detected: true
+                    risk_level_10: 9.6
+                    reported_incidents: 12
+                    wallets_drained_estimate: 23
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invalidWalletAddress:
+                  value:
+                    success: false
+                    message: Invalid wallet_address format
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                feedFailure:
+                  value:
+                    success: false
+                    message: Failed to build threat feed
+
+  /protection/threat-feed:
+    get:
+      tags: [Protection]
+      operationId: getThreatFeed
+      summary: Return latest malicious contracts and domains
+      description: |
+        Polled by extension every ~3 minutes to refresh local fast heuristics cache.
+      responses:
+        "200":
+          description: Threat feed payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ThreatFeedResponse"
+              examples:
+                default:
+                  value:
+                    malicious_contracts:
+                      - "0x000000000000000000000000000000000000dead"
+                      - "0x1111111254eeb25477b68fb85ed929f73a960582"
+                    malicious_domains:
+                      - metamask-security.com
+                      - coinbase-wallet-auth.net
+                    updated_at: "2026-03-29T12:00:00.000Z"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /telemetry/events:
+    post:
+      tags: [Telemetry]
+      operationId: ingestTelemetryEvents
+      summary: Ingest extension threat and decision telemetry in batch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TelemetryBatchRequest"
+            examples:
+              sampleBatch:
+                value:
+                  events:
+                    - type: tx_blocked
+                      riskScore: 91
+                      domain: app.uniswap.org
+                      method: eth_sendTransaction
+                      findings:
+                        - Known scam contract
+                      at: "2026-03-29T12:01:00.000Z"
+                    - type: domain_risk_detected
+                      domain: metamask-security.com
+                      riskScore: 95
+                      findings:
+                        - Known phishing domain
+                      at: "2026-03-29T12:01:20.000Z"
+      responses:
+        "200":
+          description: Events accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TelemetryIngestResponse"
+              examples:
+                accepted:
+                  value:
+                    success: true
+                    accepted: 2
+                    message: Telemetry events accepted
+        "202":
+          description: Events queued asynchronously
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TelemetryIngestResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invalidRisk:
+                  value:
+                    success: false
+                    message: events.riskScore must be between 0 and 100
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /wallets/connect:
+    post:
+      tags: [Wallet]
+      operationId: connectWallet
+      summary: Register connected wallet session
+      description: |
+        Called by extension popup and web frontend wallet flow.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WalletConnectRequest"
+            examples:
+              metamask:
+                value:
+                  address: "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed"
+                  chain_id: 1
+                  wallet_type: metamask
+      responses:
+        "200":
+          description: Wallet connected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WalletConnectResponse"
+              examples:
+                connected:
+                  value:
+                    success: true
+                    data:
+                      id: 8de1f5d0-7c1e-4f67-9f39-2d67b8c74a35
+                      address: "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed"
+                      chain_id: 1
+                      wallet_type: metamask
+                      connected_at: "2026-03-29T12:10:01.000Z"
+                      is_active: true
+                    dashboard_user:
+                      user_id: fetrtwgebejhssns
+                      display_name: Stealth bag
+                      user_number: 2314
+                      user_label: User 2314
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invalidWalletType:
+                  value:
+                    success: false
+                    message: "Invalid wallet_type; allowed: metamask, coinbase"
+                    error: "Invalid wallet_type; allowed: metamask, coinbase"
+        "409":
+          description: Wallet already connected (optional)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  schemas:
+    TransactionAnalyzeRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - method
+        - params
+        - url
+        - domain
+        - wallet_address
+        - chain_id
+        - source
+      properties:
+        method:
+          type: string
+          enum:
+            - eth_sendTransaction
+            - eth_sign
+            - eth_signTypedData
+            - eth_signTypedData_v3
+            - eth_signTypedData_v4
+        params:
+          type: array
+          items:
+            oneOf:
+              - type: object
+                additionalProperties: true
+              - type: string
+              - type: number
+              - type: boolean
+              - type: "null"
+        url:
+          type: string
+          format: uri
+        domain:
+          type: string
+        wallet_address:
+          $ref: "#/components/schemas/EvmAddress"
+        chain_id:
+          type: integer
+          minimum: 1
+        source:
+          type: string
+          enum: [senseiguard_extension]
+
+    TransactionAnalyzeResponse:
+      type: object
+      additionalProperties: true
+      required:
+        - risk_score
+        - riskScore
+        - findings
+      properties:
+        risk_score:
+          type: integer
+          minimum: 0
+          maximum: 100
+        riskScore:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Optional camelCase compatibility field
+        findings:
+          type: array
+          items:
+            type: string
+        breakdown:
+          oneOf:
+            - type: object
+              additionalProperties:
+                oneOf:
+                  - type: number
+                  - type: string
+                  - type: boolean
+                  - type: "null"
+            - type: "null"
+        band:
+          type: string
+          enum: [Safe, Warning, Block]
+        recommendation:
+          type: string
+        malicious_contract_detected:
+          type: boolean
+        risk_level_10:
+          type: number
+          minimum: 0
+          maximum: 10
+        reported_incidents:
+          type: integer
+          minimum: 0
+        wallets_drained_estimate:
+          type: integer
+          minimum: 0
+        chain_id:
+          type: integer
+          minimum: 1
+        url:
+          type: string
+          format: uri
+        domain:
+          type: string
+
+    ThreatFeedResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - malicious_contracts
+        - malicious_domains
+      properties:
+        malicious_contracts:
+          type: array
+          items:
+            $ref: "#/components/schemas/EvmAddress"
+        malicious_domains:
+          type: array
+          items:
+            type: string
+            minLength: 1
+        updated_at:
+          type: string
+          format: date-time
+
+    TelemetryBatchRequest:
+      type: object
+      additionalProperties: false
+      required: [events]
+      properties:
+        events:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/TelemetryEvent"
+
+    TelemetryEvent:
+      type: object
+      additionalProperties: true
+      required:
+        - type
+        - at
+      properties:
+        type:
+          type: string
+          enum:
+            - tx_evaluated
+            - tx_blocked
+            - tx_warned
+            - domain_risk_detected
+            - user_decision
+            - sync_heartbeat
+        riskScore:
+          type: integer
+          minimum: 0
+          maximum: 100
+        domain:
+          type: string
+        method:
+          type: string
+        findings:
+          type: array
+          items:
+            type: string
+        decision:
+          type: string
+        context:
+          oneOf:
+            - type: object
+              additionalProperties: true
+            - type: "null"
+        at:
+          type: string
+          format: date-time
+
+    TelemetryIngestResponse:
+      type: object
+      additionalProperties: true
+      required: [success]
+      properties:
+        success:
+          type: boolean
+        accepted:
+          type: integer
+          minimum: 0
+        message:
+          type: string
+
+    WalletConnectRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - address
+        - chain_id
+        - wallet_type
+      properties:
+        address:
+          $ref: "#/components/schemas/EvmAddress"
+        chain_id:
+          type: integer
+          minimum: 1
+        wallet_type:
+          type: string
+          enum: [metamask, coinbase]
+
+    WalletConnectResponse:
+      type: object
+      additionalProperties: true
+      required:
+        - success
+        - data
+        - dashboard_user
+      properties:
+        success:
+          type: boolean
+        data:
+          $ref: "#/components/schemas/WalletSession"
+        dashboard_user:
+          $ref: "#/components/schemas/DashboardUser"
+        message:
+          type: string
+        error:
+          type: string
+
+    ErrorResponse:
+      type: object
+      additionalProperties: true
+      required:
+        - success
+        - message
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        code:
+          type: string
+        message:
+          type: string
+        error:
+          type: string
+
+    EvmAddress:
+      type: string
+      pattern: "^0x[a-fA-F0-9]{40}$"
+
+    WalletSession:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - address
+        - chain_id
+        - wallet_type
+        - connected_at
+        - is_active
+      properties:
+        id:
+          type: string
+          format: uuid
+        address:
+          $ref: "#/components/schemas/EvmAddress"
+        chain_id:
+          type: integer
+          minimum: 1
+        wallet_type:
+          type: string
+          enum: [metamask, coinbase]
+        connected_at:
+          type: string
+          format: date-time
+        is_active:
+          type: boolean
+
+    DashboardUser:
+      type: object
+      additionalProperties: false
+      required:
+        - user_id
+        - display_name
+        - user_number
+        - user_label
+      properties:
+        user_id:
+          type: string
+        display_name:
+          type: string
+        user_number:
+          type: integer
+        user_label:
+          type: string
+

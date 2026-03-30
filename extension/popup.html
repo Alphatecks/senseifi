@@ -2,140 +2,196 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=480, initial-scale=1" />
-  <title>SenseiFi Trade Insight</title>
+  <meta name="viewport" content="width=380, initial-scale=1" />
+  <title>SenseiGuard</title>
   <link rel="stylesheet" href="popup.css" />
 </head>
-<body>
-  <div class="container">
-    <header class="header">
-      <h1 class="logo">SenseiFi</h1>
-      <span class="badge">Trade insight</span>
-    </header>
-
-    <section class="cards">
-      <div class="card">
-        <span class="card-label">Active Extensions</span>
-        <span class="card-value">3</span>
-        <span class="card-change positive">+2.3%</span>
-        <span class="card-meta">This month</span>
-      </div>
-      <div class="card">
-        <span class="card-label">Contract Scanned</span>
-        <span class="card-value">12</span>
-        <span class="card-change positive">+2.3%</span>
-        <span class="card-meta">This month</span>
-      </div>
-      <div class="card">
-        <span class="card-label">Connected Wallet</span>
-        <span class="card-value">6</span>
-        <span class="card-meta">This month</span>
-      </div>
-      <div class="card">
-        <span class="card-label">Unread Alerts</span>
-        <span class="card-value">6</span>
-        <span class="card-change negative">−2.3%</span>
-        <span class="card-meta">This month</span>
-        <span class="card-warning">1 high risk</span>
-      </div>
-    </section>
-
-    <section class="trade-insight">
-      <div class="trade-header">
-        <h2 class="trade-title">
-          <svg class="icon-envelope" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7L2 6"/></svg>
-          Trade insight
-        </h2>
-        <div class="trade-toolbar">
-          <div class="search-wrap">
-            <svg class="icon-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-            <input type="text" class="search-input" placeholder="Search" />
-          </div>
-          <button type="button" class="btn-icon" aria-label="Filter">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>
-          </button>
-          <select class="select-days" aria-label="Time range">
-            <option value="7">7 days</option>
-            <option value="14">14 days</option>
-            <option value="30">30 days</option>
-          </select>
+<body class="welcome">
+  <div class="welcome-scroll-shell">
+    <!-- Step 1: feature list -->
+    <div id="view-welcome" class="welcome-container">
+      <header class="welcome-header">
+        <div class="welcome-brand">
+          <span class="welcome-logo">
+            <img src="assets/scaled_logo.png" alt="" width="32" height="32" class="welcome-logo-img" />
+          </span>
+          <span class="welcome-brand-name">SenseiGuard</span>
         </div>
+        <button type="button" class="welcome-close" aria-label="Close">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 4L4 12M4 4l8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </header>
+
+      <h1 class="welcome-headline">Your crypto Sensei is now watching your wallet.</h1>
+
+      <ul class="welcome-features">
+        <li class="welcome-feature">
+          <h2 class="welcome-feature-title">Initial Wallet Security Scan</h2>
+          <p class="welcome-feature-desc">Runs a quick scan for risky approvals, suspicious tokens, and contract interactions. Shows your Wallet Security Score.</p>
+        </li>
+        <li class="welcome-feature">
+          <h2 class="welcome-feature-title">Passive Protection Mode</h2>
+          <p class="welcome-feature-desc">Monitors Web3 sites, transactions, and phishing domains in the background.</p>
+        </li>
+        <li class="welcome-feature">
+          <h2 class="welcome-feature-title">dApp Security Scanning</h2>
+          <p class="welcome-feature-desc">Checks domain reputation and contracts, displaying Safe, Caution, or Dangerous badges.</p>
+        </li>
+        <li class="welcome-feature">
+          <h2 class="welcome-feature-title">Transaction Analysis</h2>
+          <p class="welcome-feature-desc">Analyzes function calls and approvals before you sign to warn you of risks.</p>
+        </li>
+        <li class="welcome-feature">
+          <h2 class="welcome-feature-title">Malicious Contract Detection</h2>
+          <p class="welcome-feature-desc">Specifically targets wallet drainers and scam-linked contracts.</p>
+        </li>
+        <li class="welcome-feature">
+          <h2 class="welcome-feature-title">Scam Token Detection</h2>
+          <p class="welcome-feature-desc">Detects fake airdrops and lets you hide or report them.</p>
+        </li>
+      </ul>
+
+      <button type="button" class="welcome-cta" id="cta-welcome-connect">Connect Wallet</button>
+
+      <footer class="welcome-footer">
+        <span class="welcome-footer-icon" aria-hidden="true">ⓘ</span>
+        <span class="welcome-footer-text">Need help? Talk to Support.</span>
+      </footer>
+    </div>
+
+    <!-- Step 2: after Connect Wallet — shield + activation -->
+    <div id="view-activate" class="activate-container view-hidden">
+      <header class="welcome-header">
+        <div class="welcome-brand">
+          <span class="welcome-logo">
+            <img src="assets/scaled_logo.png" alt="" width="32" height="32" class="welcome-logo-img" />
+          </span>
+          <span class="welcome-brand-name">SenseiGuard</span>
+        </div>
+        <button type="button" class="welcome-close" aria-label="Close">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 4L4 12M4 4l8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </header>
+
+      <div class="activate-hero">
+        <h1 class="activate-headline">Your crypto Sensei is now watching your wallet.</h1>
+        <img src="assets/icons/Shield.png" alt="" class="activate-shield" width="96" height="96" />
       </div>
 
-      <div class="table-wrap">
-        <table class="insight-table">
-          <thead>
-            <tr>
-              <th>Wallet / dApp</th>
-              <th>Network</th>
-              <th>Activity Type</th>
-              <th>Risk Level</th>
-              <th>AI Insight Shown</th>
-              <th>Date</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><span class="wallet-name">MetaMask Wallet</span><span class="network-tag">Ethereum</span></td>
-              <td>Ethereum</td>
-              <td>Contract Approval</td>
-              <td><span class="risk risk-high">High</span></td>
-              <td class="insight-cell">Approval matches known drain-pattern contracts interacting with flagged wallets.</td>
-              <td>2hr ago</td>
-            </tr>
-            <tr>
-              <td><span class="wallet-name">Trust Wallet</span><span class="network-tag">Binance Smart Chain</span></td>
-              <td>Binance Smart Chain</td>
-              <td>Token Transfer</td>
-              <td><span class="risk risk-medium">Medium</span></td>
-              <td class="insight-cell">Transfer to a wallet associated with a high-risk project.</td>
-              <td>1hr ago</td>
-            </tr>
-            <tr>
-              <td><span class="wallet-name">Coinbase Wallet</span><span class="network-tag">Ethereum</span></td>
-              <td>Ethereum</td>
-              <td>Withdrawal</td>
-              <td><span class="risk risk-critical">Critical</span></td>
-              <td class="insight-cell">Withdrawal to unverified addresses flagged for suspicious activity.</td>
-              <td>30min ago</td>
-            </tr>
-            <tr>
-              <td><span class="wallet-name">Ledger Wallet</span><span class="network-tag">Bitcoin</span></td>
-              <td>Bitcoin</td>
-              <td>Transaction Confirmation</td>
-              <td><span class="risk risk-medium">Medium</span></td>
-              <td class="insight-cell">Transaction confirmed on a blockchain with a history of hacks.</td>
-              <td>15min ago</td>
-            </tr>
-            <tr>
-              <td><span class="wallet-name">Exodus Wallet</span><span class="network-tag">Litecoin</span></td>
-              <td>Litecoin</td>
-              <td>Address Generation</td>
-              <td><span class="risk risk-high">High</span></td>
-              <td class="insight-cell">Generated addresses closely matching known scam patterns.</td>
-              <td>5min ago</td>
-            </tr>
-            <tr>
-              <td><span class="wallet-name">Atomic Wallet</span><span class="network-tag">Ripple</span></td>
-              <td>Ripple</td>
-              <td>Deposit Alert</td>
-              <td><span class="risk risk-critical">Critical</span></td>
-              <td class="insight-cell">High-value deposit to an account linked with fraudulent schemes.</td>
-              <td>10min ago</td>
-            </tr>
-            <tr>
-              <td><span class="wallet-name">MyEtherWallet</span><span class="network-tag">Ethereum Classic</span></td>
-              <td>Ethereum Classic</td>
-              <td>Smart Contract Interaction</td>
-              <td><span class="risk risk-high">High</span></td>
-              <td class="insight-cell">Interaction with a contract flagged for vulnerabilities.</td>
-              <td>1hr 30min</td>
-            </tr>
-          </tbody>
-        </table>
+      <p class="activate-desc">
+        Turn on SenseiGuard in your browser to scan dApps, domains, and transactions before you sign. Your wallet stays safer with real-time checks and clear risk signals.
+      </p>
+
+      <div class="activate-toggle-block">
+        <div class="activate-toggle-row">
+          <span class="activate-label">Activate SenseiGuard Extension</span>
+          <label class="sg-toggle">
+            <input type="checkbox" id="activate-extension-toggle" checked aria-label="Activate SenseiGuard Extension" />
+            <span class="sg-toggle-track" aria-hidden="true"></span>
+          </label>
+        </div>
+        <p class="activate-notify-copy">
+          Notify when wallets and security actions are<br />
+          needed across all platforms
+        </p>
       </div>
-    </section>
+
+      <button type="button" class="welcome-cta" id="cta-activate-connect">Connect Wallet</button>
+
+      <footer class="welcome-footer">
+        <span class="welcome-footer-icon" aria-hidden="true">ⓘ</span>
+        <span class="welcome-footer-text">Need help? Talk to Support.</span>
+      </footer>
+    </div>
+
+    <!-- Step 3: Connect Wallet — wallet list + QR -->
+    <div id="view-connect-wallet" class="connect-wallet-container view-hidden">
+      <header class="welcome-header">
+        <div class="welcome-brand">
+          <span class="welcome-logo">
+            <img src="assets/scaled_logo.png" alt="" width="32" height="32" class="welcome-logo-img" />
+          </span>
+          <span class="welcome-brand-name">SenseiGuard</span>
+        </div>
+        <button type="button" class="welcome-close" aria-label="Close">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 4L4 12M4 4l8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </header>
+
+      <p class="cw-section-title">Connect Wallet</p>
+
+      <div class="cw-row cw-row--metamask" data-wallet="metamask">
+        <div class="cw-row-main">
+          <img
+            class="cw-wallet-icon"
+            src="https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Fox.svg"
+            alt=""
+            width="28"
+            height="28"
+          />
+          <span class="cw-row-label">
+            MetaMask <span class="cw-recommended">(Recommended)</span>
+          </span>
+        </div>
+        <button type="button" class="cw-row-btn" data-action="connect-metamask">Connect</button>
+      </div>
+
+      <div class="cw-row cw-row--coinbase" data-wallet="coinbase">
+        <div class="cw-row-main">
+          <img
+            class="cw-wallet-icon"
+            src="https://pbs.twimg.com/media/G1y6H-1a0AAkGJ9.png"
+            alt=""
+            width="28"
+            height="28"
+          />
+          <span class="cw-row-label">Coinbase Wallet</span>
+        </div>
+        <button type="button" class="cw-row-btn" data-action="connect-coinbase">Connect</button>
+      </div>
+
+      <div class="cw-or" role="separator" aria-label="Or">
+        <span class="cw-or-line"></span>
+        <span class="cw-or-text">OR</span>
+        <span class="cw-or-line"></span>
+      </div>
+
+      <div class="cw-qr-block">
+        <div class="cw-qr-frame">
+          <img
+            class="cw-qr-img"
+            src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&amp;data=SenseiGuard&amp;bgcolor=ffffff&amp;color=000000&amp;margin=8"
+            alt="QR code to connect wallet"
+            width="180"
+            height="180"
+          />
+        </div>
+        <p class="cw-scan-line">
+          <svg class="cw-scan-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405M19 13V7a2 2 0 00-2-2h-6M5 7V5a2 2 0 012-2h6m-6 0v2m0 0H7m0 0v2" />
+          </svg>
+          Scan Code to connect
+        </p>
+      </div>
+
+      <p id="cw-status" class="cw-status" role="status" aria-live="polite"></p>
+
+      <button type="button" class="welcome-cta" id="cta-connect-wallet-main">Connect Wallet</button>
+
+      <footer class="welcome-footer cw-footer">
+        <span class="welcome-footer-icon" aria-hidden="true">ⓘ</span>
+        <span class="welcome-footer-text">Need help? Talk to Support.</span>
+      </footer>
+    </div>
   </div>
+  <script src="config.js"></script>
+  <script src="wallet-connect.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>
