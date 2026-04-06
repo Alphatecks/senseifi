@@ -7,6 +7,7 @@ import HowItWorksSection from "./HowItWorksSection";
 import WhyTrustSection from "./WhyTrustSection";
 import CenteredAppDownload from "./CenteredAppDownload";
 import { useInView } from "../utils/useInView";
+import handImage from "@/assets/images/hand.png";
 
 export default function HomeScreen() {
   // Hero Section scroll animation
@@ -39,8 +40,8 @@ export default function HomeScreen() {
         {/* Desktop rolling coin */}
         <div className="hidden md:block absolute right-0 -top-20 md:-top-48 w-[28rem] h-[28rem] md:w-[64rem] md:h-[64rem] z-50 pointer-events-none">
           <Image
-            src="/images/rollingcoin.gif"
-            alt="Rolling coin"
+            src={handImage}
+            alt="SenseiFi hand"
             width={1024}
             height={1024}
             className="w-full h-full object-contain opacity-70"
@@ -50,15 +51,15 @@ export default function HomeScreen() {
         {/* ...no animated coins... */}
         <div className="w-full flex flex-col items-center md:items-start text-center md:text-left mt-2 md:mt-36">
           <h1 className={`text-4xl md:text-6xl font-normal leading-tight mb-4 text-white drop-shadow-xl z-10 relative ${heroInView ? "animate-fade-slide-up" : "opacity-0"}`}>
-            Intelligent Crypto Insights,<br className="hidden md:inline" /> Driven by Next-Level AI
+            Protect Wallets. Detect Threats.<br className="hidden md:inline" /> Trade Crypto With Confidence
           </h1>
           <p className={`text-lg md:text-xl text-white/80 mb-8 max-w-2xl z-10 relative ${heroInView ? "animate-fade-slide-up delay-200" : "opacity-0"}`}>
             Where Artificial Intelligence Meets Financial Precision.
           </p>
           <div className="flex flex-row flex-wrap gap-3 mb-12 z-10 relative w-full justify-center md:justify-start">
-            <Link href="/waitlist" className="flex-1 min-w-[120px] max-w-[180px] md:flex-none md:min-w-0 md:max-w-none flex justify-center md:block" scroll={true}>
+            <Link href="/connect-wallet" className="flex-1 min-w-[120px] max-w-[180px] md:flex-none md:min-w-0 md:max-w-none flex justify-center md:block" scroll={true}>
               <button className="w-full md:w-auto px-4 py-2 md:px-7 md:py-3 rounded-xl font-semibold text-sm md:text-base bg-gradient-to-r from-[#0026FF] to-[#0026FF] text-white shadow-lg border-2 border-white/20 hover:from-[#0026FF] hover:to-blue-500 transition">
-                Join Waitlist
+                Get Started
               </button>
             </Link>
             <button className="flex-1 min-w-[120px] max-w-[180px] md:flex-none md:min-w-0 md:max-w-none w-full md:w-auto px-4 py-2 md:px-7 md:py-3 rounded-xl font-semibold text-sm md:text-base bg-white/10 text-white border-2 border-white/20 hover:bg-white/20 transition flex items-center gap-2">
@@ -69,8 +70,8 @@ export default function HomeScreen() {
         {/* Mobile rolling coin below hero content */}
         <div className="block md:hidden relative pointer-events-none" style={{ height: '400px', overflow: 'visible' }}>
           <Image
-            src="/images/rollingcoin.gif"
-            alt="Rolling coin"
+            src={handImage}
+            alt="SenseiFi hand"
             width={2000}
             height={800}
             style={{

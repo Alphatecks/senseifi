@@ -2,8 +2,9 @@
 
 
 import Image from 'next/image';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useWallet } from '@/hooks/useWallet';
 
 const MOBILE_NOTIFICATIONS = [
   {
@@ -53,7 +54,17 @@ type HeaderProps = { hideGetStarted?: boolean };
 export default function Header({ hideGetStarted }: HeaderProps) {
   const [open, setOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [hasMounted, setHasMounted] = useState(false);
+  const { connectedAddress, isConnectedOrRemembered, disconnectWallet, isDisconnecting } = useWallet();
   const unreadCount = 2;
+  const showConnectedWallet = hasMounted && isConnectedOrRemembered && Boolean(connectedAddress);
+  const displayAddress = connectedAddress
+    ? `${connectedAddress.slice(0, 6)}...${connectedAddress.slice(-4)}`
+    : '';
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
 
   return (
     <header className="fixed w-full top-0 z-50 bg-gradient-to-b from-[#0a0a1a] via-[#0a0a1a] to-transparent">
@@ -111,12 +122,32 @@ export default function Header({ hideGetStarted }: HeaderProps) {
             )}
           </button>
           {!hideGetStarted && (
-            <Link
-              href="/connect-wallet"
-              className="hidden md:inline-flex flex-none mr-0 md:mr-40 bg-gradient-radial from-[#0026FF] to-blue-400 hover:from-[#0026FF] hover:to-blue-500 text-white px-8 py-3 rounded-2xl font-medium transition shadow-lg border-2 border-white items-center justify-center"
-            >
-              Get started
-            </Link>
+            showConnectedWallet ? (
+              <div className="hidden md:flex items-center gap-2 mr-0 md:mr-40">
+                <button
+                  type="button"
+                  title={connectedAddress ?? undefined}
+                  className="inline-flex flex-none bg-gradient-radial from-[#0026FF] to-blue-400 text-white px-6 py-3 rounded-2xl font-medium border-2 border-white items-center justify-center"
+                >
+                  {displayAddress}
+                </button>
+                <button
+                  type="button"
+                  onClick={disconnectWallet}
+                  disabled={isDisconnecting}
+                  className="inline-flex items-center justify-center px-5 py-3 rounded-2xl font-medium border-2 border-white/25 bg-white/10 text-white hover:bg-white/20 transition disabled:opacity-60"
+                >
+                  {isDisconnecting ? 'Disconnecting...' : 'Disconnect'}
+                </button>
+              </div>
+            ) : (
+              <Link
+                href="/connect-wallet"
+                className="hidden md:inline-flex flex-none mr-0 md:mr-40 bg-gradient-radial from-[#0026FF] to-blue-400 hover:from-[#0026FF] hover:to-blue-500 text-white px-8 py-3 rounded-2xl font-medium transition shadow-lg border-2 border-white items-center justify-center"
+              >
+                Get started
+              </Link>
+            )
           )}
         </div>
       </nav>
@@ -156,12 +187,32 @@ export default function Header({ hideGetStarted }: HeaderProps) {
 
         {!hideGetStarted && (
           <div className="mt-8">
-            <Link
-              href="/connect-wallet"
-              className="w-auto px-6 bg-gradient-radial from-[#0026FF] to-blue-400 hover:from-[#0026FF] hover:to-blue-500 text-white py-3 rounded-2xl font-medium transition shadow-lg border-2 border-white whitespace-nowrap flex items-center justify-center"
-            >
-              Get started
-            </Link>
+            {showConnectedWallet ? (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  title={connectedAddress ?? undefined}
+                  className="w-auto px-5 bg-gradient-radial from-[#0026FF] to-blue-400 text-white py-3 rounded-2xl font-medium border-2 border-white whitespace-nowrap flex items-center justify-center"
+                >
+                  {displayAddress}
+                </button>
+                <button
+                  type="button"
+                  onClick={disconnectWallet}
+                  disabled={isDisconnecting}
+                  className="w-auto px-4 bg-white/10 hover:bg-white/20 text-white py-3 rounded-2xl font-medium border-2 border-white/25 whitespace-nowrap flex items-center justify-center transition disabled:opacity-60"
+                >
+                  {isDisconnecting ? 'Disconnecting...' : 'Disconnect'}
+                </button>
+              </div>
+            ) : (
+              <Link
+                href="/connect-wallet"
+                className="w-auto px-6 bg-gradient-radial from-[#0026FF] to-blue-400 hover:from-[#0026FF] hover:to-blue-500 text-white py-3 rounded-2xl font-medium transition shadow-lg border-2 border-white whitespace-nowrap flex items-center justify-center"
+              >
+                Get started
+              </Link>
+            )}
           </div>
         )}
       </div>

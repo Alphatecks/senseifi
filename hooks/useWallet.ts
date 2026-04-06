@@ -2,8 +2,10 @@
 
 import { useAccount, useConnect, useDisconnect, useChainId } from 'wagmi';
 import { walletService } from '../services/walletService';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useDashboardUser } from '@/context/DashboardUserContext';
+
+const LAST_CONNECTED_WALLET_KEY = 'senseifi:last-connected-wallet';
 
 export function useWallet() {
   const { setDashboardUser } = useDashboardUser();
@@ -11,6 +13,7 @@ export function useWallet() {
   const { connect, connectors, isPending } = useConnect();
   const { disconnect } = useDisconnect();
   const chainId = useChainId();
+  const [persistedAddress, setPersistedAddress] = useState<string | null>(null);
 
   const walletType: 'metamask' | 'coinbase' = (() => {
     const id = connector?.id ?? '';
@@ -21,6 +24,25 @@ export function useWallet() {
   const [isRegistering, setIsRegistering] = useState(false);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
   const [registrationError, setRegistrationError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const stored = window.localStorage.getItem(LAST_CONNECTED_WALLET_KEY);
+    if (stored?.trim()) setPersistedAddress(stored.trim());
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (isConnected && address?.trim()) {
+      window.localStorage.setItem(LAST_CONNECTED_WALLET_KEY, address.trim());
+      setPersistedAddress(address.trim());
+    }
+  }, [isConnected, address]);
+
+  const connectedAddress = useMemo(() => {
+    if (address?.trim()) return address.trim();
+    return persistedAddress;
+  }, [address, persistedAddress]);
 
   const connectMetaMask = async () => {
     // Try multiple possible MetaMask connector IDs
@@ -53,13 +75,17 @@ export function useWallet() {
   const disconnectWallet = async () => {
     setIsDisconnecting(true);
     try {
-      if (address) {
+      if (connectedAddress) {
         try {
-          await walletService.disconnectWallet(address);
+          await walletService.disconnectWallet(connectedAddress);
         } catch (error) {
           console.error('Failed to disconnect wallet from backend:', error);
         }
       }
+      if (typeof window !== 'undefined') {
+        window.localStorage.removeItem(LAST_CONNECTED_WALLET_KEY);
+      }
+      setPersistedAddress(null);
       setDashboardUser(null);
       disconnect();
     } finally {
@@ -89,7 +115,9 @@ export function useWallet() {
 
   return {
     address,
+    connectedAddress,
     isConnected,
+    isConnectedOrRemembered: Boolean(connectedAddress),
     chainId,
     walletType,
     connectMetaMask,

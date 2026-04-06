@@ -106,6 +106,28 @@ export async function getThreatIntelligence(): Promise<ThreatIntelligenceItem[] 
   return data.data;
 }
 
+// --- Domain threat feed (threat intelligence) ---
+export interface DomainThreatFeedSources {
+  from_activity_feed: number;
+  from_env_blocklist: number;
+  static_trusted: number;
+}
+
+export interface DomainThreatFeedData {
+  malicious_domains: string[];
+  trusted_domains: string[];
+  sources: DomainThreatFeedSources;
+  updated_at: string;
+}
+
+export async function getDomainThreatFeed(): Promise<DomainThreatFeedData | null> {
+  const { ok, status, data } = await dashboardFetch<DomainThreatFeedData>(
+    '/protection/domain-threat-feed'
+  );
+  if (status === 404 || !ok || !data) return null;
+  return data;
+}
+
 // --- Security Overview (Threat Intelligence) ---
 export interface SecurityOverviewData {
   overall_risk: { risk_score: number; risk_level: string };

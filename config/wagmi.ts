@@ -1,9 +1,16 @@
-import { createConfig, http } from 'wagmi';
+import { createConfig, createStorage, http } from 'wagmi';
 import { mainnet, bsc, polygon } from 'wagmi/chains';
 import { metaMask, coinbaseWallet } from 'wagmi/connectors';
 
 export const config = createConfig({
   chains: [mainnet, bsc, polygon],
+  ssr: true,
+  storage: createStorage({
+    storage:
+      typeof window !== 'undefined' && window.localStorage
+        ? window.localStorage
+        : undefined,
+  }),
   connectors: [
     metaMask(),
     coinbaseWallet({

@@ -1,14 +1,196 @@
 import React from "react";
 import { useInView } from "../utils/useInView";
 import Image from "next/image";
+import { useDashboardUser } from "@/context/DashboardUserContext";
+import {
+  createBillingPortal,
+  createSubscriptionCheckout,
+  getSubscriptionPlans,
+  type BillingCycle,
+  type SubscriptionPlanKey,
+} from "@/services/subscriptionService";
+import { useWallet } from "@/hooks/useWallet";
 
+type PlanPricing = Record<SubscriptionPlanKey, { monthly: number; annual: number }>;
+type UnknownRecord = Record<string, unknown>;
+
+const DEFAULT_PLAN_PRICING: PlanPricing = {
+  pro: { monthly: 30, annual: 300 },
+  pro_plus: { monthly: 50, annual: 500 },
+  premium: { monthly: 200, annual: 2000 },
+};
+
+function isRecord(value: unknown): value is UnknownRecord {
+  return typeof value === "object" && value !== null;
+}
+
+function toAmount(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const num = Number(value);
+    if (Number.isFinite(num)) return num;
+  }
+  return null;
+}
+
+function readCycleAmount(value: unknown): number | null {
+  if (typeof value === "number" || typeof value === "string") return toAmount(value);
+  if (!isRecord(value)) return null;
+  return (
+    toAmount(value.amount) ??
+    toAmount(value.price) ??
+    toAmount(value.unit_amount) ??
+    toAmount(value.value)
+  );
+}
+
+function parsePlanPricingPayload(payload: unknown): PlanPricing | null {
+  if (!isRecord(payload)) return null;
+  const source = (isRecord(payload.data) ? payload.data : payload.plans) as unknown;
+  const plans = isRecord(source) ? source : payload;
+
+  const nextPricing: PlanPricing = { ...DEFAULT_PLAN_PRICING };
+  const planKeys: SubscriptionPlanKey[] = ["pro", "pro_plus", "premium"];
+  let foundAtLeastOne = false;
+
+  planKeys.forEach((planKey) => {
+    const rawPlan = plans[planKey];
+    if (!isRecord(rawPlan)) return;
+
+    const monthly = readCycleAmount(rawPlan.monthly);
+    const annual = readCycleAmount(rawPlan.annual);
+    if (monthly && annual) {
+      nextPricing[planKey] = { monthly, annual };
+      foundAtLeastOne = true;
+    }
+  });
+
+  return foundAtLeastOne ? nextPricing : null;
+}
 
 export default function WhyTrustSection() {
+  const { connectedAddress, isConnectedOrRemembered, disconnectWallet, isDisconnecting } = useWallet();
+  const { dashboardUser } = useDashboardUser();
+  const [hasMounted, setHasMounted] = React.useState(false);
   const [mobileRef, mobileInView] = useInView<HTMLDivElement>({ threshold: 0.05 });
   const [desktopRef, desktopInView] = useInView<HTMLDivElement>({ threshold: 0.05 });
   const [proRef, proInView] = useInView<HTMLDivElement>({ threshold: 0 });
   const [proPlusRef, proPlusInView] = useInView<HTMLDivElement>({ threshold: 0 });
   const [premiumRef, premiumInView] = useInView<HTMLDivElement>({ threshold: 0 });
+  const [isProAnnual, setIsProAnnual] = React.useState(false);
+  const [isProPlusAnnual, setIsProPlusAnnual] = React.useState(false);
+  const [isPremiumAnnual, setIsPremiumAnnual] = React.useState(false);
+  const [planPricing, setPlanPricing] = React.useState<PlanPricing>(DEFAULT_PLAN_PRICING);
+  const [checkoutLoadingPlan, setCheckoutLoadingPlan] = React.useState<SubscriptionPlanKey | null>(null);
+  const [portalLoading, setPortalLoading] = React.useState(false);
+  const [billingError, setBillingError] = React.useState<string | null>(null);
+
+  const getAnnualBeforeDiscount = (monthly: number) => monthly * 12;
+  const getAnnualSavings = (monthly: number, annual: number) =>
+    getAnnualBeforeDiscount(monthly) - annual;
+  const displayAddress = connectedAddress
+    ? `${connectedAddress.slice(0, 6)}...${connectedAddress.slice(-4)}`
+    : "";
+  const showConnectedWalletCta = hasMounted && isConnectedOrRemembered && Boolean(connectedAddress);
+
+  React.useEffect(() => {
+    setHasMounted(true);
+  }, []);
+
+  const handleCheckout = async (plan: SubscriptionPlanKey, isAnnual: boolean) => {
+    if (!dashboardUser?.user_id) {
+      setBillingError("Connect a wallet first to create a checkout session.");
+      return;
+    }
+
+    setBillingError(null);
+    setCheckoutLoadingPlan(plan);
+    try {
+      const billingCycle: BillingCycle = isAnnual ? "annual" : "monthly";
+      const result = await createSubscriptionCheckout({
+        user_id: dashboardUser.user_id,
+        plan,
+        billing_cycle: billingCycle,
+      });
+
+      if ("error" in result) {
+        setBillingError(result.error);
+        return;
+      }
+
+      if (!result.checkoutUrl) {
+        setBillingError("Unable to create checkout session. Please try again.");
+        return;
+      }
+
+      window.location.href = result.checkoutUrl;
+    } catch {
+      setBillingError("Payment checkout failed. Please try again.");
+    } finally {
+      setCheckoutLoadingPlan(null);
+    }
+  };
+
+  const handleOpenPortal = async () => {
+    if (!dashboardUser?.user_id) {
+      setBillingError("Connect a wallet first to open billing portal.");
+      return;
+    }
+
+    setBillingError(null);
+    setPortalLoading(true);
+    try {
+      const result = await createBillingPortal(dashboardUser.user_id);
+      if (!result?.portalUrl) {
+        setBillingError("Unable to open billing portal. Please try again.");
+        return;
+      }
+      window.location.href = result.portalUrl;
+    } catch {
+      setBillingError("Billing portal failed. Please try again.");
+    } finally {
+      setPortalLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    let active = true;
+    const loadPlans = async () => {
+      try {
+        const plansResponse = await getSubscriptionPlans();
+        if (!active || !plansResponse) return;
+        const parsed = parsePlanPricingPayload(plansResponse);
+        if (parsed) setPlanPricing(parsed);
+      } catch {
+        // Keep fallback pricing when plan fetch fails.
+      }
+    };
+
+    void loadPlans();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const renderBillingToggle = (isAnnual: boolean, onToggle: () => void, id: string) => (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={isAnnual}
+      aria-label={`Toggle ${id} billing cycle`}
+      onClick={onToggle}
+      className="mt-5 relative inline-flex h-10 w-[190px] items-center rounded-full border border-white/20 bg-[#0D1019] p-1 text-sm transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#425EFF] focus-visible:ring-offset-2 focus-visible:ring-offset-[#11131A]"
+    >
+      <span
+        className={`absolute top-1 h-8 w-[92px] rounded-full bg-gradient-to-r from-[#425EFF] to-[#7F5FFF] shadow-[0_4px_14px_rgba(66,94,255,0.35)] transition-transform duration-300 ${
+          isAnnual ? "translate-x-[92px]" : "translate-x-0"
+        }`}
+      />
+      <span className={`relative z-10 w-[92px] text-center ${!isAnnual ? "text-white" : "text-white/70"}`}>Monthly</span>
+      <span className={`relative z-10 w-[92px] text-center ${isAnnual ? "text-white" : "text-white/70"}`}>Annual</span>
+    </button>
+  );
+
   return (
     <section className="w-full py-24 bg-black text-white flex flex-col items-center">
       {/* Mobile Why Section Header - matches screenshot, does NOT affect desktop */}
@@ -67,15 +249,36 @@ export default function WhyTrustSection() {
           </div>
         </div>
       </div>
-      {/* Get Started button beneath the cross */}
+      {/* Wallet status action beneath the cross */}
       <div className="flex justify-center mt-16">
-        {/* Desktop button: #0026FF, mobile unchanged */}
-        <button className="hidden md:inline-block px-8 py-3 bg-[#0026FF] hover:bg-blue-700 text-white text-lg rounded-md shadow-lg transition-colors duration-200">
-          <span className="font-normal">Get Started</span>
-        </button>
-        <button className="inline-block md:hidden px-8 py-3 bg-[#0026FF] hover:bg-blue-700 text-white text-lg rounded-md shadow-lg transition-colors duration-200">
-          <span className="font-normal">Get Started</span>
-        </button>
+        {showConnectedWalletCta ? (
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              title={connectedAddress ?? undefined}
+              className="px-5 py-3 bg-[#0026FF] text-white text-base md:text-lg rounded-md shadow-lg"
+            >
+              {displayAddress}
+            </button>
+            <button
+              type="button"
+              onClick={disconnectWallet}
+              disabled={isDisconnecting}
+              className="px-5 py-3 bg-white/10 hover:bg-white/20 text-white text-base md:text-lg rounded-md shadow-lg border border-white/20 transition-colors duration-200 disabled:opacity-60"
+            >
+              {isDisconnecting ? "Disconnecting..." : "Disconnect Wallet"}
+            </button>
+          </div>
+        ) : (
+          <>
+            <button className="hidden md:inline-block px-8 py-3 bg-[#0026FF] hover:bg-blue-700 text-white text-lg rounded-md shadow-lg transition-colors duration-200">
+              <span className="font-normal">Get Started</span>
+            </button>
+            <button className="inline-block md:hidden px-8 py-3 bg-[#0026FF] hover:bg-blue-700 text-white text-lg rounded-md shadow-lg transition-colors duration-200">
+              <span className="font-normal">Get Started</span>
+            </button>
+          </>
+        )}
       </div>
     {/* Testimonials Section */}
     {/* Mobile Loved by Users Section */}
@@ -102,7 +305,7 @@ export default function WhyTrustSection() {
             </div>
             <span className="text-[10px] text-white/60 ml-3">Used by 50,000+ calm souls worldwide</span>
           </div>
-          <button className="w-full py-3 bg-white text-[#0026FF] text-base rounded-md transition-colors duration-200 font-medium">Get Started Now</button>
+          <button className="w-full py-3 bg-white text-[#0026FF] text-base rounded-md transition-colors duration-200 font-medium">Explore Platform</button>
         </div>
         {/* Card 2: Testimonial */}
         <div className="bg-[#181C23] rounded-2xl p-6 flex flex-col justify-between min-w-[280px] max-w-xs w-4/5">
@@ -152,7 +355,7 @@ export default function WhyTrustSection() {
             </div>
             <span className="text-xs text-white/60 ml-4">Used by 50,000+ calm souls worldwide</span>
           </div>
-          <button className="w-full py-3 bg-white text-blue-600 text-base rounded-md transition-colors duration-200">Get Started Now</button>
+          <button className="w-full py-3 bg-white text-blue-600 text-base rounded-md transition-colors duration-200">Explore Platform</button>
         </div>
         {/* Card 2: Testimonial */}
         <div className="bg-[#181C23] rounded-xl p-8 flex flex-col justify-between min-h-[440px] w-1/3">
@@ -179,6 +382,19 @@ export default function WhyTrustSection() {
       {/* Pricing Section */}
       <div className="w-full py-24 bg-black text-white flex flex-col items-center">
         <h2 className="text-4xl md:text-5xl font-normal mb-16 text-center">Pick your perfect plan</h2>
+        <div className="w-full max-w-6xl flex items-center justify-end px-4 mb-6">
+          <button
+            type="button"
+            onClick={handleOpenPortal}
+            disabled={portalLoading}
+            className="text-sm text-blue-300 hover:text-blue-200 transition disabled:opacity-60"
+          >
+            {portalLoading ? "Opening portal..." : "Manage Billing"}
+          </button>
+        </div>
+        {billingError && (
+          <p className="w-full max-w-6xl px-4 mb-6 text-sm text-red-300">{billingError}</p>
+        )}
         <div className="flex flex-col md:flex-row gap-y-6 md:gap-y-0 md:gap-8 w-full max-w-6xl justify-center">
           {/* PRO PLAN */}
           <div ref={proRef} className={`bg-[#181C23] rounded-xl flex flex-col max-w-sm w-10/12 md:min-w-[380px] md:max-w-[400px] min-h-[600px] md:w-full shadow-lg mx-auto ${proInView ? "animate-zoom-in-out" : "opacity-0"}`}>
@@ -198,10 +414,26 @@ export default function WhyTrustSection() {
               </ul>
               <div className="mt-auto">
                     <div className="bg-[#11131A] rounded-t-xl w-full flex flex-col items-start pl-8">
-                      <span className="text-3xl font-normal text-white mt-6">$30USD<span className="text-base font-normal text-white/70">/month</span></span>
-                     <button className="w-11/12 py-3 mt-6 mb-6 text-white text-base font-normal rounded-full transition-colors duration-200 border-2 border-transparent bg-gradient-to-r from-indigo-400 via-blue-400 to-purple-400 bg-origin-border hover:from-blue-500 hover:to-indigo-600" style={{background: 'linear-gradient(#181C23, #181C23) padding-box, linear-gradient(90deg, #7F5FFF, #01C8FF, #FFB86C) border-box', border: '2px solid transparent'}}>
-                    Go Pro
-                  </button>
+                      {renderBillingToggle(isProAnnual, () => setIsProAnnual((prev) => !prev), "pro plan")}
+                      <span className="text-3xl font-normal text-white mt-4">
+                        ${isProAnnual ? planPricing.pro.annual : planPricing.pro.monthly}USD
+                        <span className="text-base font-normal text-white/70">{isProAnnual ? "/year" : "/month"}</span>
+                      </span>
+                      {isProAnnual && (
+                        <span className="text-xs text-white/60 mt-1">
+                          <span className="line-through">${getAnnualBeforeDiscount(planPricing.pro.monthly).toLocaleString()}USD</span>
+                          {" "}{"->"}{" "}saves ${getAnnualSavings(planPricing.pro.monthly, planPricing.pro.annual).toLocaleString()}USD
+                        </span>
+                      )}
+                     <button
+                      type="button"
+                      onClick={() => handleCheckout("pro", isProAnnual)}
+                      disabled={checkoutLoadingPlan !== null}
+                      className="w-11/12 py-3 mt-6 mb-6 text-white text-base font-normal rounded-full transition-colors duration-200 border-2 border-transparent bg-gradient-to-r from-indigo-400 via-blue-400 to-purple-400 bg-origin-border hover:from-blue-500 hover:to-indigo-600 disabled:opacity-60"
+                      style={{background: 'linear-gradient(#181C23, #181C23) padding-box, linear-gradient(90deg, #7F5FFF, #01C8FF, #FFB86C) border-box', border: '2px solid transparent'}}
+                    >
+                      {checkoutLoadingPlan === "pro" ? "Redirecting..." : "Go Pro"}
+                    </button>
                 </div>
               </div>
             </div>
@@ -229,14 +461,27 @@ export default function WhyTrustSection() {
                         background: 'linear-gradient(135deg, #11131A 60%, #425EFF 100%)',
                       }}
                     >
-                      <span className="text-3xl font-normal text-white mt-6">$50USD<span className="text-base font-normal text-white/70">/month</span></span>
+                      {renderBillingToggle(isProPlusAnnual, () => setIsProPlusAnnual((prev) => !prev), "pro plus plan")}
+                      <span className="text-3xl font-normal text-white mt-4">
+                        ${isProPlusAnnual ? planPricing.pro_plus.annual : planPricing.pro_plus.monthly}USD
+                        <span className="text-base font-normal text-white/70">{isProPlusAnnual ? "/year" : "/month"}</span>
+                      </span>
+                      {isProPlusAnnual && (
+                        <span className="text-xs text-white/70 mt-1">
+                          <span className="line-through">${getAnnualBeforeDiscount(planPricing.pro_plus.monthly).toLocaleString()}USD</span>
+                          {" "}{"->"}{" "}saves ${getAnnualSavings(planPricing.pro_plus.monthly, planPricing.pro_plus.annual).toLocaleString()}USD
+                        </span>
+                      )}
                       <button
-                        className="w-11/12 py-3 mt-6 mb-6 text-white text-base font-normal rounded-full shadow-lg transition-colors duration-200 border-none"
+                        type="button"
+                        onClick={() => handleCheckout("pro_plus", isProPlusAnnual)}
+                        disabled={checkoutLoadingPlan !== null}
+                        className="w-11/12 py-3 mt-6 mb-6 text-white text-base font-normal rounded-full shadow-lg transition-colors duration-200 border-none disabled:opacity-60"
                         style={{
                           background: 'linear-gradient(135deg, #425EFF 40%, #7F5FFF 100%)',
                         }}
                       >
-                        Go Pro+
+                        {checkoutLoadingPlan === "pro_plus" ? "Redirecting..." : "Go Pro+"}
                       </button>
                     </div>
               </div>
@@ -260,10 +505,26 @@ export default function WhyTrustSection() {
               </ul>
               <div className="mt-auto">
                     <div className="bg-[#11131A] rounded-t-xl w-full flex flex-col items-start pl-8">
-                      <span className="text-3xl font-normal text-white mt-6">$200USD<span className="text-base font-normal text-white/70">/month</span></span>
-                     <button className="w-11/12 py-3 mt-6 mb-6 text-white text-base font-normal rounded-full transition-colors duration-200 border-2 border-transparent bg-gradient-to-r from-indigo-400 via-blue-400 to-purple-400 bg-origin-border hover:from-blue-500 hover:to-indigo-600" style={{background: 'linear-gradient(#181C23, #181C23) padding-box, linear-gradient(90deg, #7F5FFF, #01C8FF, #FFB86C) border-box', border: '2px solid transparent'}}>
-                    Get Premium
-                  </button>
+                      {renderBillingToggle(isPremiumAnnual, () => setIsPremiumAnnual((prev) => !prev), "premium plan")}
+                      <span className="text-3xl font-normal text-white mt-4">
+                        ${isPremiumAnnual ? planPricing.premium.annual : planPricing.premium.monthly}USD
+                        <span className="text-base font-normal text-white/70">{isPremiumAnnual ? "/year" : "/month"}</span>
+                      </span>
+                      {isPremiumAnnual && (
+                        <span className="text-xs text-white/60 mt-1">
+                          <span className="line-through">${getAnnualBeforeDiscount(planPricing.premium.monthly).toLocaleString()}USD</span>
+                          {" "}{"->"}{" "}saves ${getAnnualSavings(planPricing.premium.monthly, planPricing.premium.annual).toLocaleString()}USD
+                        </span>
+                      )}
+                     <button
+                      type="button"
+                      onClick={() => handleCheckout("premium", isPremiumAnnual)}
+                      disabled={checkoutLoadingPlan !== null}
+                      className="w-11/12 py-3 mt-6 mb-6 text-white text-base font-normal rounded-full transition-colors duration-200 border-2 border-transparent bg-gradient-to-r from-indigo-400 via-blue-400 to-purple-400 bg-origin-border hover:from-blue-500 hover:to-indigo-600 disabled:opacity-60"
+                      style={{background: 'linear-gradient(#181C23, #181C23) padding-box, linear-gradient(90deg, #7F5FFF, #01C8FF, #FFB86C) border-box', border: '2px solid transparent'}}
+                    >
+                      {checkoutLoadingPlan === "premium" ? "Redirecting..." : "Get Premium"}
+                    </button>
                 </div>
               </div>
             </div>

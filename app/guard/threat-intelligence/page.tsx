@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Image from "next/image";
 
 import { useWallet } from "@/hooks/useWallet";
-import { getSecurityOverview } from "@/services/dashboardService";
-import type { SecurityOverviewData } from "@/services/dashboardService";
+import { getDomainThreatFeed, getSecurityOverview } from "@/services/dashboardService";
+import type { DomainThreatFeedData, SecurityOverviewData } from "@/services/dashboardService";
 
 import alertIcon from "@/assets/icons/alert.png";
 import scanIcon from "@/assets/icons/scan.png";
@@ -78,30 +78,14 @@ const MINI_CHART = (
   </svg>
 );
 
-const COMMUNITY_THREATS: Array<{
-  threatType: string;
-  description: string;
-  network: string;
-  riskLevel: "High" | "Critical" | "Medium";
-  reports: number;
-  status: string;
-  lastSeen: string;
-}> = [
-  { threatType: "Phishing DApp", description: "Fake Uniswap interface prompting wallet connect", network: "Ethereum", riskLevel: "High", reports: 42, status: "Confirmed", lastSeen: "2 mins ago" },
-  { threatType: "Crypto Scam Website", description: "Imitation of a popular exchange to steal credentials", network: "Binance Smart Chain", riskLevel: "Critical", reports: 57, status: "Confirmed", lastSeen: "5 mins ago" },
-  { threatType: "NFT Ransomware", description: "Malware disguised as an NFT minting site", network: "Polygon", riskLevel: "High", reports: 30, status: "In Progress", lastSeen: "10 mins ago" },
-  { threatType: "Fake Airdrop Alert", description: "Phishing attempt through social media claiming", network: "Solana", riskLevel: "Medium", reports: 15, status: "Confirmed", lastSeen: "15 mins ago" },
-  { threatType: "DeFi Rug Pull", description: "Exit scam after raising funds for a fake project", network: "Avalanche", riskLevel: "Critical", reports: 75, status: "Confirmed", lastSeen: "30 mins ago" },
-];
-
 const RISK_CLASS: Record<string, string> = {
-  High: "text-[#F00500]",
-  Critical: "text-[#F00500]",
-  Medium: "text-amber-500",
+  Dangerous: "text-[#F00500]",
+  Safe: "text-[#32BB1D]",
 };
 
 const CHART_W = 280;
 const CHART_H = 100;
+const COMMUNITY_ROWS_PER_PAGE = 10;
 
 function smoothCurvePath(points: Array<{ x: number; y: number }>, tension: number = 0.3): string {
   if (points.length < 2) return "";
@@ -133,15 +117,36 @@ function chartPathFromDaily(daily: Array<{ day: string; count: number }>): { pat
   return { path: basePath, areaPath, dayLabels, values };
 }
 
+type CommunityThreatRow = {
+  domain: string;
+  listType: "malicious_domains" | "trusted_domains";
+  siteSafety: "Dangerous" | "Safe";
+  sourceMetadata: string;
+  updatedAt: string;
+};
+
+function formatUpdatedAt(dateValue: string | null | undefined): string {
+  if (!dateValue) return "—";
+  const parsed = new Date(dateValue);
+  if (Number.isNaN(parsed.getTime())) return "—";
+  return parsed.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 export default function ThreatIntelligencePage() {
   const { address } = useWallet();
   const [mounted, setMounted] = useState(false);
   const [securityOverview, setSecurityOverview] = useState<SecurityOverviewData | null>(null);
   const [securityOverviewLoading, setSecurityOverviewLoading] = useState(false);
+  const [domainThreatFeed, setDomainThreatFeed] = useState<DomainThreatFeedData | null>(null);
+  const [domainThreatFeedLoading, setDomainThreatFeedLoading] = useState(false);
   const [search, setSearch] = useState("");
-  const [riskFilter, setRiskFilter] = useState("Low");
-  const [page, setPage] = useState(12);
-  const totalPages = 78;
+  const [riskFilter, setRiskFilter] = useState("All");
+  const [page, setPage] = useState(1);
   const [highlightDayIndex, setHighlightDayIndex] = useState(0);
   const [summaryModalOpen, setSummaryModalOpen] = useState(false);
 
@@ -159,6 +164,58 @@ export default function ThreatIntelligencePage() {
       .then(setSecurityOverview)
       .finally(() => setSecurityOverviewLoading(false));
   }, [mounted, address]);
+
+  useEffect(() => {
+    if (!mounted) return;
+    setDomainThreatFeedLoading(true);
+    getDomainThreatFeed()
+      .then(setDomainThreatFeed)
+      .finally(() => setDomainThreatFeedLoading(false));
+  }, [mounted]);
+
+  const communityThreatRows = useMemo<CommunityThreatRow[]>(() => {
+    if (!domainThreatFeed) return [];
+    const maliciousSourceMetadata = `activity:${domainThreatFeed.sources?.from_activity_feed ?? 0}, env:${domainThreatFeed.sources?.from_env_blocklist ?? 0}`;
+    const trustedSourceMetadata = `static_trusted:${domainThreatFeed.sources?.static_trusted ?? 0}`;
+    const maliciousRows: CommunityThreatRow[] = (domainThreatFeed.malicious_domains || []).map((domain) => ({
+      domain,
+      listType: "malicious_domains",
+      siteSafety: "Dangerous",
+      sourceMetadata: maliciousSourceMetadata,
+      updatedAt: formatUpdatedAt(domainThreatFeed.updated_at),
+    }));
+    const trustedRows: CommunityThreatRow[] = (domainThreatFeed.trusted_domains || []).map((domain) => ({
+      domain,
+      listType: "trusted_domains",
+      siteSafety: "Safe",
+      sourceMetadata: trustedSourceMetadata,
+      updatedAt: formatUpdatedAt(domainThreatFeed.updated_at),
+    }));
+    return [...maliciousRows, ...trustedRows];
+  }, [domainThreatFeed]);
+
+  const filteredCommunityRows = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return communityThreatRows.filter((row) => {
+      const matchesSearch =
+        !query ||
+        row.domain.toLowerCase().includes(query) ||
+        row.listType.toLowerCase().includes(query) ||
+        row.siteSafety.toLowerCase().includes(query);
+      const matchesRisk = riskFilter === "All" || row.siteSafety === riskFilter;
+      return matchesSearch && matchesRisk;
+    });
+  }, [communityThreatRows, riskFilter, search]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, riskFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredCommunityRows.length / COMMUNITY_ROWS_PER_PAGE));
+  const pagedCommunityRows = filteredCommunityRows.slice(
+    (page - 1) * COMMUNITY_ROWS_PER_PAGE,
+    page * COMMUNITY_ROWS_PER_PAGE
+  );
 
   const daily = securityOverview?.scam_pattern_insights?.daily ?? [];
   const chartData = chartPathFromDaily(daily);
@@ -501,7 +558,7 @@ export default function ThreatIntelligencePage() {
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div className="flex items-center gap-2">
             {ENVELOPE_ICON}
-            <h2 className="text-lg font-medium text-slate-200">Community-Reported Threats</h2>
+            <h2 className="text-lg font-medium text-slate-200">Domain threat feed</h2>
           </div>
           <div className="flex items-center gap-2 flex-1 min-w-0 justify-end">
             <div className="relative w-full max-w-[200px] min-w-[120px]">
@@ -523,9 +580,8 @@ export default function ThreatIntelligencePage() {
                 className="rounded-lg border bg-[#25283D] border-[#25283D] text-white text-sm font-medium pl-3 pr-8 py-2.5 appearance-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-slate-500 min-w-[7rem]"
               >
                 <option value="All">All</option>
-                <option value="Low">Low</option>
-                <option value="Medium">Medium</option>
-                <option value="High">High</option>
+                <option value="Dangerous">Dangerous</option>
+                <option value="Safe">Safe</option>
               </select>
               <svg className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -543,27 +599,33 @@ export default function ThreatIntelligencePage() {
           <table className="w-full text-sm border-separate" style={{ borderSpacing: "0 8px" }}>
             <thead style={{ backgroundColor: "#25283D" }} className="sticky top-0 z-10">
               <tr className="text-slate-300">
-                <th className="text-left py-3 px-4 font-medium rounded-tl-lg rounded-bl-lg whitespace-nowrap">Threat Type</th>
-                <th className="text-left py-3 px-4 font-medium whitespace-nowrap">Description</th>
-                <th className="text-left py-3 px-4 font-medium whitespace-nowrap">Network</th>
-                <th className="text-left py-3 px-4 font-medium whitespace-nowrap">Risk Level</th>
-                <th className="text-left py-3 px-4 font-medium whitespace-nowrap">Reports</th>
-                <th className="text-left py-3 px-4 font-medium whitespace-nowrap">Status</th>
-                <th className="text-left py-3 px-4 font-medium rounded-tr-lg rounded-br-lg whitespace-nowrap">Last Seen</th>
+                <th className="text-left py-3 px-4 font-medium rounded-tl-lg rounded-bl-lg whitespace-nowrap">Domain</th>
+                <th className="text-left py-3 px-4 font-medium whitespace-nowrap">List Type</th>
+                <th className="text-left py-3 px-4 font-medium whitespace-nowrap">Site Safety</th>
+                <th className="text-left py-3 px-4 font-medium whitespace-nowrap">Source Metadata</th>
+                <th className="text-left py-3 px-4 font-medium rounded-tr-lg rounded-br-lg whitespace-nowrap">Updated At</th>
               </tr>
             </thead>
             <tbody>
-              {COMMUNITY_THREATS.map((row, i) => (
-                <tr key={i} className="text-slate-300 hover:bg-slate-700/20 transition-colors bg-[#25283D]/50 [&>td:first-child]:rounded-l-lg [&>td:last-child]:rounded-r-lg">
-                  <td className="py-3 px-4 font-medium text-white whitespace-nowrap">{row.threatType}</td>
-                  <td className="py-3 px-4 text-slate-300 max-w-[240px] truncate">{row.description}</td>
-                  <td className="py-3 px-4 whitespace-nowrap">{row.network}</td>
-                  <td className="py-3 px-4 whitespace-nowrap"><span className={`font-medium ${RISK_CLASS[row.riskLevel]}`}>{row.riskLevel}</span></td>
-                  <td className="py-3 px-4 whitespace-nowrap">{row.reports}</td>
-                  <td className="py-3 px-4 whitespace-nowrap text-slate-300">{row.status}</td>
-                  <td className="py-3 px-4 whitespace-nowrap text-slate-400" style={{ fontFamily: "'Satoshi', sans-serif" }}>{row.lastSeen}</td>
+              {domainThreatFeedLoading ? (
+                <tr>
+                  <td colSpan={5} className="py-6 px-4 text-slate-400">Loading domain threat feed…</td>
                 </tr>
-              ))}
+              ) : !pagedCommunityRows.length ? (
+                <tr>
+                  <td colSpan={5} className="py-6 px-4 text-slate-400">No domain threat feed entries found for current filters.</td>
+                </tr>
+              ) : (
+                pagedCommunityRows.map((row, i) => (
+                  <tr key={`${row.domain}-${i}`} className="text-slate-300 hover:bg-slate-700/20 transition-colors bg-[#25283D]/50 [&>td:first-child]:rounded-l-lg [&>td:last-child]:rounded-r-lg">
+                    <td className="py-3 px-4 font-medium text-white whitespace-nowrap">{row.domain}</td>
+                    <td className="py-3 px-4 whitespace-nowrap text-slate-300">{row.listType}</td>
+                    <td className="py-3 px-4 whitespace-nowrap"><span className={`font-medium ${RISK_CLASS[row.siteSafety]}`}>{row.siteSafety}</span></td>
+                    <td className="py-3 px-4 text-slate-300 max-w-[260px] truncate">{row.sourceMetadata}</td>
+                    <td className="py-3 px-4 whitespace-nowrap text-slate-400" style={{ fontFamily: "'Satoshi', sans-serif" }}>{row.updatedAt}</td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
@@ -573,13 +635,7 @@ export default function ThreatIntelligencePage() {
             ← Prev 10
           </button>
           <div className="flex items-center gap-1 flex-wrap justify-center">
-            <button type="button" onClick={() => setPage(1)} className={`w-8 h-8 rounded-lg text-sm font-medium transition ${page === 1 ? "bg-[#0026FF] text-white" : "text-slate-400 hover:text-white hover:bg-slate-700/50"}`}>1</button>
-            <span className="px-1 text-slate-500">...</span>
-            {[11, 12, 13].map((n) => (
-              <button key={n} type="button" onClick={() => setPage(n)} className={`w-8 h-8 rounded-lg text-sm font-medium transition ${page === n ? "bg-[#0026FF] text-white" : "text-slate-400 hover:text-white hover:bg-slate-700/50"}`}>{n}</button>
-            ))}
-            <span className="px-1 text-slate-500">...</span>
-            <button type="button" onClick={() => setPage(totalPages)} className={`w-8 h-8 rounded-lg text-sm font-medium transition ${page === totalPages ? "bg-[#0026FF] text-white" : "text-slate-400 hover:text-white hover:bg-slate-700/50"}`}>{totalPages}</button>
+            <span className="text-sm text-slate-500">Page {page} of {totalPages}</span>
           </div>
           <button type="button" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages} className="rounded-lg px-3 py-2 text-sm font-medium text-slate-400 hover:text-white bg-[#25283D] border border-slate-600/50 hover:border-slate-500 transition disabled:opacity-50 disabled:cursor-not-allowed">
             Next 10 →

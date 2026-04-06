@@ -63,7 +63,7 @@ const PHISHING_DOMAINS = [
 const DEFAULT_SETTINGS = {
   enabled: true,
   strictMode: true,
-  failClosedOnBackendUnavailable: true,
+  failClosedOnBackendUnavailable: false,
   autoBlockDangerous: true,
   warningThreshold: 45,
   blockThreshold: 75,
@@ -73,7 +73,6 @@ const DEFAULT_SETTINGS = {
 };
 
 const STRICT_METHODS = new Set([
-  'eth_requestAccounts',
   'eth_sendTransaction',
   'eth_sign',
   'personal_sign',
@@ -262,6 +261,14 @@ async function callRiskBackend(payload, context) {
       findings: Array.isArray(json.findings) ? json.findings : [],
       breakdown: json.breakdown || null,
       band: typeof json.band === 'string' ? json.band : null,
+      siteSafety: typeof json.site_safety === 'string' ? json.site_safety : null,
+      siteSafe: typeof json.site_safe === 'boolean' ? json.site_safe : null,
+      websiteScanSummary:
+        typeof json.website_scan === 'string'
+          ? json.website_scan
+          : json.website_scan && typeof json.website_scan.summary === 'string'
+            ? json.website_scan.summary
+            : null,
       recommendation: typeof json.recommendation === 'string' ? json.recommendation : null,
       maliciousContractDetected: !!json.malicious_contract_detected,
       riskLevel10:
@@ -290,11 +297,62 @@ async function callRiskBackend(payload, context) {
       findings: [backendErrorMessage],
       breakdown: null,
       band: null,
+      siteSafety: null,
+      siteSafe: null,
+      websiteScanSummary: null,
       recommendation: null,
       maliciousContractDetected: false,
       riskLevel10: null,
       reportedIncidents: null,
       walletsDrainedEstimate: null,
+      raw: null,
+    };
+  }
+}
+
+async function callDappConnectionCheck(context) {
+  try {
+    const url = context.url || '';
+    const domain = context.domain || '';
+    const res = await fetch(`${getApiBase()}/protection/dapp/connection-check`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url,
+        domain,
+        max_pages: 2,
+      }),
+    });
+    const json = await res.json();
+    if (!res.ok || !json) {
+      throw new Error(`Dapp connection check failed: ${res.status}`);
+    }
+    const rawSiteSafety = typeof json.site_safety === 'string' ? json.site_safety : '';
+    const siteSafety = rawSiteSafety || (typeof json.band === 'string' ? json.band : null);
+    const findings = Array.isArray(json.findings) ? json.findings : [];
+    const websiteScanSummary =
+      typeof json.website_scan === 'string'
+        ? json.website_scan
+        : json.website_scan && typeof json.website_scan.summary === 'string'
+          ? json.website_scan.summary
+          : null;
+    return {
+      ok: true,
+      siteSafety,
+      siteSafe: typeof json.site_safe === 'boolean' ? json.site_safe : null,
+      riskScore: clampRisk(json.risk_score ?? json.riskScore ?? 0),
+      findings,
+      websiteScanSummary,
+      raw: json,
+    };
+  } catch (_error) {
+    return {
+      ok: false,
+      siteSafety: null,
+      siteSafe: null,
+      riskScore: 0,
+      findings: [],
+      websiteScanSummary: null,
       raw: null,
     };
   }
@@ -411,9 +469,37 @@ async function evaluateTransaction(payload, sender) {
       local.findings.push('Backend threat feed flagged destination contract');
     }
   }
-  let backend = await callRiskBackend(payload, { url, domain, walletAddress, chainId });
-  const combinedScore = clampRisk(Math.max(local.score, backend.ok ? backend.score : 0));
-  const findings = [...local.findings, ...(backend.findings || [])];
+  const isConnectMethod = CONNECT_METHODS.has(payload.method);
+  let backend = null;
+  let dappCheck = null;
+  if (isConnectMethod) {
+    dappCheck = await callDappConnectionCheck({ url, domain });
+  } else {
+    backend = await callRiskBackend(payload, { url, domain, walletAddress, chainId });
+  }
+
+  const combinedScore = clampRisk(
+    Math.max(
+      local.score,
+      backend && backend.ok ? backend.score : 0,
+      dappCheck && dappCheck.ok ? dappCheck.riskScore : 0
+    )
+  );
+  const findings = [...local.findings];
+  if (backend) {
+    findings.push(...(backend.findings || []));
+    if (backend.websiteScanSummary) {
+      findings.push(`Website scan: ${backend.websiteScanSummary}`);
+    }
+  }
+  if (dappCheck && dappCheck.ok) {
+    if (Array.isArray(dappCheck.findings) && dappCheck.findings.length) {
+      findings.push(...dappCheck.findings);
+    }
+    if (dappCheck.websiteScanSummary) {
+      findings.push(`Connection scan: ${dappCheck.websiteScanSummary}`);
+    }
+  }
   const txUsd = txValueToUsd(payload);
 
   if ((payload.method === 'eth_sendTransaction' || payload.method === 'eth_signTypedData' || payload.method === 'eth_signTypedData_v4') && settings.approvalRequiresConfirmation) {
@@ -437,18 +523,57 @@ async function evaluateTransaction(payload, sender) {
     findings.push(...currentDomainRisk.findings);
   }
 
+  if (backend) {
+    const backendSiteSafety = String(backend.siteSafety || '').toLowerCase();
+    if (backend.siteSafe === false || backendSiteSafety === 'dangerous') {
+      decision = {
+        action: 'warn',
+        riskScore: Math.max(decision.riskScore, settings.warningThreshold),
+        reason: backend.recommendation || 'Site safety scan flagged this dApp as risky',
+      };
+    }
+    if (backendSiteSafety === 'block') {
+      decision = {
+        action: 'block',
+        riskScore: Math.max(decision.riskScore, settings.blockThreshold),
+        reason: backend.recommendation || 'Site safety scan blocked this dApp',
+      };
+    }
+  }
+
+  if (dappCheck && dappCheck.ok) {
+    const dappSiteSafety = String(dappCheck.siteSafety || '').toLowerCase();
+    if (dappCheck.siteSafe === false || dappSiteSafety === 'dangerous') {
+      decision = {
+        action: 'warn',
+        riskScore: Math.max(decision.riskScore, settings.warningThreshold, dappCheck.riskScore || 0),
+        reason: decision.reason || 'Connection check marked this site as risky',
+      };
+    }
+    if (dappSiteSafety === 'block') {
+      decision = {
+        action: 'block',
+        riskScore: Math.max(decision.riskScore, settings.blockThreshold, dappCheck.riskScore || 0),
+        reason: 'Connection check marked this site as blocked',
+      };
+    }
+  }
+
   if (
     settings.strictMode &&
     settings.failClosedOnBackendUnavailable &&
-    !backend.ok &&
+    !(
+      (isConnectMethod && dappCheck && dappCheck.ok) ||
+      (!isConnectMethod && backend && backend.ok)
+    ) &&
     STRICT_METHODS.has(payload.method)
   ) {
     decision = {
-      action: 'block',
-      riskScore: Math.max(decision.riskScore, settings.blockThreshold),
-      reason: 'Strict mode: backend risk check unavailable',
+      action: 'warn',
+      riskScore: Math.max(decision.riskScore, settings.warningThreshold),
+      reason: 'Backend risk check unavailable. Review carefully before proceeding.',
     };
-    findings.push('Blocked because backend risk check was unavailable');
+    findings.push('Backend unavailable: proceeding with caution using local checks only');
   }
 
   if (
@@ -464,14 +589,18 @@ async function evaluateTransaction(payload, sender) {
     findings.push('Wallet connection request reviewed by SenseiGuard');
   }
 
-  if (backend.maliciousContractDetected || String(backend.band || '').toLowerCase() === 'block') {
+  const maliciousEvidence =
+    !!(backend && backend.maliciousContractDetected) ||
+    String(backend && backend.band ? backend.band : '').toLowerCase() === 'block';
+
+  if (maliciousEvidence) {
     decision = {
       action: 'block',
       riskScore: Math.max(decision.riskScore, backend.score || settings.blockThreshold),
       reason: backend.recommendation || 'Malicious contract detected by backend intelligence',
     };
     findings.push('Malicious contract detected');
-  } else if (String(backend.band || '').toLowerCase() === 'warning' && decision.action === 'allow') {
+  } else if (backend && String(backend.band || '').toLowerCase() === 'warning' && decision.action === 'allow') {
     decision = {
       action: 'warn',
       riskScore: Math.max(decision.riskScore, backend.score || settings.warningThreshold),
@@ -496,11 +625,12 @@ async function evaluateTransaction(payload, sender) {
     reason: decision.reason,
     findings,
     txUsdEstimate: txUsd,
-    maliciousContractDetected: backend.maliciousContractDetected,
-    riskLevel10: backend.riskLevel10,
-    reportedIncidents: backend.reportedIncidents,
-    walletsDrainedEstimate: backend.walletsDrainedEstimate,
-    backendBand: backend.band,
+    maliciousContractDetected: !!(backend && backend.maliciousContractDetected),
+    maliciousEvidence,
+    riskLevel10: backend ? backend.riskLevel10 : null,
+    reportedIncidents: backend ? backend.reportedIncidents : null,
+    walletsDrainedEstimate: backend ? backend.walletsDrainedEstimate : null,
+    backendBand: backend ? backend.band : null,
     at: nowIso(),
     tabId: sender?.tab?.id || null,
   };
@@ -517,11 +647,12 @@ async function evaluateTransaction(payload, sender) {
     domain,
     method: payload.method,
     findings,
-    maliciousContractDetected: backend.maliciousContractDetected,
-    riskLevel10: backend.riskLevel10,
-    reportedIncidents: backend.reportedIncidents,
-    walletsDrainedEstimate: backend.walletsDrainedEstimate,
-    backendBand: backend.band,
+    maliciousContractDetected: !!(backend && backend.maliciousContractDetected),
+    maliciousEvidence,
+    riskLevel10: backend ? backend.riskLevel10 : null,
+    reportedIncidents: backend ? backend.reportedIncidents : null,
+    walletsDrainedEstimate: backend ? backend.walletsDrainedEstimate : null,
+    backendBand: backend ? backend.band : null,
   });
 
   if (decision.action === 'block') {
@@ -538,16 +669,34 @@ async function evaluateTransaction(payload, sender) {
       reason: decision.reason,
       findings,
       txUsdEstimate: txUsd,
-      maliciousContractDetected: backend.maliciousContractDetected,
-      riskLevel10: backend.riskLevel10,
-      reportedIncidents: backend.reportedIncidents,
-      walletsDrainedEstimate: backend.walletsDrainedEstimate,
-      backendBand: backend.band,
-      recommendation: backend.recommendation,
+      maliciousContractDetected: !!(backend && backend.maliciousContractDetected),
+      maliciousEvidence,
+      riskLevel10: backend ? backend.riskLevel10 : null,
+      reportedIncidents: backend ? backend.reportedIncidents : null,
+      walletsDrainedEstimate: backend ? backend.walletsDrainedEstimate : null,
+      backendBand: backend ? backend.band : null,
+      recommendation: backend ? backend.recommendation : null,
+      siteSafety: backend ? backend.siteSafety : dappCheck ? dappCheck.siteSafety : null,
+      siteSafe: backend ? backend.siteSafe : dappCheck ? dappCheck.siteSafe : null,
+      websiteScanSummary:
+        backend && backend.websiteScanSummary
+          ? backend.websiteScanSummary
+          : dappCheck
+            ? dappCheck.websiteScanSummary
+            : null,
+      connectionCheck: dappCheck
+        ? {
+            ok: dappCheck.ok,
+            siteSafety: dappCheck.siteSafety,
+            siteSafe: dappCheck.siteSafe,
+            riskScore: dappCheck.riskScore,
+            websiteScanSummary: dappCheck.websiteScanSummary,
+          }
+        : null,
       backend: {
-        ok: backend.ok,
-        score: backend.score,
-        breakdown: backend.breakdown,
+        ok: backend ? backend.ok : null,
+        score: backend ? backend.score : null,
+        breakdown: backend ? backend.breakdown : null,
       },
       local: {
         score: local.score,

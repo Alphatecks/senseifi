@@ -15,6 +15,30 @@
   const STYLE_ID = 'senseiguard-scan-overlay-style';
   const pendingRequests = new Set();
 
+  function isExtensionContextAlive() {
+    return typeof chrome !== 'undefined' && !!(chrome.runtime && chrome.runtime.id);
+  }
+
+  function safeRuntimeGetUrl(path) {
+    if (!isExtensionContextAlive()) return '';
+    try {
+      return chrome.runtime.getURL(path);
+    } catch (_error) {
+      return '';
+    }
+  }
+
+  function sendRuntimeMessage(message) {
+    if (!isExtensionContextAlive()) {
+      return Promise.reject(new Error('Extension context invalidated'));
+    }
+    try {
+      return chrome.runtime.sendMessage(message);
+    } catch (error) {
+      return Promise.reject(error);
+    }
+  }
+
   function ensureScanOverlay() {
     if (!document.getElementById(STYLE_ID)) {
       const style = document.createElement('style');
@@ -203,6 +227,9 @@
           font-size: clamp(24px, 3.4vw, 44px);
           font-weight: 700;
         }
+        #${ALERT_OVERLAY_ID} .senseiguard-critical-warning {
+          color: #ffcc66;
+        }
         #${ALERT_OVERLAY_ID} .senseiguard-row {
           display: flex;
           justify-content: space-between;
@@ -251,13 +278,14 @@
 
     let overlay = document.getElementById(OVERLAY_ID);
     if (!overlay) {
+      const logoUrl = safeRuntimeGetUrl('assets/scaled_logo.png');
       overlay = document.createElement('div');
       overlay.id = OVERLAY_ID;
       overlay.innerHTML = `
         <div class="senseiguard-card" role="dialog" aria-modal="true" aria-label="SenseiGuard scan in progress">
           <div class="senseiguard-header">
             <div class="senseiguard-brand">
-              <img class="senseiguard-logo" src="${chrome.runtime.getURL('assets/scaled_logo.png')}" alt="SenseiGuard" />
+              <img class="senseiguard-logo" src="${logoUrl}" alt="SenseiGuard" />
               <span>SenseiGuard</span>
             </div>
             <button type="button" class="senseiguard-close" aria-label="Close">×</button>
@@ -290,26 +318,27 @@
     ensureScanOverlay();
     let overlay = document.getElementById(ALERT_OVERLAY_ID);
     if (!overlay) {
+      const logoUrl = safeRuntimeGetUrl('assets/scaled_logo.png');
       overlay = document.createElement('div');
       overlay.id = ALERT_OVERLAY_ID;
       overlay.innerHTML = `
         <div class="senseiguard-card" role="dialog" aria-modal="true" aria-label="SenseiGuard malicious contract warning">
           <div class="senseiguard-header">
             <div class="senseiguard-brand">
-              <img class="senseiguard-logo" src="${chrome.runtime.getURL('assets/scaled_logo.png')}" alt="SenseiGuard" />
+              <img class="senseiguard-logo" src="${logoUrl}" alt="SenseiGuard" />
               <span>SenseiGuard</span>
             </div>
             <button type="button" class="senseiguard-close" aria-label="Close">×</button>
           </div>
           <div class="senseiguard-body">
             <h2 class="senseiguard-detected-title">Malicious Contract Detected</h2>
-            <p class="senseiguard-critical">🚨 Critical Warning</p>
+            <p class="senseiguard-critical" id="senseiguard-alert-critical">🚨 Critical Warning</p>
             <div class="senseiguard-row">
               <span>Risk Level:</span>
               <span id="senseiguard-alert-risk">9.6 / 10</span>
             </div>
             <div class="senseiguard-row senseiguard-row-muted">
-              <span>Reported incidents:</span>
+              <span id="senseiguard-alert-meta-label">Reported incidents:</span>
               <span id="senseiguard-alert-incidents">Multiple wallets drained</span>
             </div>
             <button type="button" class="senseiguard-btn senseiguard-btn-block" id="senseiguard-btn-block">
@@ -357,25 +386,19 @@
 
   function isMaliciousDecision(decision) {
     if (!decision) return false;
+    if (decision.maliciousEvidence) return true;
     if (decision.maliciousContractDetected) return true;
-    if (decision.action === 'block') return true;
-    const findings = Array.isArray(decision.findings) ? decision.findings.join(' ').toLowerCase() : '';
-    const reason = String(decision.reason || '').toLowerCase();
     const backendBand = String(decision.backendBand || '').toLowerCase();
-    return (
-      backendBand === 'block' ||
-      findings.includes('malicious') ||
-      findings.includes('scam') ||
-      findings.includes('drain') ||
-      reason.includes('malicious') ||
-      reason.includes('scam')
-    );
+    return backendBand === 'block';
   }
 
   function showMaliciousOverlay(decision, requestContext) {
+    return new Promise((resolve) => {
     const overlay = ensureAlertOverlay();
     const riskTextNode = overlay.querySelector('#senseiguard-alert-risk');
     const incidentsNode = overlay.querySelector('#senseiguard-alert-incidents');
+    const incidentsLabelNode = overlay.querySelector('#senseiguard-alert-meta-label');
+    const criticalNode = overlay.querySelector('#senseiguard-alert-critical');
     const blockBtn = overlay.querySelector('#senseiguard-btn-block');
     const proceedBtn = overlay.querySelector('#senseiguard-btn-proceed');
     const titleNode = overlay.querySelector('.senseiguard-detected-title');
@@ -389,24 +412,36 @@
       riskTextNode.textContent = `${Math.max(0, Math.min(10, riskLevel10)).toFixed(1)} / 10`;
     }
 
-    if (titleNode && decision && decision.action === 'warn') {
-      titleNode.textContent = 'High-Risk Contract Detected';
+    const malicious = isMaliciousDecision(decision);
+
+    if (titleNode) {
+      titleNode.textContent = malicious ? 'Malicious Contract Detected' : 'Scan Issue Detected';
+    }
+    if (criticalNode) {
+      criticalNode.textContent = malicious
+        ? '🚨 Critical Warning'
+        : '⚠ Review required before proceeding';
+      criticalNode.classList.toggle('senseiguard-critical-warning', !malicious);
+    }
+    if (incidentsLabelNode) {
+      incidentsLabelNode.textContent = malicious ? 'Reported incidents:' : 'Top finding:';
     }
 
     if (incidentsNode) {
-      if (
+      if (malicious && (
         typeof decision?.walletsDrainedEstimate === 'number' &&
         Number.isFinite(decision.walletsDrainedEstimate)
-      ) {
+      )) {
         incidentsNode.textContent = `${decision.walletsDrainedEstimate} wallets drained`;
       } else if (
+        malicious &&
         typeof decision?.reportedIncidents === 'number' &&
         Number.isFinite(decision.reportedIncidents)
       ) {
         incidentsNode.textContent = `${decision.reportedIncidents} reported incidents`;
       } else {
         const fallback =
-          decision && decision.action === 'block' ? 'Critical malicious contract activity' : 'Suspicious activity reported';
+          malicious ? 'Critical malicious contract activity' : 'Suspicious activity reported';
         incidentsNode.textContent =
           Array.isArray(decision?.findings) && decision.findings.length > 0 ? decision.findings[0] : fallback;
       }
@@ -414,41 +449,54 @@
 
     if (blockBtn) {
       blockBtn.onclick = function () {
-        chrome.runtime.sendMessage({
+        sendRuntimeMessage({
           type: 'SENSEIGUARD_USER_DECISION',
           decision: 'block',
           context: {
             method: requestContext?.method || null,
             riskScore: decision?.riskScore || null,
           },
-        });
+        }).catch(function () {});
         overlay.classList.remove('senseiguard-visible');
+        resolve('block');
       };
     }
 
     if (proceedBtn) {
       proceedBtn.onclick = function () {
-        chrome.runtime.sendMessage({
+        sendRuntimeMessage({
           type: 'SENSEIGUARD_USER_DECISION',
           decision: 'proceed',
           context: {
             method: requestContext?.method || null,
             riskScore: decision?.riskScore || null,
           },
-        });
+        }).catch(function () {});
         overlay.classList.remove('senseiguard-visible');
+        resolve('proceed');
       };
-      proceedBtn.style.display = decision?.action === 'block' ? 'none' : 'block';
+      proceedBtn.style.display = 'block';
+    }
+
+    const closeBtn = overlay.querySelector('.senseiguard-close');
+    if (closeBtn) {
+      closeBtn.onclick = function () {
+        overlay.classList.remove('senseiguard-visible');
+        resolve('dismiss');
+      };
     }
 
     overlay.classList.add('senseiguard-visible');
+    });
   }
 
   function injectInpageHook() {
     if (document.getElementById('senseiguard-inpage-hook')) return;
+    const hookUrl = safeRuntimeGetUrl('inpage-hook.js');
+    if (!hookUrl) return;
     const script = document.createElement('script');
     script.id = 'senseiguard-inpage-hook';
-    script.src = chrome.runtime.getURL('inpage-hook.js');
+    script.src = hookUrl;
     script.async = false;
     (document.documentElement || document.head).appendChild(script);
     script.onload = function () {
@@ -457,21 +505,20 @@
   }
 
   async function askBackgroundForDecision(payload) {
-    return chrome.runtime.sendMessage({
+    return sendRuntimeMessage({
       type: 'SENSEIGUARD_EVALUATE_TX',
       payload,
     });
   }
 
   function sendDebugEvent(eventName, details) {
-    if (!(typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage)) return;
-    chrome.runtime.sendMessage({
+    sendRuntimeMessage({
       type: 'SENSEIGUARD_DEBUG_EVENT',
       payload: {
         event: eventName,
         details: details || null,
       },
-    });
+    }).catch(function () {});
   }
 
   window.addEventListener('message', async (event) => {
@@ -503,21 +550,41 @@
         reason: 'No decision returned',
       };
 
+      const requiresUserGate = decision.action === 'warn' || isMaliciousDecision(decision);
+      let finalDecision = decision;
+
+      if (requiresUserGate) {
+        const userChoice = await showMaliciousOverlay(decision, { method: data.method });
+        if (userChoice === 'block' || userChoice === 'dismiss') {
+          finalDecision = {
+            ...decision,
+            action: 'block',
+            reason:
+              userChoice === 'dismiss'
+                ? 'Blocked: user dismissed SenseiGuard review'
+                : decision.reason || 'Blocked by user via SenseiGuard review',
+          };
+        } else {
+          finalDecision = {
+            ...decision,
+            action: 'allow',
+            reason: decision.reason || 'Allowed by user after SenseiGuard review',
+          };
+        }
+      }
+
       window.postMessage(
         {
           source: EXTENSION_TO_PAGE,
           requestId,
-          decision,
+          decision: finalDecision,
         },
         '*'
       );
-      if (isMaliciousDecision(decision)) {
-        showMaliciousOverlay(decision, { method: data.method });
-      }
       sendDebugEvent('tx_decision_sent', {
         method: data.method || 'unknown',
-        action: decision.action || 'allow',
-        riskScore: decision.riskScore || 0,
+        action: finalDecision.action || 'allow',
+        riskScore: finalDecision.riskScore || 0,
       });
     } catch (error) {
       sendDebugEvent('tx_decision_error', {
