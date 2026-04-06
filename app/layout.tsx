@@ -2,10 +2,18 @@ import type { Metadata } from 'next'
 import './globals.css'
 import '../styles/mobile-hide.css'
 import { Providers } from './providers'
+import logoIcon from '@/assets/images/logo.png'
 
 export const metadata: Metadata = {
   title: 'SenseiFi - AI-Powered Trading Intelligence',
   description: 'Join the waiting list for SenseiFi - AI-powered trading intelligence, security tools, and exclusive launch benefits.',
+  icons: {
+    icon: [
+      { url: logoIcon.src, type: 'image/png' },
+    ],
+    shortcut: [{ url: logoIcon.src }],
+    apple: [{ url: logoIcon.src }],
+  },
 }
 
 export default function RootLayout({
