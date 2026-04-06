@@ -1,12 +1,15 @@
-"use client";
-
 import Link from "next/link";
 import Image from "next/image";
-import { useSearchParams } from "next/navigation";
 
-export default function BillingSuccessPage() {
-  const searchParams = useSearchParams();
-  const sessionId = searchParams.get("session_id");
+type BillingSuccessPageProps = {
+  searchParams?: {
+    session_id?: string | string[];
+  };
+};
+
+export default function BillingSuccessPage({ searchParams }: BillingSuccessPageProps) {
+  const sessionIdRaw = searchParams?.session_id;
+  const sessionId = Array.isArray(sessionIdRaw) ? sessionIdRaw[0] : sessionIdRaw;
 
   return (
     <main className="min-h-screen bg-[#0a0a1a] text-white relative overflow-hidden">
