@@ -151,7 +151,7 @@ function formatLastScan(lastScanAt: string | null): string {
 }
 
 export default function WalletSecurityPage() {
-  const { address } = useWallet();
+  const { activeAddress: address } = useWallet();
   const [txPage, setTxPage] = useState(1);
   const [txList, setTxList] = useState<TransactionMonitoringItem[]>([]);
   const [txLoading, setTxLoading] = useState(false);

@@ -103,7 +103,7 @@ function formatBalance(totalAssetUsd: string | null | undefined): string {
 export default function GuardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { address } = useWallet();
+  const { activeAddress: address } = useWallet();
   const { dashboardUser } = useDashboardUser();
   const [totalAssetUsd, setTotalAssetUsd] = useState<string | null>(null);
   const [notificationsOpen, setNotificationsOpen] = useState(false);

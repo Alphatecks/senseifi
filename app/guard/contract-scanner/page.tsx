@@ -83,7 +83,7 @@ function trustScoreColor(score: number): string {
 const SCAN_HISTORY_PAGE_SIZE = 5;
 
 export default function ContractScannerPage() {
-  const { address } = useWallet();
+  const { activeAddress: address } = useWallet();
   const [contractLink, setContractLink] = useState("");
   const [chainIdInput, setChainIdInput] = useState("");
   const [lastScanChainId, setLastScanChainId] = useState<number>(1);

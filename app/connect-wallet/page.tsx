@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -19,6 +19,7 @@ export default function ConnectWalletPage() {
     address,
     isConnected,
     chainId,
+    walletType,
     connectMetaMask,
     connectCoinbase,
     disconnectWallet,
@@ -28,6 +29,7 @@ export default function ConnectWalletPage() {
     registrationError,
     isPending,
   } = useWallet();
+  const registeredSessionKeyRef = useRef<string | null>(null);
 
   // Track if component is mounted on client side
   useEffect(() => {
@@ -40,25 +42,32 @@ export default function ConnectWalletPage() {
       setConnectedWalletType(null);
       setIsConnectingMetaMask(false);
       setIsConnectingCoinbase(false);
+      registeredSessionKeyRef.current = null;
     }
   }, [isConnected]);
 
   // Auto-register wallet when connected
   useEffect(() => {
-    if (isConnected && address && chainId && !isRegistering && connectedWalletType) {
-      registerWalletWithBackend(connectedWalletType)
-        .then(() => {
-          // Redirect to SenseiGuard dashboard after successful registration
-          if (selectedPath === 'guard') {
-            setTimeout(() => router.push('/guard'), 1000);
-          }
-        })
-        .catch((error) => {
-          console.error('Failed to register wallet:', error);
-        });
-    }
+    if (!isConnected || !address || !chainId || isRegistering) return;
+    const walletTypeToRegister = connectedWalletType ?? walletType;
+    const sessionKey = `${address.toLowerCase()}:${chainId}:${walletTypeToRegister}`;
+    if (registeredSessionKeyRef.current === sessionKey) return;
+    registeredSessionKeyRef.current = sessionKey;
+
+    registerWalletWithBackend(walletTypeToRegister)
+      .then(() => {
+        if (selectedPath === 'guard') {
+          setTimeout(() => router.push('/guard'), 1000);
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to register wallet:', error);
+        if (registeredSessionKeyRef.current === sessionKey) {
+          registeredSessionKeyRef.current = null;
+        }
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConnected, address, chainId, connectedWalletType]);
+  }, [isConnected, address, chainId, connectedWalletType, walletType, isRegistering, selectedPath]);
 
   const handleConnectMetaMask = async () => {
     try {

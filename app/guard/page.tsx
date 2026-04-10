@@ -69,7 +69,7 @@ function formatLastScan(lastScanAt: string | null): string {
 
 export default function GuardDashboardPage() {
   const router = useRouter();
-  const { address, chainId, walletType } = useWallet();
+  const { activeAddress: address, chainId, walletType } = useWallet();
   const { setDashboardUser } = useDashboardUser();
   const { openRescanModal, scanCompleteTimestamp } = useRescanModal();
   const [summary, setSummary] = useState<DashboardSummaryData | null>(null);

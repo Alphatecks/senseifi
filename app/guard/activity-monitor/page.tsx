@@ -150,7 +150,7 @@ const FEED_POLL_MS = 10000;
 const FEED_PER_PAGE = 10;
 
 export default function ActivityMonitorPage() {
-  const { address } = useWallet();
+  const { activeAddress: address } = useWallet();
   const { dashboardUser } = useDashboardUser();
   const { openRescanModal } = useRescanModal();
   const [search, setSearch] = useState("");

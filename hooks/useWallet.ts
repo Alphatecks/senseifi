@@ -10,7 +10,7 @@ const LAST_CONNECTED_WALLET_KEY = 'senseifi:last-connected-wallet';
 export function useWallet() {
   const { setDashboardUser } = useDashboardUser();
   const { address, isConnected, connector } = useAccount();
-  const { connect, connectors, isPending } = useConnect();
+  const { connectAsync, connectors, isPending } = useConnect();
   const { disconnect } = useDisconnect();
   const chainId = useChainId();
   const [persistedAddress, setPersistedAddress] = useState<string | null>(null);
@@ -51,11 +51,12 @@ export function useWallet() {
       c.id === 'io.metamask' ||
       c.name?.toLowerCase().includes('metamask')
     );
-    if (metaMaskConnector) {
-      connect({ connector: metaMaskConnector });
-    } else {
-      console.error('MetaMask connector not found. Available connectors:', connectors.map(c => ({ id: c.id, name: c.name })));
+    if (!metaMaskConnector) {
+      const available = connectors.map((c) => ({ id: c.id, name: c.name }));
+      console.error('MetaMask connector not found. Available connectors:', available);
+      throw new Error('MetaMask connector not found');
     }
+    await connectAsync({ connector: metaMaskConnector });
   };
 
   const connectCoinbase = async () => {
@@ -65,11 +66,12 @@ export function useWallet() {
       c.id === 'coinbaseWallet' ||
       c.name?.toLowerCase().includes('coinbase')
     );
-    if (coinbaseConnector) {
-      connect({ connector: coinbaseConnector });
-    } else {
-      console.error('Coinbase Wallet connector not found. Available connectors:', connectors.map(c => ({ id: c.id, name: c.name })));
+    if (!coinbaseConnector) {
+      const available = connectors.map((c) => ({ id: c.id, name: c.name }));
+      console.error('Coinbase Wallet connector not found. Available connectors:', available);
+      throw new Error('Coinbase Wallet connector not found');
     }
+    await connectAsync({ connector: coinbaseConnector });
   };
 
   const disconnectWallet = async () => {
@@ -93,7 +95,7 @@ export function useWallet() {
     }
   };
 
-  const registerWalletWithBackend = async (walletType: 'metamask' | 'coinbase') => {
+  const registerWalletWithBackend = async (walletTypeOverride?: 'metamask' | 'coinbase') => {
     if (!address || !chainId) {
       throw new Error('Wallet not connected');
     }
@@ -102,7 +104,8 @@ export function useWallet() {
     setRegistrationError(null);
 
     try {
-      const { dashboard_user } = await walletService.connectWallet(address, chainId, walletType);
+      const resolvedWalletType = walletTypeOverride ?? walletType;
+      const { dashboard_user } = await walletService.connectWallet(address, chainId, resolvedWalletType);
       if (dashboard_user) setDashboardUser(dashboard_user);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to register wallet';
@@ -115,6 +118,7 @@ export function useWallet() {
 
   return {
     address,
+    activeAddress: connectedAddress,
     connectedAddress,
     isConnected,
     isConnectedOrRemembered: Boolean(connectedAddress),

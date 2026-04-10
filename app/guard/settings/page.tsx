@@ -111,7 +111,7 @@ const navItems: Array<{ id: SettingsSection; label: string; icon: (active: boole
 ];
 
 export default function SettingsPage() {
-  const { address } = useWallet();
+  const { activeAddress: address } = useWallet();
   const { dashboardUser } = useDashboardUser();
   const connectNetworksModal = useConnectNetworksModal();
   const [section, setSection] = useState<SettingsSection>("profile");

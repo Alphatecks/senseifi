@@ -138,7 +138,7 @@ function formatUpdatedAt(dateValue: string | null | undefined): string {
 }
 
 export default function ThreatIntelligencePage() {
-  const { address } = useWallet();
+  const { activeAddress: address } = useWallet();
   const [mounted, setMounted] = useState(false);
   const [securityOverview, setSecurityOverview] = useState<SecurityOverviewData | null>(null);
   const [securityOverviewLoading, setSecurityOverviewLoading] = useState(false);
