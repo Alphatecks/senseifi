@@ -7,6 +7,9 @@ import logoIcon from '@/assets/images/logo.png'
 export const metadata: Metadata = {
   title: 'SenseiFi - AI-Powered Trading Intelligence',
   description: 'Join the waiting list for SenseiFi - AI-powered trading intelligence, security tools, and exclusive launch benefits.',
+  other: {
+    'base:app_id': '69d8831234c69936dc95d6b2',
+  },
   icons: {
     icon: [
       { url: logoIcon.src, type: 'image/png' },
