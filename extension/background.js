@@ -4,6 +4,7 @@
 
 const STORAGE_KEYS = {
   session: 'senseiguard_session',
+  walletAddress: 'senseiguard_wallet_address',
   settings: 'senseiguard_settings',
   alerts: 'senseiguard_alerts',
   riskCache: 'senseiguard_risk_cache',
@@ -17,6 +18,7 @@ const MESSAGE_TYPES = {
   getState: 'SENSEIGUARD_GET_STATE',
   setSettings: 'SENSEIGUARD_SET_SETTINGS',
   registerWallet: 'SENSEIGUARD_REGISTER_WALLET',
+  clearWalletSession: 'SENSEIGUARD_CLEAR_WALLET_SESSION',
   markAlertRead: 'SENSEIGUARD_MARK_ALERT_READ',
   userDecision: 'SENSEIGUARD_USER_DECISION',
   debugEvent: 'SENSEIGUARD_DEBUG_EVENT',
@@ -148,6 +150,17 @@ async function storageGet(keys) {
 
 async function storageSet(patch) {
   return chrome.storage.local.set(patch);
+}
+
+async function storageRemove(keys) {
+  return chrome.storage.local.remove(keys);
+}
+
+function normalizeWalletAddress(value) {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!/^0x[a-fA-F0-9]{40}$/.test(trimmed)) return null;
+  return trimmed;
 }
 
 function clampRisk(score) {
@@ -314,12 +327,14 @@ async function callDappConnectionCheck(context) {
   try {
     const url = context.url || '';
     const domain = context.domain || '';
+    const walletAddress = normalizeWalletAddress(context.walletAddress) || null;
     const res = await fetch(`${getApiBase()}/protection/dapp/connection-check`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         url,
         domain,
+        wallet_address: walletAddress,
         max_pages: 2,
       }),
     });
@@ -406,6 +421,31 @@ async function loadSession() {
   return migrated;
 }
 
+async function loadPersistedWalletAddress() {
+  const stored = await storageGet([STORAGE_KEYS.walletAddress, STORAGE_KEYS.session, 'senseiguard_wallet_connect']);
+  const direct = normalizeWalletAddress(stored[STORAGE_KEYS.walletAddress]);
+  if (direct) return direct;
+
+  const session = stored[STORAGE_KEYS.session];
+  const sessionWallet =
+    session && Array.isArray(session.connectedWallets) && session.connectedWallets.length > 0
+      ? normalizeWalletAddress(session.connectedWallets[0] && session.connectedWallets[0].address)
+      : null;
+  if (sessionWallet) {
+    await storageSet({ [STORAGE_KEYS.walletAddress]: sessionWallet });
+    return sessionWallet;
+  }
+
+  const legacy = stored.senseiguard_wallet_connect;
+  const legacyWallet = normalizeWalletAddress(legacy && legacy.wallet ? legacy.wallet.address : null);
+  if (legacyWallet) {
+    await storageSet({ [STORAGE_KEYS.walletAddress]: legacyWallet });
+    return legacyWallet;
+  }
+
+  return null;
+}
+
 async function loadRiskCache() {
   const stored = await storageGet([STORAGE_KEYS.riskCache]);
   const cache = stored[STORAGE_KEYS.riskCache] || {};
@@ -453,7 +493,9 @@ async function evaluateTransaction(payload, sender) {
   const session = await loadSession();
   const riskCache = await loadRiskCache();
   const connectedWallet = session?.connectedWallets?.[0] || null;
-  const walletAddress = connectedWallet?.address || null;
+  const sessionWalletAddress = normalizeWalletAddress(connectedWallet?.address);
+  const persistedWalletAddress = await loadPersistedWalletAddress();
+  const walletAddress = sessionWalletAddress || persistedWalletAddress;
   const chainId = connectedWallet?.chain_id || null;
   const url = sender?.tab?.url || '';
   const domain = domainFromUrl(url);
@@ -470,10 +512,19 @@ async function evaluateTransaction(payload, sender) {
     }
   }
   const isConnectMethod = CONNECT_METHODS.has(payload.method);
+  if (isConnectMethod) {
+    console.info('[SenseiGuard][scan][connect]', {
+      method: payload.method,
+      domain,
+      sessionWalletAddress: sessionWalletAddress || null,
+      persistedWalletAddress: persistedWalletAddress || null,
+      effectiveWalletAddress: walletAddress || null,
+    });
+  }
   let backend = null;
   let dappCheck = null;
   if (isConnectMethod) {
-    dappCheck = await callDappConnectionCheck({ url, domain });
+    dappCheck = await callDappConnectionCheck({ url, domain, walletAddress });
   } else {
     backend = await callRiskBackend(payload, { url, domain, walletAddress, chainId });
   }
@@ -810,17 +861,27 @@ async function handleMessage(message, sender) {
     case MESSAGE_TYPES.registerWallet: {
       const current = (await loadSession()) || { connectedWallets: [], dashboardUser: null, updatedAt: null };
       const wallet = message.wallet || null;
-      if (wallet && wallet.address) {
-        const withoutCurrent = current.connectedWallets.filter((w) => w.address !== wallet.address);
+      const walletAddress = normalizeWalletAddress(wallet && wallet.address);
+      if (walletAddress) {
+        const sanitizedWallet = { ...wallet, address: walletAddress };
+        const withoutCurrent = current.connectedWallets.filter((w) => w.address !== walletAddress);
         const updated = {
-          connectedWallets: [wallet, ...withoutCurrent].slice(0, 5),
+          connectedWallets: [sanitizedWallet, ...withoutCurrent].slice(0, 5),
           dashboardUser: message.dashboardUser || current.dashboardUser || null,
           updatedAt: nowIso(),
         };
-        await storageSet({ [STORAGE_KEYS.session]: updated });
+        await storageSet({
+          [STORAGE_KEYS.session]: updated,
+          [STORAGE_KEYS.walletAddress]: walletAddress,
+        });
         return { ok: true, session: updated };
       }
       return { ok: false, error: 'Invalid wallet payload' };
+    }
+
+    case MESSAGE_TYPES.clearWalletSession: {
+      await storageRemove([STORAGE_KEYS.session, STORAGE_KEYS.walletAddress, 'senseiguard_wallet_connect']);
+      return { ok: true };
     }
 
     case MESSAGE_TYPES.markAlertRead: {

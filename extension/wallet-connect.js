@@ -133,6 +133,9 @@
   }
 
   async function persistSession(payload) {
+    var walletAddress = payload && payload.data && typeof payload.data.address === 'string'
+      ? payload.data.address
+      : null;
     if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
       await chrome.storage.local.set({
         senseiguard_wallet_connect: {
@@ -140,6 +143,7 @@
           dashboard_user: payload.dashboard_user,
           savedAt: Date.now(),
         },
+        senseiguard_wallet_address: walletAddress,
       });
     }
     if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
@@ -151,6 +155,25 @@
         });
       } catch (_err) {
         // Keep connect flow resilient even if background message fails.
+      }
+    }
+  }
+
+  async function clearStoredWalletSession() {
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+      await chrome.storage.local.remove([
+        'senseiguard_wallet_connect',
+        'senseiguard_wallet_address',
+        'senseiguard_session',
+      ]);
+    }
+    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+      try {
+        await chrome.runtime.sendMessage({
+          type: 'SENSEIGUARD_CLEAR_WALLET_SESSION',
+        });
+      } catch (_err) {
+        // Keep disconnect flow resilient even if background message fails.
       }
     }
   }
@@ -169,5 +192,6 @@
     connectViaActiveTab: connectViaActiveTab,
     registerWalletWithBackend: registerWalletWithBackend,
     connectAndRegister: connectAndRegister,
+    clearStoredWalletSession: clearStoredWalletSession,
   };
 })();

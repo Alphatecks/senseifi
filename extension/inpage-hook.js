@@ -19,7 +19,8 @@
   const PAGE_TO_EXTENSION = 'SENSEIGUARD_TX_REQUEST';
   const EXTENSION_TO_PAGE = 'SENSEIGUARD_TX_DECISION';
   const DEBUG_TO_EXTENSION = 'SENSEIGUARD_DEBUG_EVENT';
-  const DECISION_TIMEOUT_MS = 3500;
+  const DEFAULT_DECISION_TIMEOUT_MS = 45000;
+  const CONNECT_DECISION_TIMEOUT_MS = 90000;
   const STATE_KEY = '__senseiguardInpageState';
   const state =
     window[STATE_KEY] ||
@@ -71,6 +72,13 @@
     });
   }
 
+  function getDecisionTimeoutMs(method) {
+    if (method === 'eth_requestAccounts' || method === 'wallet_requestPermissions') {
+      return CONNECT_DECISION_TIMEOUT_MS;
+    }
+    return DEFAULT_DECISION_TIMEOUT_MS;
+  }
+
   function attachListenersOnce() {
     if (state.listenersAttached) return;
     state.listenersAttached = true;
@@ -108,7 +116,7 @@
       );
       emitDebug('tx_intercepted_inpage', { method });
 
-      const decision = await awaitDecision(requestId, DECISION_TIMEOUT_MS);
+      const decision = await awaitDecision(requestId, getDecisionTimeoutMs(method));
       if (decision.action === 'block') {
         const err = new Error(
           `Blocked by SenseiGuard (${decision.riskScore || 0}/100): ${decision.reason || 'High risk detected'}`
