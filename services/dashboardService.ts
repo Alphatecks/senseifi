@@ -55,12 +55,21 @@ async function dashboardFetch<T>(
   options: RequestInit = {}
 ): Promise<{ ok: boolean; status: number; data: T | null }> {
   const url = `${DASHBOARD_API_BASE_URL}${endpoint}`;
-  const res = await fetch(url, {
-    headers: { 'Content-Type': 'application/json', ...(options.headers as Record<string, string>) },
-    ...options,
-  });
-  const data = res.ok ? await res.json().catch(() => null) : null;
-  return { ok: res.ok, status: res.status, data };
+  try {
+    const res = await fetch(url, {
+      headers: { 'Content-Type': 'application/json', ...(options.headers as Record<string, string>) },
+      ...options,
+    });
+    const data = res.ok ? await res.json().catch(() => null) : null;
+    return { ok: res.ok, status: res.status, data };
+  } catch (error) {
+    console.error('[Dashboard API] Network error:', {
+      endpoint,
+      url,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return { ok: false, status: 0, data: null };
+  }
 }
 
 export async function getDashboardSummary(address: string): Promise<DashboardSummaryData | null> {
@@ -139,6 +148,9 @@ export interface SecurityOverviewData {
   scam_patterns: { status: string; detected_count: number };
   reported_threats: { verified: number; detected: number };
   live_scam_signals: Array<{
+    id?: string;
+    signal_id?: string;
+    threat_id?: string;
     address: string;
     threat_type: string;
     detected_at: string;
@@ -163,6 +175,34 @@ export async function getSecurityOverview(walletAddress: string): Promise<Securi
   const parsed = data as { success?: boolean; data?: SecurityOverviewData } | null;
   if (parsed?.success && parsed.data) return parsed.data;
   return null;
+}
+
+export interface LiveScamSignalDetailsData {
+  id?: string;
+  signal_id?: string;
+  wallet_address?: string;
+  title?: string;
+  description?: string;
+  threat_type?: string;
+  risk_level?: string;
+  recommendation?: string;
+  detected_at?: string;
+  [key: string]: unknown;
+}
+
+export async function getLiveScamSignalDetails(
+  signalId: string,
+  walletAddress: string
+): Promise<LiveScamSignalDetailsData | null> {
+  if (!signalId?.trim() || !walletAddress?.trim()) return null;
+  const params = new URLSearchParams({ wallet_address: walletAddress.trim() });
+  const { ok, status, data } = await dashboardFetch<{ success?: boolean; data?: LiveScamSignalDetailsData } | LiveScamSignalDetailsData>(
+    `/dashboard/live-scam-signals/${encodeURIComponent(signalId.trim())}?${params}`
+  );
+  if (status === 404 || !ok || !data) return null;
+  const wrapped = data as { success?: boolean; data?: LiveScamSignalDetailsData };
+  if (wrapped.success && wrapped.data) return wrapped.data;
+  return data as LiveScamSignalDetailsData;
 }
 
 export async function getUnreadAlerts(address: string, limit: number = 20): Promise<UnreadAlertsData | null> {
@@ -726,10 +766,86 @@ export async function getSecurityAlerts(
   const { ok, data } = await dashboardFetch<{ success: boolean; data: SecurityAlertItem[] }>(
     `/protection/security-alerts?${params}`
   );
+  console.log('[Dashboard API] Security alerts response:', {
+    endpoint: `/protection/security-alerts?${params}`,
+    ok,
+    data,
+  });
   if (!ok) return null;
   const parsed = data as { success?: boolean; data?: SecurityAlertItem[] } | null;
   if (parsed?.success && Array.isArray(parsed.data)) return parsed.data;
   return null;
+}
+
+// --- How to fix (emergency remediation) ---
+
+export interface HowToFixThreatItem {
+  id: string;
+  title: string;
+  severity: string;
+  threat_type: string;
+  surface: string;
+  source_contract: string | null;
+  detected_at: string;
+  where_to_fix: string;
+  recommended_action: string;
+  fix_steps: string[];
+}
+
+export interface HowToFixThreatMeta {
+  count: number;
+  high_priority_count: number;
+}
+
+export interface HowToFixThreatsResponse {
+  data: HowToFixThreatItem[];
+  meta: HowToFixThreatMeta;
+}
+
+export async function getHowToFixThreats(
+  walletAddress: string,
+  page: number = 1,
+  perPage: number = 3
+): Promise<HowToFixThreatsResponse | null> {
+  if (!walletAddress?.trim()) return null;
+  const safePage = Math.max(1, page);
+  const safePerPage = Math.min(20, Math.max(1, perPage));
+  // Backend endpoint is /dashboard/:address/where-to-fix?limit=3.
+  // To support client pagination when backend does not expose page/per_page,
+  // request up to page * perPage items, then slice the current page locally.
+  const serverLimit = safePage * safePerPage;
+  const params = new URLSearchParams({
+    limit: String(serverLimit),
+  });
+
+  const { ok, data } = await dashboardFetch<{
+    success?: boolean;
+    data?: HowToFixThreatItem[];
+    meta?: HowToFixThreatMeta;
+  }>(
+    `/dashboard/${encodeURIComponent(walletAddress.trim())}/where-to-fix?${params}`
+  );
+
+  if (!ok || !data) return null;
+
+  const parsed = data as {
+    success?: boolean;
+    data?: HowToFixThreatItem[];
+    meta?: HowToFixThreatMeta;
+  };
+
+  const rawList = Array.isArray(parsed.data) ? parsed.data : [];
+  const meta = parsed.meta ?? {
+    count: rawList.length,
+    high_priority_count: rawList.filter((item) => String(item.severity).toLowerCase() === "high").length,
+  };
+
+  const pageData = rawList.slice((safePage - 1) * safePerPage, safePage * safePerPage);
+
+  return {
+    data: pageData,
+    meta,
+  };
 }
 
 // --- Address Safety (protection) ---
@@ -827,12 +943,22 @@ export interface DashboardOverviewData {
   connected_risk: DashboardOverviewConnectedRisk;
 }
 
-export async function getDashboardOverview(timelineLimit: number = 20): Promise<DashboardOverviewData | null> {
+export async function getDashboardOverview(
+  timelineLimit: number = 20,
+  params?: { user_id?: string; wallet_address?: string }
+): Promise<DashboardOverviewData | null> {
   const limit = Math.min(100, Math.max(1, timelineLimit));
-  const params = new URLSearchParams({ timeline_limit: String(limit) });
+  const search = new URLSearchParams({ timeline_limit: String(limit) });
+  if (params?.user_id?.trim()) search.set("user_id", params.user_id.trim());
+  if (params?.wallet_address?.trim()) search.set("wallet_address", params.wallet_address.trim());
   const { ok, data } = await dashboardFetch<{ success: boolean; data: DashboardOverviewData }>(
-    `/dashboard/overview?${params}`
+    `/dashboard/overview?${search}`
   );
+  console.log('[Activity Monitor API] /dashboard/overview response:', {
+    endpoint: `/dashboard/overview?${search}`,
+    ok,
+    data,
+  });
   if (!ok) return null;
   const parsed = data as { success?: boolean; data?: DashboardOverviewData } | null;
   if (parsed?.success && parsed.data) return parsed.data;
@@ -868,6 +994,11 @@ export async function getActivityMonitorWallets(params?: { user_id?: string; wal
   const { ok, data } = await dashboardFetch<{ success: boolean; data: ActivityMonitorWalletItem[] }>(
     `/dashboard/activity-monitor/wallets${qs ? `?${qs}` : ''}`
   );
+  console.log('[Dashboard API] Activity monitor wallets response:', {
+    endpoint: `/dashboard/activity-monitor/wallets${qs ? `?${qs}` : ''}`,
+    ok,
+    data,
+  });
   if (!ok) return null;
   const parsed = data as { success?: boolean; data?: ActivityMonitorWalletItem[] } | null;
   if (parsed?.success && Array.isArray(parsed.data)) return parsed.data;
@@ -882,6 +1013,11 @@ export async function getActivityMonitorDapps(params?: { user_id?: string; walle
   const { ok, data } = await dashboardFetch<{ success: boolean; data: ActivityMonitorDappItem[] }>(
     `/dashboard/activity-monitor/dapps${qs ? `?${qs}` : ''}`
   );
+  console.log('[Dashboard API] Activity monitor dapps response:', {
+    endpoint: `/dashboard/activity-monitor/dapps${qs ? `?${qs}` : ''}`,
+    ok,
+    data,
+  });
   if (!ok) return null;
   const parsed = data as { success?: boolean; data?: ActivityMonitorDappItem[] } | null;
   if (parsed?.success && Array.isArray(parsed.data)) return parsed.data;
@@ -925,6 +1061,11 @@ export async function getActivityFeed(
   const { ok, data } = await dashboardFetch<{ success: boolean; data: ActivityFeedItem[]; pagination: ActivityFeedPagination }>(
     `/dashboard/activity/feed?${params}`
   );
+  console.log('[Dashboard API] Activity feed response:', {
+    endpoint: `/dashboard/activity/feed?${params}`,
+    ok,
+    data,
+  });
   if (!ok) return null;
   const parsed = data as { success?: boolean; data?: ActivityFeedItem[]; pagination?: ActivityFeedPagination } | null;
   if (parsed?.success && Array.isArray(parsed.data)) {

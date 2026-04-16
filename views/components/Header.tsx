@@ -68,8 +68,8 @@ export default function Header({ hideGetStarted }: HeaderProps) {
 
   return (
     <header className="fixed w-full top-0 z-50 bg-gradient-to-b from-[#0a0a1a] via-[#0a0a1a] to-transparent">
-      <nav className="relative flex items-center justify-between w-full px-4 md:px-8 py-6">
-        <div className="flex items-center gap-2 ml-9 md:ml-40">
+      <nav className="relative flex items-center justify-between w-full px-4 md:px-6 lg:px-8 xl:px-8 py-6">
+        <div className="flex items-center gap-2 ml-9 md:ml-2 lg:ml-6 xl:ml-40">
           <Image
             src="/images/scaled_logo.png"
             alt="SenseiFi Logo"
@@ -80,14 +80,14 @@ export default function Header({ hideGetStarted }: HeaderProps) {
           <span className="text-white font-medium text-lg">SenseiFi</span>
         </div>
         
-        <ul className="hidden md:flex flex-1 items-center justify-center gap-10 text-gray-300">
+        <ul className="hidden md:flex flex-1 items-center justify-center gap-4 lg:gap-8 xl:gap-10 text-gray-300 text-sm lg:text-base">
           <li><a href="/" className="hover:text-white transition">Home</a></li>
-          <li><a href="#" className="hover:text-white transition">About</a></li>
+          <li><a href="/about" className="hover:text-white transition">About</a></li>
           <li><a href="#" className="hover:text-white transition">Pricing</a></li>
           <li><a href="#" className="hover:text-white transition">Features</a></li>
           <li><a href="#" className="hover:text-white transition">Contact</a></li>
         </ul>
-        <div className="flex items-center gap-2 md:gap-4 ml-0 mr-6 md:ml-auto md:mr-0">
+        <div className="flex items-center gap-2 md:gap-3 lg:gap-4 ml-0 mr-6 md:ml-auto md:mr-0">
           {/* Mobile: notification icon in its own box */}
           <button
             type="button"
@@ -123,11 +123,11 @@ export default function Header({ hideGetStarted }: HeaderProps) {
           </button>
           {!hideGetStarted && (
             showConnectedWallet ? (
-              <div className="hidden md:flex items-center gap-2 mr-0 md:mr-40">
+              <div className="hidden md:flex items-center gap-2 mr-0 md:mr-0 lg:mr-4 xl:mr-40">
                 <button
                   type="button"
                   title={connectedAddress ?? undefined}
-                  className="inline-flex flex-none bg-gradient-radial from-[#0026FF] to-blue-400 text-white px-6 py-3 rounded-2xl font-medium border-2 border-white items-center justify-center"
+                  className="inline-flex flex-none bg-gradient-radial from-[#0026FF] to-blue-400 text-white px-5 lg:px-6 py-2.5 lg:py-3 rounded-2xl font-medium border-2 border-white items-center justify-center"
                 >
                   {displayAddress}
                 </button>
@@ -135,7 +135,7 @@ export default function Header({ hideGetStarted }: HeaderProps) {
                   type="button"
                   onClick={disconnectWallet}
                   disabled={isDisconnecting}
-                  className="inline-flex items-center justify-center px-5 py-3 rounded-2xl font-medium border-2 border-white/25 bg-white/10 text-white hover:bg-white/20 transition disabled:opacity-60"
+                  className="inline-flex items-center justify-center px-4 lg:px-5 py-2.5 lg:py-3 rounded-2xl font-medium border-2 border-white/25 bg-white/10 text-white hover:bg-white/20 transition disabled:opacity-60"
                 >
                   {isDisconnecting ? 'Disconnecting...' : 'Disconnect'}
                 </button>
@@ -143,7 +143,7 @@ export default function Header({ hideGetStarted }: HeaderProps) {
             ) : (
               <Link
                 href="/connect-wallet"
-                className="hidden md:inline-flex flex-none mr-0 md:mr-40 bg-gradient-radial from-[#0026FF] to-blue-400 hover:from-[#0026FF] hover:to-blue-500 text-white px-8 py-3 rounded-2xl font-medium transition shadow-lg border-2 border-white items-center justify-center"
+                className="hidden md:inline-flex flex-none mr-0 md:mr-0 lg:mr-4 xl:mr-40 bg-gradient-radial from-[#0026FF] to-blue-400 hover:from-[#0026FF] hover:to-blue-500 text-white px-6 lg:px-8 py-2.5 lg:py-3 rounded-2xl font-medium transition shadow-lg border-2 border-white items-center justify-center"
               >
                 Get started
               </Link>
@@ -175,7 +175,7 @@ export default function Header({ hideGetStarted }: HeaderProps) {
         <ul className="text-white/90 text-base divide-y divide-white/10 border-t border-b border-white/10">
           {[
             { label: 'Home', href: '/' },
-            { label: 'About us', href: '#' },
+            { label: 'About us', href: '/about' },
             { label: 'Pricing', href: '#' },
             { label: 'Contact us', href: '#' },
           ].map((item) => (

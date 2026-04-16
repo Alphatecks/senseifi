@@ -68,6 +68,20 @@
   display: none; /* Chrome/Safari/Webkit */
 }
 
+@keyframes logo-marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.logo-marquee-track {
+  width: max-content;
+  animation: logo-marquee 18s linear infinite;
+}
+
 /* Dashboard header emboss (neumorphic) – gray/dark-gray and gray-white, no black */
 .emboss-raised {
   box-shadow:

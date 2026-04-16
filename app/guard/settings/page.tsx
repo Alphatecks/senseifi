@@ -46,6 +46,14 @@ const ACTIVE_ICON_COLOR = "#0026ff";
 const INACTIVE_COLOR = "#515461";
 
 type SettingsSection = "profile" | "security" | "subscription" | "support" | "terms";
+type BillingHistoryRow = {
+  id: string;
+  planName: string;
+  amount: string;
+  purchaseDate: string;
+  endDate: string;
+  status: string;
+};
 
 const SETTINGS_ICON = (
   <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -80,7 +88,8 @@ const SHIELD_ICON = (active: boolean) => (
 
 const CARD_ICON = (active: boolean) => (
   <svg className="w-6 h-6" style={{ color: active ? ACTIVE_ICON_COLOR : INACTIVE_COLOR }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.5 20a6.5 6.5 0 0113 0M12 12a4 4 0 100-8 4 4 0 000 8z" />
+    <circle cx="12" cy="12" r="10" strokeWidth={1.8} />
   </svg>
 );
 
@@ -110,6 +119,14 @@ const navItems: Array<{ id: SettingsSection; label: string; icon: (active: boole
   { id: "terms", label: "Terms & Privacy Policy", icon: DOCUMENT_ICON },
 ];
 
+const BILLING_HISTORY: BillingHistoryRow[] = [
+  { id: "h1", planName: "Pro + plan", amount: "$50 USDC", purchaseDate: "2025-12-23", endDate: "2026-12-23", status: "Completed" },
+  { id: "h2", planName: "Pro + plan", amount: "$50 USDC", purchaseDate: "2025-12-23", endDate: "2026-12-23", status: "Completed" },
+  { id: "h3", planName: "Pro + plan", amount: "$50 USDC", purchaseDate: "2025-12-23", endDate: "2026-12-23", status: "Completed" },
+  { id: "h4", planName: "Pro + plan", amount: "$50 USDC", purchaseDate: "2025-12-23", endDate: "2026-12-23", status: "Completed" },
+  { id: "h5", planName: "Pro + plan", amount: "$50 USDC", purchaseDate: "2025-12-23", endDate: "2026-12-23", status: "Completed" },
+];
+
 export default function SettingsPage() {
   const { activeAddress: address } = useWallet();
   const { dashboardUser } = useDashboardUser();
@@ -121,6 +138,12 @@ export default function SettingsPage() {
   const [connectedWalletsLoading, setConnectedWalletsLoading] = useState(false);
   const [connectedDapps, setConnectedDapps] = useState<ActivityMonitorDappItem[]>([]);
   const [connectedDappsLoading, setConnectedDappsLoading] = useState(false);
+  const [securityExtensionEnabled, setSecurityExtensionEnabled] = useState(true);
+  const [threatMode, setThreatMode] = useState("Balanced");
+  const [autoBlockHighRisk, setAutoBlockHighRisk] = useState(true);
+  const [blindSignatureProtection, setBlindSignatureProtection] = useState(true);
+  const [unlimitedApprovalGuard, setUnlimitedApprovalGuard] = useState(true);
+  const [billingSearch, setBillingSearch] = useState("");
 
   useEffect(() => {
     if (!address) {
@@ -398,25 +421,354 @@ export default function SettingsPage() {
         )}
 
         {section === "security" && (
-          <div className="max-w-3xl space-y-8">
-            <div className="flex items-center gap-2">
-              {SHIELD_ICON(true)}
-              <h2 className="text-xl font-semibold text-white">Security Preferences</h2>
-            </div>
-            <div className="rounded-xl border border-slate-700/60 p-6" style={{ backgroundColor: CARD_BG }}>
-              <p className="text-slate-400">Security settings and 2FA options will appear here.</p>
+          <div className="w-full max-w-5xl">
+            <div
+              className="rounded-2xl border border-slate-700/60 overflow-hidden shadow-[0_16px_40px_rgba(0,0,0,0.45)]"
+              style={{ background: "linear-gradient(180deg, rgba(20,24,45,0.98) 0%, rgba(17,21,40,0.98) 100%)" }}
+            >
+              <div className="px-6 py-5 border-b border-slate-700/60" style={{ backgroundColor: "rgba(10,14,32,0.7)" }}>
+                <div className="flex items-center gap-2.5">
+                  <span className="inline-flex items-center justify-center w-7 h-7 rounded-md border border-slate-600/70 bg-slate-900/70">
+                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                  </span>
+                  <h2 className="text-white text-[1.05rem] font-semibold">Security Preferences</h2>
+                </div>
+              </div>
+
+              <div className="px-6 py-6 space-y-7">
+                <div className="space-y-3">
+                  <h3 className="text-white text-lg md:text-xl leading-tight font-semibold">Activate Senseiguard Extension</h3>
+                  <div className="flex items-start gap-4 justify-between">
+                    <p className="text-slate-300 text-sm md:text-base leading-relaxed">
+                      Notify when wallets and security actions are needed across all platforms
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setSecurityExtensionEnabled((v) => !v)}
+                      className={`relative mt-1 inline-flex h-7 w-14 shrink-0 items-center rounded-full transition ${
+                        securityExtensionEnabled ? "bg-[#0026FF]" : "bg-slate-600"
+                      }`}
+                      aria-pressed={securityExtensionEnabled}
+                      aria-label="Toggle Senseiguard extension activation"
+                    >
+                      <span
+                        className={`inline-block h-6 w-6 transform rounded-full bg-white transition ${
+                          securityExtensionEnabled ? "translate-x-7" : "translate-x-1"
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="inline-block border-b-2 border-[#0026FF] pb-1">
+                    <h4 className="text-white text-base md:text-lg leading-tight font-semibold">AI Threat Sensitivity</h4>
+                  </div>
+                  <p className="text-slate-200 text-sm md:text-base">Modes:</p>
+                  <div className="relative">
+                    <select
+                      value={threatMode}
+                      onChange={(e) => setThreatMode(e.target.value)}
+                      className="w-full appearance-none rounded-xl border border-slate-700/80 bg-[#1d223a] px-4 pr-11 py-3 text-sm md:text-base text-slate-300 focus:outline-none focus:ring-1 focus:ring-[#4066FF]"
+                    >
+                      <option value="Balanced">Balanced</option>
+                      <option value="Strict">Strict</option>
+                      <option value="Relaxed">Relaxed</option>
+                    </select>
+                    <svg className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="inline-block border-b-2 border-[#0026FF] pb-1">
+                    <h4 className="text-white text-base md:text-lg leading-tight font-semibold">AI Threat Sensitivity</h4>
+                  </div>
+                  <div className="flex items-start justify-between gap-4">
+                    <p className="text-slate-200 text-sm md:text-base leading-relaxed">
+                      Automatically block approvals and signatures classified as high risk.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setAutoBlockHighRisk((v) => !v)}
+                      className={`relative mt-1 inline-flex h-7 w-14 shrink-0 items-center rounded-full transition ${
+                        autoBlockHighRisk ? "bg-[#0026FF]" : "bg-slate-600"
+                      }`}
+                      aria-pressed={autoBlockHighRisk}
+                      aria-label="Toggle AI threat sensitivity"
+                    >
+                      <span
+                        className={`inline-block h-6 w-6 transform rounded-full bg-white transition ${
+                          autoBlockHighRisk ? "translate-x-7" : "translate-x-1"
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="inline-block border-b-2 border-[#0026FF] pb-1">
+                    <h4 className="text-white text-base md:text-lg leading-tight font-semibold">Blind Signature Protection</h4>
+                  </div>
+                  <div className="flex items-start justify-between gap-4">
+                    <p className="text-slate-200 text-sm md:text-base leading-relaxed">
+                      Detects and warns against unclear or hidden contract signatures.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setBlindSignatureProtection((v) => !v)}
+                      className={`relative mt-1 inline-flex h-7 w-14 shrink-0 items-center rounded-full transition ${
+                        blindSignatureProtection ? "bg-[#0026FF]" : "bg-slate-600"
+                      }`}
+                      aria-pressed={blindSignatureProtection}
+                      aria-label="Toggle blind signature protection"
+                    >
+                      <span
+                        className={`inline-block h-6 w-6 transform rounded-full bg-white transition ${
+                          blindSignatureProtection ? "translate-x-7" : "translate-x-1"
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="inline-block border-b-2 border-[#0026FF] pb-1">
+                    <h4 className="text-white text-base md:text-lg leading-tight font-semibold">Unlimited Approval Guard</h4>
+                  </div>
+                  <div className="flex items-start justify-between gap-4">
+                    <p className="text-slate-200 text-sm md:text-base leading-relaxed">
+                      Prevents unlimited token approvals unless explicitly approved.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setUnlimitedApprovalGuard((v) => !v)}
+                      className={`relative mt-1 inline-flex h-7 w-14 shrink-0 items-center rounded-full transition ${
+                        unlimitedApprovalGuard ? "bg-[#0026FF]" : "bg-slate-600"
+                      }`}
+                      aria-pressed={unlimitedApprovalGuard}
+                      aria-label="Toggle unlimited approval guard"
+                    >
+                      <span
+                        className={`inline-block h-6 w-6 transform rounded-full bg-white transition ${
+                          unlimitedApprovalGuard ? "translate-x-7" : "translate-x-1"
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}
 
         {section === "subscription" && (
-          <div className="max-w-3xl space-y-8">
-            <div className="flex items-center gap-2">
-              {CARD_ICON(true)}
-              <h2 className="text-xl font-semibold text-white">Subscription & Billing</h2>
+          <div className="w-full max-w-6xl space-y-5">
+            <div
+              className="rounded-2xl border border-slate-700/60 p-3 md:p-4 shadow-[0_16px_40px_rgba(0,0,0,0.45)]"
+              style={{ background: "linear-gradient(180deg, rgba(20,24,45,0.98) 0%, rgba(17,21,40,0.98) 100%)" }}
+            >
+              <div className="flex items-center gap-2 mb-4">
+                <span className="inline-flex items-center justify-center w-7 h-7 rounded-md border border-slate-600/70 bg-slate-900/70">
+                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.5 20a6.5 6.5 0 0113 0M12 12a4 4 0 100-8 4 4 0 000 8z" />
+                      <circle cx="12" cy="12" r="10" strokeWidth={1.8} />
+                  </svg>
+                </span>
+                <h2 className="text-white text-base md:text-lg font-semibold">Subscription & Billing</h2>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 w-full">
+                <div className="bg-[#181C23] rounded-xl flex flex-col w-full min-h-[560px] shadow-lg">
+                  <div className="flex items-center justify-between mb-0 p-8 pb-0">
+                    <span className="text-lg font-semibold">PRO PLAN</span>
+                    <img src="/images/icons/pro.png" alt="Pro" className="w-16 h-16" />
+                  </div>
+                  <hr className="border-t border-white/10 w-full mb-0 mt-4" />
+                  <ul className="mb-8 space-y-3 text-white/80 text-sm px-6 mt-8">
+                    <li className="flex items-center gap-2.5"><img src="/images/icons/check-circle.png" alt="check" className="w-4 h-4" />Full wallet security scan</li>
+                    <li className="flex items-center gap-2.5"><img src="/images/icons/check-circle.png" alt="check" className="w-4 h-4" />Real-time threat & scam alerts</li>
+                    <li className="flex items-center gap-2.5"><img src="/images/icons/check-circle.png" alt="check" className="w-4 h-4" />AI trading signals (standard)</li>
+                    <li className="flex items-center gap-2.5"><img src="/images/icons/check-circle.png" alt="check" className="w-4 h-4" />Portfolio health score</li>
+                    <li className="flex items-center gap-2.5"><img src="/images/icons/check-circle.png" alt="check" className="w-4 h-4" />Basic spending analytics</li>
+                    <li className="flex items-center gap-2.5"><img src="/images/icons/check-circle.png" alt="check" className="w-4 h-4" />Access to SenseiCard (limited transactions)</li>
+                    <li className="flex items-center gap-2.5"><img src="/images/icons/check-circle.png" alt="check" className="w-4 h-4" />Full Chrome Extension features</li>
+                  </ul>
+                  <div className="mt-auto">
+                    <div className="bg-[#11131A] rounded-t-xl w-full flex flex-col items-start pl-6">
+                      <span className="text-2xl font-normal text-white mt-5 flex items-center gap-2">
+                        <Image src="/images/icons/usdc.svg" alt="USDC" width={26} height={26} />
+                        $30 USDC
+                        <span className="text-sm font-normal text-white/70">/month</span>
+                      </span>
+                      <button
+                        type="button"
+                        className="w-11/12 py-3 mt-6 mb-6 text-white text-base font-normal rounded-full transition-colors duration-200 border-2 border-transparent bg-gradient-to-r from-indigo-400 via-blue-400 to-purple-400 bg-origin-border hover:from-blue-500 hover:to-indigo-600"
+                        style={{ background: "linear-gradient(#181C23, #181C23) padding-box, linear-gradient(90deg, #7F5FFF, #01C8FF, #FFB86C) border-box", border: "2px solid transparent" }}
+                      >
+                        Go Pro
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-[#181C23] rounded-xl flex flex-col w-full min-h-[560px] shadow-lg border-2 border-blue-600">
+                  <div className="flex items-center justify-between mb-0 p-8 pb-0">
+                    <span className="text-lg font-semibold">PRO+ PLAN <span className="text-xs text-blue-400 ml-2">(Recommended)</span></span>
+                    <img src="/images/icons/proplus.png" alt="Pro+" className="w-16 h-16" />
+                  </div>
+                  <hr className="border-t border-white/10 w-full mb-0 mt-4" />
+                  <ul className="mb-8 space-y-3 text-white/80 text-sm px-6 mt-8">
+                    <li className="flex items-center gap-2.5"><img src="/images/icons/check-circle.png" alt="check" className="w-4 h-4" />Everything in Pro</li>
+                    <li className="flex items-center gap-2.5"><img src="/images/icons/check-circle.png" alt="check" className="w-4 h-4" />Advanced AI trading predictions</li>
+                    <li className="flex items-center gap-2.5"><img src="/images/icons/check-circle.png" alt="check" className="w-4 h-4" />Trend, momentum & sentiment analysis</li>
+                    <li className="flex items-center gap-2.5"><img src="/images/icons/check-circle.png" alt="check" className="w-4 h-4" />Portfolio optimization engine</li>
+                    <li className="flex items-center gap-2.5"><img src="/images/icons/check-circle.png" alt="check" className="w-4 h-4" />Priority conversion rates on SenseiCard</li>
+                    <li className="flex items-center gap-2.5"><img src="/images/icons/check-circle.png" alt="check" className="w-4 h-4" />Subscription management tools</li>
+                    <li className="flex items-center gap-2.5"><img src="/images/icons/check-circle.png" alt="check" className="w-4 h-4" />Multi-chain asset monitoring</li>
+                  </ul>
+                  <div className="mt-auto">
+                    <div
+                      className="rounded-t-xl w-full flex flex-col items-start pl-6 relative overflow-hidden"
+                      style={{ background: "linear-gradient(135deg, #11131A 60%, #425EFF 100%)" }}
+                    >
+                      <span className="text-2xl font-normal text-white mt-5 flex items-center gap-2">
+                        <Image src="/images/icons/usdc.svg" alt="USDC" width={26} height={26} />
+                        $50 USDC
+                        <span className="text-sm font-normal text-white/70">/month</span>
+                      </span>
+                      <button
+                        type="button"
+                        className="w-11/12 py-3 mt-6 mb-6 text-white text-base font-normal rounded-full shadow-lg transition-colors duration-200 border-none"
+                        style={{ background: "linear-gradient(135deg, #425EFF 40%, #7F5FFF 100%)" }}
+                      >
+                        Go Pro+
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-[#181C23] rounded-xl flex flex-col w-full min-h-[560px] shadow-lg">
+                  <div className="flex items-center justify-between mb-0 p-8 pb-0">
+                    <span className="text-lg font-semibold">PREMIUM PLAN</span>
+                    <img src="/images/icons/premium.png" alt="Premium" className="w-16 h-16" />
+                  </div>
+                  <hr className="border-t border-white/10 w-full mb-0 mt-4" />
+                  <ul className="mb-8 space-y-3 text-white/80 text-sm px-6 mt-8">
+                    <li className="flex items-center gap-2.5"><img src="/images/icons/check-circle.png" alt="check" className="w-4 h-4" />Everything in Pro+</li>
+                    <li className="flex items-center gap-2.5"><img src="/images/icons/check-circle.png" alt="check" className="w-4 h-4" />Unlimited spending with SenseiCard</li>
+                    <li className="flex items-center gap-2.5"><img src="/images/icons/check-circle.png" alt="check" className="w-4 h-4" />Smart budgeting & auto-analytics</li>
+                    <li className="flex items-center gap-2.5"><img src="/images/icons/check-circle.png" alt="check" className="w-4 h-4" />High-frequency AI alerts</li>
+                    <li className="flex items-center gap-2.5"><img src="/images/icons/check-circle.png" alt="check" className="w-4 h-4" />Wallet risk logs + breach history</li>
+                    <li className="flex items-center gap-2.5"><img src="/images/icons/check-circle.png" alt="check" className="w-4 h-4" />Instant multi-chain insights</li>
+                    <li className="flex items-center gap-2.5"><img src="/images/icons/check-circle.png" alt="check" className="w-4 h-4" />Priority customer support</li>
+                  </ul>
+                  <div className="mt-auto">
+                    <div className="bg-[#11131A] rounded-t-xl w-full flex flex-col items-start pl-6">
+                      <span className="text-2xl font-normal text-white mt-5 flex items-center gap-2">
+                        <Image src="/images/icons/usdc.svg" alt="USDC" width={26} height={26} />
+                        $200 USDC
+                        <span className="text-sm font-normal text-white/70">/month</span>
+                      </span>
+                      <button
+                        type="button"
+                        className="w-11/12 py-3 mt-6 mb-6 text-white text-base font-normal rounded-full transition-colors duration-200 border-2 border-transparent bg-gradient-to-r from-indigo-400 via-blue-400 to-purple-400 bg-origin-border hover:from-blue-500 hover:to-indigo-600"
+                        style={{ background: "linear-gradient(#181C23, #181C23) padding-box, linear-gradient(90deg, #7F5FFF, #01C8FF, #FFB86C) border-box", border: "2px solid transparent" }}
+                      >
+                        Get Premium
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className="rounded-xl border border-slate-700/60 p-6" style={{ backgroundColor: CARD_BG }}>
-              <p className="text-slate-400">Subscription and billing management will appear here.</p>
+
+            <div
+              className="rounded-2xl border border-slate-700/60 p-3 md:p-4 shadow-[0_16px_40px_rgba(0,0,0,0.45)]"
+              style={{ background: "linear-gradient(180deg, rgba(20,24,45,0.98) 0%, rgba(17,21,40,0.98) 100%)" }}
+            >
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center justify-center w-7 h-7 rounded-md border border-slate-600/70 bg-slate-900/70">
+                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m-6-8h6m2 12H7a2 2 0 01-2-2V6a2 2 0 012-2h6l6 6v8a2 2 0 01-2 2z" />
+                    </svg>
+                  </span>
+                  <h3 className="text-white text-base md:text-lg font-semibold">Billing History</h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="relative">
+                    <input
+                      value={billingSearch}
+                      onChange={(e) => setBillingSearch(e.target.value)}
+                      placeholder="Search"
+                      className="w-44 sm:w-56 rounded-lg border border-slate-700/70 bg-[#1d223a] py-2 pl-9 pr-3 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-[#4066FF]"
+                    />
+                    <svg className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M11 18a7 7 0 100-14 7 7 0 000 14z" />
+                    </svg>
+                  </div>
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-slate-700/70 bg-[#1d223a] text-slate-300 hover:text-white transition"
+                    aria-label="Filter transactions"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h18M6 12h12M10 19h4" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[760px] text-sm">
+                  <thead>
+                    <tr className="text-left text-slate-300 bg-[#0F1426]">
+                      <th className="py-3 px-4 rounded-l-lg font-medium">Plan name</th>
+                      <th className="py-3 px-4 font-medium">Amount</th>
+                      <th className="py-3 px-4 font-medium">Purchase date</th>
+                      <th className="py-3 px-4 font-medium">End date</th>
+                      <th className="py-3 px-4 font-medium">Status</th>
+                      <th className="py-3 px-4 rounded-r-lg font-medium text-center">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {BILLING_HISTORY.filter((row) => {
+                      const term = billingSearch.trim().toLowerCase();
+                      if (!term) return true;
+                      return (
+                        row.planName.toLowerCase().includes(term) ||
+                        row.amount.toLowerCase().includes(term) ||
+                        row.status.toLowerCase().includes(term)
+                      );
+                    }).map((row) => (
+                      <tr key={row.id} className="border-b border-slate-800/80 text-slate-400">
+                        <td className="py-3.5 px-4">{row.planName}</td>
+                        <td className="py-3.5 px-4">{row.amount}</td>
+                        <td className="py-3.5 px-4">{row.purchaseDate}</td>
+                        <td className="py-3.5 px-4">{row.endDate}</td>
+                        <td className="py-3.5 px-4">
+                          <span className="text-[#32BB1D]">{row.status}</span>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <button
+                            type="button"
+                            className="mx-auto flex items-center justify-center w-8 h-8 rounded-md text-slate-200 hover:text-white hover:bg-slate-800/80 transition"
+                            aria-label={`Download ${row.planName} invoice`}
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1M8 12l4 4m0 0l4-4m-4 4V4" />
+                            </svg>
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}

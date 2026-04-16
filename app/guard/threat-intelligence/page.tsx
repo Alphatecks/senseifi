@@ -4,8 +4,8 @@ import React, { useState, useEffect, useMemo } from "react";
 import Image from "next/image";
 
 import { useWallet } from "@/hooks/useWallet";
-import { getDomainThreatFeed, getSecurityOverview } from "@/services/dashboardService";
-import type { DomainThreatFeedData, SecurityOverviewData } from "@/services/dashboardService";
+import { getDomainThreatFeed, getSecurityOverview, getLiveScamSignalDetails } from "@/services/dashboardService";
+import type { DomainThreatFeedData, SecurityOverviewData, LiveScamSignalDetailsData } from "@/services/dashboardService";
 
 import alertIcon from "@/assets/icons/alert.png";
 import scanIcon from "@/assets/icons/scan.png";
@@ -86,6 +86,8 @@ const RISK_CLASS: Record<string, string> = {
 const CHART_W = 280;
 const CHART_H = 100;
 const COMMUNITY_ROWS_PER_PAGE = 10;
+const LIVE_SIGNALS_PER_PAGE = 4;
+type LiveScamSignalSummary = NonNullable<SecurityOverviewData["live_scam_signals"]>[number];
 
 function smoothCurvePath(points: Array<{ x: number; y: number }>, tension: number = 0.3): string {
   if (points.length < 2) return "";
@@ -137,6 +139,25 @@ function formatUpdatedAt(dateValue: string | null | undefined): string {
   });
 }
 
+function extractLiveSignalId(signal: LiveScamSignalSummary): string {
+  const possible = [signal.id, signal.signal_id, signal.threat_id];
+  for (let i = 0; i < possible.length; i += 1) {
+    const value = possible[i];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return "";
+}
+
+function detailValueToText(value: unknown): string {
+  if (value == null) return "—";
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return "—";
+  }
+}
+
 export default function ThreatIntelligencePage() {
   const { activeAddress: address } = useWallet();
   const [mounted, setMounted] = useState(false);
@@ -147,8 +168,14 @@ export default function ThreatIntelligencePage() {
   const [search, setSearch] = useState("");
   const [riskFilter, setRiskFilter] = useState("All");
   const [page, setPage] = useState(1);
+  const [liveSignalsPage, setLiveSignalsPage] = useState(1);
   const [highlightDayIndex, setHighlightDayIndex] = useState(0);
   const [summaryModalOpen, setSummaryModalOpen] = useState(false);
+  const [liveSignalDetailsOpen, setLiveSignalDetailsOpen] = useState(false);
+  const [liveSignalDetailsLoading, setLiveSignalDetailsLoading] = useState(false);
+  const [liveSignalDetailsError, setLiveSignalDetailsError] = useState("");
+  const [selectedLiveSignal, setSelectedLiveSignal] = useState<LiveScamSignalSummary | null>(null);
+  const [selectedLiveSignalDetails, setSelectedLiveSignalDetails] = useState<LiveScamSignalDetailsData | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -216,6 +243,12 @@ export default function ThreatIntelligencePage() {
     (page - 1) * COMMUNITY_ROWS_PER_PAGE,
     page * COMMUNITY_ROWS_PER_PAGE
   );
+  const liveScamSignals = securityOverview?.live_scam_signals ?? [];
+  const liveSignalsTotalPages = Math.max(1, Math.ceil(liveScamSignals.length / LIVE_SIGNALS_PER_PAGE));
+  const pagedLiveScamSignals = liveScamSignals.slice(
+    (liveSignalsPage - 1) * LIVE_SIGNALS_PER_PAGE,
+    liveSignalsPage * LIVE_SIGNALS_PER_PAGE
+  );
 
   const daily = securityOverview?.scam_pattern_insights?.daily ?? [];
   const chartData = chartPathFromDaily(daily);
@@ -223,6 +256,42 @@ export default function ThreatIntelligencePage() {
   const highlightX = chartData.values.length > 1 ? (safeHighlightIndex / (chartData.values.length - 1)) * CHART_W : 0;
   const highlightY = chartData.values.length ? CHART_H - (chartData.values[safeHighlightIndex] / Math.max(1, ...chartData.values)) * CHART_H : CHART_H;
   const highlightValue = chartData.values.length ? String(chartData.values[safeHighlightIndex]) : "0";
+
+  useEffect(() => {
+    setLiveSignalsPage(1);
+  }, [address, liveScamSignals.length]);
+
+  useEffect(() => {
+    if (liveSignalsPage > liveSignalsTotalPages) {
+      setLiveSignalsPage(liveSignalsTotalPages);
+    }
+  }, [liveSignalsPage, liveSignalsTotalPages]);
+
+  const openLiveSignalDetails = async (signal: LiveScamSignalSummary) => {
+    const signalId = extractLiveSignalId(signal);
+    if (!signalId || !address?.trim()) {
+      setLiveSignalDetailsError("Signal details are not available for this record.");
+      setSelectedLiveSignal(signal);
+      setSelectedLiveSignalDetails(null);
+      setLiveSignalDetailsOpen(true);
+      return;
+    }
+    setSelectedLiveSignal(signal);
+    setSelectedLiveSignalDetails(null);
+    setLiveSignalDetailsError("");
+    setLiveSignalDetailsOpen(true);
+    setLiveSignalDetailsLoading(true);
+    try {
+      const details = await getLiveScamSignalDetails(signalId, address.trim());
+      if (!details) {
+        setLiveSignalDetailsError("Could not load signal details.");
+      } else {
+        setSelectedLiveSignalDetails(details);
+      }
+    } finally {
+      setLiveSignalDetailsLoading(false);
+    }
+  };
 
   return (
     <div className="rounded-2xl p-6 space-y-6 xl:bg-blue-950/25 xl:border xl:border-blue-900/40">
@@ -533,7 +602,7 @@ export default function ThreatIntelligencePage() {
               ) : !securityOverview.live_scam_signals?.length ? (
                 <li className="rounded-xl p-4 bg-[#25283D] border border-slate-700/50 text-slate-500 text-sm">No live scam signals.</li>
               ) : (
-                securityOverview.live_scam_signals.map((signal, i) => (
+                pagedLiveScamSignals.map((signal, i) => (
                   <li key={`${signal.address}-${i}`} className="rounded-xl p-4 bg-[#25283D] border border-slate-700/50">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex flex-col gap-0.5 min-w-0">
@@ -545,10 +614,42 @@ export default function ThreatIntelligencePage() {
                         <span className="text-sm font-bold text-[#F00500]">{signal.risk_level}</span>
                       </div>
                     </div>
+                    <div className="mt-3">
+                      <button
+                        type="button"
+                        onClick={() => openLiveSignalDetails(signal)}
+                        className="rounded-lg px-3 py-2 text-xs font-medium text-white border border-slate-600/60 bg-[#1f243c] hover:bg-[#29314f] transition"
+                      >
+                        View details
+                      </button>
+                    </div>
                   </li>
                 ))
               )}
             </ul>
+            {!securityOverviewLoading && liveScamSignals.length > LIVE_SIGNALS_PER_PAGE && (
+              <div className="flex items-center justify-between gap-3 mt-3">
+                <button
+                  type="button"
+                  onClick={() => setLiveSignalsPage((p) => Math.max(1, p - 1))}
+                  disabled={liveSignalsPage <= 1}
+                  className="rounded-lg px-3 py-2 text-xs font-medium text-slate-400 hover:text-white bg-[#25283D] border border-slate-600/50 hover:border-slate-500 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Prev
+                </button>
+                <span className="text-xs text-slate-500">
+                  Page {liveSignalsPage} of {liveSignalsTotalPages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setLiveSignalsPage((p) => Math.min(liveSignalsTotalPages, p + 1))}
+                  disabled={liveSignalsPage >= liveSignalsTotalPages}
+                  className="rounded-lg px-3 py-2 text-xs font-medium text-slate-400 hover:text-white bg-[#25283D] border border-slate-600/50 hover:border-slate-500 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -642,6 +743,69 @@ export default function ThreatIntelligencePage() {
           </button>
         </div>
       </div>
+
+      {liveSignalDetailsOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" aria-hidden onClick={() => setLiveSignalDetailsOpen(false)} />
+          <div className="relative w-full max-w-xl rounded-2xl border border-slate-700/60 shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-5" style={{ backgroundColor: "#1B1B1B" }}>
+              <h3 className="text-lg font-normal text-white">Live scam signal details</h3>
+              <button
+                type="button"
+                onClick={() => setLiveSignalDetailsOpen(false)}
+                className="w-9 h-9 rounded-full flex items-center justify-center text-slate-400 hover:text-white bg-slate-800/60 hover:bg-slate-700/80 border border-slate-600/50 transition"
+                aria-label="Close"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <div className="p-5 space-y-4" style={{ backgroundColor: "#191b28" }}>
+              {liveSignalDetailsLoading ? (
+                <p className="text-sm text-slate-400">Loading details…</p>
+              ) : liveSignalDetailsError ? (
+                <p className="text-sm text-red-300">{liveSignalDetailsError}</p>
+              ) : selectedLiveSignalDetails ? (
+                <>
+                  <div className="rounded-lg border border-slate-700/60 p-4 bg-[#25283D]">
+                    <p className="text-sm text-slate-300">
+                      <span className="text-slate-400">Signal:</span>{" "}
+                      {selectedLiveSignalDetails.title || selectedLiveSignal?.threat_type || "Unknown"}
+                    </p>
+                    <p className="text-sm text-slate-300 mt-1">
+                      <span className="text-slate-400">Address:</span>{" "}
+                      {selectedLiveSignal?.address || detailValueToText(selectedLiveSignalDetails.address)}
+                    </p>
+                    <p className="text-sm text-slate-300 mt-1">
+                      <span className="text-slate-400">Risk Level:</span>{" "}
+                      {selectedLiveSignalDetails.risk_level || selectedLiveSignal?.risk_level || "—"}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-slate-700/60 p-4 bg-[#25283D] space-y-2">
+                    {Object.entries(selectedLiveSignalDetails).map(([key, value]) => (
+                      <div key={key} className="flex items-start justify-between gap-4 text-sm">
+                        <span className="text-slate-400">{key.replace(/_/g, " ")}</span>
+                        <span className="text-slate-200 text-right break-all max-w-[65%]">{detailValueToText(value)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm text-slate-400">No details available.</p>
+              )}
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={() => setLiveSignalDetailsOpen(false)}
+                  className="w-full rounded-lg py-2.5 text-sm font-semibold text-white transition"
+                  style={{ background: "linear-gradient(to bottom, #5B7CFF 0%, #4066FF 50%, #0026FF 100%)", boxShadow: "0 4px 15px rgba(0,38,255,0.6)" }}
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* AI threat explanation modal - matches wallet security modal styling */}
       {summaryModalOpen && (

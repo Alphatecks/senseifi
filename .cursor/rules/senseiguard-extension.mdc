@@ -1,0 +1,26 @@
+---
+description: Global context and specifics for the SenseiGuard (SenseiFi Trade Insight) Chrome extension
+alwaysApply: true
+---
+
+# SenseiGuard Extension – Project Memory
+
+SenseiGuard is a **wallet firewall + threat intelligence** Chrome extension (not a normal extension). Location: `extension/`. Product name: **SenseiGuard**; UI title: **SenseiFi Trade Insight**. Theme: dark (#0a0a1a, #191d35).
+
+## Stack (production-ready)
+
+- **Core:** TypeScript, React, Plasmo
+- **Web3:** ethers.js (primary). Optional: viem for deep contract analysis, decoding transactions, ABI handling
+- **Validation:** zod — strict schema validation for transactions, contract data, API responses (bad parsing = wrong risk = user at risk)
+- **State:** zustand — risk scores, wallet state, alerts, user settings
+- **Networking:** axios (or fetch wrapper) with retry + timeout; extension must call SenseiFi API for analysis, not do heavy analysis locally. Flow: Extension → SenseiFi API → AI/Detection Engine → Response
+
+## Architecture: 3 “brains”
+
+1. **Content script (spy)** — Injected into dApps. Detects: contract calls, approvals, suspicious UI triggers.
+2. **Background script (analyst)** — Runs logic, calls SenseiFi backend, computes risk score.
+3. **Popup UI (voice)** — Warns user (e.g. “This contract can drain your NFTs”, “High rug probability”).
+
+## Critical principle
+
+The differentiator is **how accurately you decode and interpret transactions before signing**. That’s where phishing detection, approval scanning, and rug detection succeed or fail — not the frontend stack.

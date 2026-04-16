@@ -5,8 +5,8 @@ import { createPortal } from "react-dom";
 import Image from "next/image";
 import { useWallet } from "@/hooks/useWallet";
 import { useConnectNetworksModal } from "@/context/ConnectWalletsModalContext";
-import { getDashboardSummary, getDashboardMetrics, getDashboardApprovals, getWalletsForAddress, getTransactionMonitoring, runFullScan, getScanContractDetails, scanContract, getProtectionSettings, updateProtectionSettings, setEmergencyLock, protectionSettingsToControls, getSecurityAlerts, getAddressSafety, analyzeTransaction, getRiskyTokens } from "@/services/dashboardService";
-import type { DashboardSummaryData, DashboardMetricsData, DashboardApproval, WalletListItem, WalletsPagination, TransactionMonitoringItem, RunFullScanData, ScanContractResult, ScanContractDetailResponse, SecurityAlertItem, AddressSafetyItem, AnalyzeTransactionResponse, RiskyTokenItem } from "@/services/dashboardService";
+import { getDashboardSummary, getDashboardMetrics, getDashboardApprovals, getWalletsForAddress, getTransactionMonitoring, runFullScan, getScanContractDetails, scanContract, getProtectionSettings, updateProtectionSettings, setEmergencyLock, protectionSettingsToControls, getSecurityAlerts, getAddressSafety, analyzeTransaction, getRiskyTokens, getHowToFixThreats } from "@/services/dashboardService";
+import type { DashboardSummaryData, DashboardMetricsData, DashboardApproval, WalletListItem, WalletsPagination, TransactionMonitoringItem, RunFullScanData, ScanContractResult, ScanContractDetailResponse, SecurityAlertItem, AddressSafetyItem, AnalyzeTransactionResponse, RiskyTokenItem, HowToFixThreatItem, HowToFixThreatMeta } from "@/services/dashboardService";
 import { walletService } from "@/services/walletService";
 import type { WalletModalData } from "@/services/walletService";
 
@@ -92,6 +92,8 @@ const CHAIN_TO_NETWORK: Record<string, string> = {
   Ripple: "XRP Ledger",
 };
 
+const HOW_TO_FIX_PER_PAGE = 3;
+
 function formatMetricChange(changePercent: number): string {
   const sign = changePercent >= 0 ? "+" : "";
   return `${sign}${Number(changePercent).toFixed(1)}%`;
@@ -150,6 +152,19 @@ function formatLastScan(lastScanAt: string | null): string {
   return d.toLocaleDateString();
 }
 
+function formatThreatDetectedAt(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "Unknown time";
+  return d.toLocaleString();
+}
+
+function getSeverityBadgeClass(severity: string): string {
+  const normalized = String(severity || "").toLowerCase();
+  if (normalized === "high") return "bg-[#F00500]/20 text-[#ff6b67] border-[#F00500]/40";
+  if (normalized === "medium") return "bg-amber-500/20 text-amber-300 border-amber-500/40";
+  return "bg-emerald-500/20 text-emerald-300 border-emerald-500/40";
+}
+
 export default function WalletSecurityPage() {
   const { activeAddress: address } = useWallet();
   const [txPage, setTxPage] = useState(1);
@@ -159,6 +174,12 @@ export default function WalletSecurityPage() {
   const [controls, setControls] = useState(PROTECTION_CONTROLS);
   const [protectionLoading, setProtectionLoading] = useState(false);
   const [protectionSavingId, setProtectionSavingId] = useState<string | null>(null);
+  const [protectionApiResponse, setProtectionApiResponse] = useState<{
+    controlLabel: string;
+    enabled: boolean;
+    response: unknown;
+    updatedAt: string;
+  } | null>(null);
   const [walletsList, setWalletsList] = useState<WalletListItem[]>([]);
   const [walletsLoading, setWalletsLoading] = useState(false);
   const [walletsPagination, setWalletsPagination] = useState<WalletsPagination | null>(null);
@@ -171,6 +192,8 @@ export default function WalletSecurityPage() {
   const [rescanProgress, setRescanProgress] = useState(0);
   const [summary, setSummary] = useState<DashboardSummaryData | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
+  const [weakEmergencyModalOpen, setWeakEmergencyModalOpen] = useState(false);
+  const [weakEmergencyModalEvaluated, setWeakEmergencyModalEvaluated] = useState(false);
   const [scanInProgress, setScanInProgress] = useState(false);
   const [scanTriggered, setScanTriggered] = useState(false);
   const [scanResult, setScanResult] = useState<RunFullScanData | null>(null);
@@ -201,6 +224,12 @@ export default function WalletSecurityPage() {
   const [riskyTokensModalOpen, setRiskyTokensModalOpen] = useState(false);
   const [riskyTokensLoading, setRiskyTokensLoading] = useState(false);
   const [riskyTokensList, setRiskyTokensList] = useState<RiskyTokenItem[] | null>(null);
+  const [howToFixModalOpen, setHowToFixModalOpen] = useState(false);
+  const [howToFixLoading, setHowToFixLoading] = useState(false);
+  const [howToFixError, setHowToFixError] = useState<string | null>(null);
+  const [howToFixPage, setHowToFixPage] = useState(1);
+  const [howToFixItems, setHowToFixItems] = useState<HowToFixThreatItem[]>([]);
+  const [howToFixMeta, setHowToFixMeta] = useState<HowToFixThreatMeta | null>(null);
 
   const openAnalyzeTxModal = () => {
     setAnalyzeTxResult(null);
@@ -289,6 +318,20 @@ export default function WalletSecurityPage() {
       .then(setSummary)
       .finally(() => setSummaryLoading(false));
   }, [address]);
+
+  useEffect(() => {
+    setWeakEmergencyModalOpen(false);
+    setWeakEmergencyModalEvaluated(false);
+  }, [address]);
+
+  useEffect(() => {
+    if (weakEmergencyModalEvaluated || summaryLoading || !summary) return;
+    const status = String(summary.security_status?.status || "").trim().toLowerCase();
+    if (status === "weak") {
+      setWeakEmergencyModalOpen(true);
+    }
+    setWeakEmergencyModalEvaluated(true);
+  }, [summary, summaryLoading, weakEmergencyModalEvaluated]);
 
   useEffect(() => {
     if (!address) {
@@ -395,6 +438,41 @@ export default function WalletSecurityPage() {
   }, [riskyTokensModalOpen, address]);
 
   useEffect(() => {
+    if (!howToFixModalOpen) return;
+    if (!address?.trim()) {
+      setHowToFixItems([]);
+      setHowToFixMeta({ count: 0, high_priority_count: 0 });
+      setHowToFixError("Connect your wallet to load fix guidance.");
+      return;
+    }
+
+    setHowToFixLoading(true);
+    setHowToFixError(null);
+    getHowToFixThreats(address, howToFixPage, HOW_TO_FIX_PER_PAGE)
+      .then((res) => {
+        if (!res) {
+          setHowToFixItems([]);
+          setHowToFixMeta({ count: 0, high_priority_count: 0 });
+          setHowToFixError("Unable to load fix guidance right now.");
+          return;
+        }
+        const totalPages = Math.max(1, Math.ceil((res.meta.count || 0) / HOW_TO_FIX_PER_PAGE));
+        if (howToFixPage > totalPages) {
+          setHowToFixPage(totalPages);
+          return;
+        }
+        setHowToFixItems(Array.isArray(res.data) ? res.data.slice(0, HOW_TO_FIX_PER_PAGE) : []);
+        setHowToFixMeta(res.meta);
+      })
+      .catch(() => {
+        setHowToFixItems([]);
+        setHowToFixMeta({ count: 0, high_priority_count: 0 });
+        setHowToFixError("Unable to load fix guidance right now.");
+      })
+      .finally(() => setHowToFixLoading(false));
+  }, [howToFixModalOpen, address, howToFixPage]);
+
+  useEffect(() => {
     if (!selectedWallet?.address) {
       setWalletModalData(null);
       return;
@@ -444,21 +522,51 @@ export default function WalletSecurityPage() {
   const toggleControl = async (id: string) => {
     const control = controls.find((c) => c.id === id);
     if (!control || !address) return;
+    const nextValue = !control.on;
     setProtectionSavingId(id);
     if (id === "emergency-lock") {
-      const res = await setEmergencyLock(address, !control.on, []);
+      const res = await setEmergencyLock(address, nextValue, []);
       setProtectionSavingId(null);
-      if (res) setControls((prev) => prev.map((c) => (c.id === "emergency-lock" ? { ...c, on: res.emergency_lock } : c)));
-      else setControls((prev) => prev.map((c) => (c.id === id ? { ...c, on: !c.on } : c)));
+      if (res) {
+        setControls((prev) => prev.map((c) => (c.id === "emergency-lock" ? { ...c, on: res.emergency_lock } : c)));
+        setProtectionApiResponse({
+          controlLabel: control.label,
+          enabled: Boolean(res.emergency_lock),
+          response: res,
+          updatedAt: new Date().toISOString(),
+        });
+      } else {
+        setControls((prev) => prev.map((c) => (c.id === id ? { ...c, on: !c.on } : c)));
+        setProtectionApiResponse({
+          controlLabel: control.label,
+          enabled: nextValue,
+          response: { success: false, message: "Failed to update emergency lock setting." },
+          updatedAt: new Date().toISOString(),
+        });
+      }
       return;
     }
     const apiKey = id === "auto-scan" ? "auto_security_scan" : id === "high-risk" ? "high_risk_tx_warnings" : id === "approval" ? "new_approval_alerts" : id === "dapp" ? "new_dapp_connection_alerts" : "auto_block_high_risk";
-    const newValue = !control.on;
-    const payload = { [apiKey]: newValue };
+    const payload = { [apiKey]: nextValue };
     const updated = await updateProtectionSettings(address, payload);
     setProtectionSavingId(null);
-    if (updated) setControls(protectionSettingsToControls(updated));
-    else setControls((prev) => prev.map((c) => (c.id === id ? { ...c, on: !c.on } : c)));
+    if (updated) {
+      setControls(protectionSettingsToControls(updated));
+      setProtectionApiResponse({
+        controlLabel: control.label,
+        enabled: nextValue,
+        response: updated,
+        updatedAt: new Date().toISOString(),
+      });
+    } else {
+      setControls((prev) => prev.map((c) => (c.id === id ? { ...c, on: !c.on } : c)));
+      setProtectionApiResponse({
+        controlLabel: control.label,
+        enabled: nextValue,
+        response: { success: false, message: "Failed to update protection setting." },
+        updatedAt: new Date().toISOString(),
+      });
+    }
   };
 
   return (
@@ -746,11 +854,7 @@ export default function WalletSecurityPage() {
               walletsList.map((w) => (
                 <li
                   key={w.id}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => setSelectedWallet(w)}
-                  onKeyDown={(e) => e.key === "Enter" && setSelectedWallet(w)}
-                  className="flex items-center gap-3 p-3 rounded-xl border border-slate-600/50 bg-slate-800/60 shadow-sm transition cursor-pointer active:bg-slate-800/80"
+                  className="flex items-center gap-3 p-3 rounded-xl border border-slate-600/50 bg-slate-800/60 shadow-sm transition"
                 >
                   <span className="w-10 h-10 rounded-lg bg-white flex items-center justify-center p-1.5 shrink-0 overflow-hidden">
                     <Image src={getWalletLogoUrl(w)} alt="" width={32} height={32} className="w-8 h-8 rounded object-contain" unoptimized={getWalletLogoUrl(w).startsWith("http")} />
@@ -809,11 +913,7 @@ export default function WalletSecurityPage() {
               walletsList.map((w) => (
                 <li
                   key={w.id}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => setSelectedWallet(w)}
-                  onKeyDown={(e) => e.key === "Enter" && setSelectedWallet(w)}
-                  className="emboss-inset-3d-input flex items-center gap-3 p-3 rounded-lg border transition cursor-pointer hover:opacity-90" style={{ backgroundColor: "#25283D", borderColor: "#25283D" }}
+                  className="emboss-inset-3d-input flex items-center gap-3 p-3 rounded-lg border transition" style={{ backgroundColor: "#25283D", borderColor: "#25283D" }}
                 >
                   <span className="w-8 h-8 rounded-md bg-white flex items-center justify-center p-1 shrink-0 overflow-hidden">
                     <Image src={getWalletLogoUrl(w)} alt="" width={28} height={28} className="w-7 h-7 rounded object-contain" unoptimized={getWalletLogoUrl(w).startsWith("http")} />
@@ -1093,6 +1193,17 @@ export default function WalletSecurityPage() {
               ))
             )}
           </ul>
+          {protectionApiResponse && (
+            <div className="mt-4 rounded-xl border p-3" style={{ backgroundColor: "#25283D", borderColor: "rgba(51, 65, 85, 0.6)" }}>
+              <p className="text-xs text-slate-300">
+                API response: {protectionApiResponse.controlLabel} {protectionApiResponse.enabled ? "enabled" : "disabled"}
+              </p>
+              <p className="text-[11px] text-slate-500 mt-1">Updated at {new Date(protectionApiResponse.updatedAt).toLocaleTimeString()}</p>
+              <pre className="mt-2 text-[11px] leading-5 text-slate-200 whitespace-pre-wrap break-all">
+                {JSON.stringify(protectionApiResponse.response, null, 2)}
+              </pre>
+            </div>
+          )}
           <button
             type="button"
             className="mt-4 w-full rounded-xl border py-3 text-sm font-medium text-white transition"
@@ -1132,6 +1243,17 @@ export default function WalletSecurityPage() {
               ))
             )}
           </ul>
+          {protectionApiResponse && (
+            <div className="mt-4 rounded-lg border p-3" style={{ backgroundColor: "#25283D", borderColor: "#25283D" }}>
+              <p className="text-xs text-slate-300">
+                API response: {protectionApiResponse.controlLabel} {protectionApiResponse.enabled ? "enabled" : "disabled"}
+              </p>
+              <p className="text-[11px] text-slate-500 mt-1">Updated at {new Date(protectionApiResponse.updatedAt).toLocaleTimeString()}</p>
+              <pre className="mt-2 text-[11px] leading-5 text-slate-200 whitespace-pre-wrap break-all">
+                {JSON.stringify(protectionApiResponse.response, null, 2)}
+              </pre>
+            </div>
+          )}
           </div>
 
         {/* Security Alerts + Address Safety */}
@@ -1205,7 +1327,7 @@ export default function WalletSecurityPage() {
                 <p className="text-slate-500 text-xs mt-1 max-w-[220px] text-center">Alerts will appear here when detected</p>
               </div>
             ) : (
-              <ul className="space-y-3 flex-1 overflow-y-auto">
+              <ul className="space-y-3 flex-1 overflow-y-auto hide-scrollbar">
                 {securityAlerts.map((alert) => (
                   <li key={alert.id} className="emboss-inset-3d-input p-4 rounded-lg border" style={{ backgroundColor: "#25283D", borderColor: "#25283D" }}>
                     <p className="text-sm font-medium text-white mb-1">{alert.title}</p>
@@ -1377,6 +1499,194 @@ export default function WalletSecurityPage() {
           </div>
         </div>
       </div>
+
+      {/* Rescan modal - portaled to body */}
+      {weakEmergencyModalOpen && typeof document !== "undefined" && createPortal(
+        <div
+          className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4"
+          style={{ top: 0, left: 0, right: 0, bottom: 0, minHeight: "100vh" }}
+          onClick={() => setWeakEmergencyModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-xl rounded-2xl border shadow-2xl overflow-hidden"
+            style={{ backgroundColor: "#191D35", borderColor: "rgba(240, 5, 0, 0.45)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-5" style={{ backgroundColor: "#191D35" }}>
+              <div className="flex items-center gap-3">
+                <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[#F00500]/20 border border-[#F00500]/40">
+                  <svg className="w-5 h-5 text-[#F00500]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M12 9v3m0 4h.01M10.29 3.86l-8.03 14a2 2 0 001.74 3h16.06a2 2 0 001.74-3l-8.03-14a2 2 0 00-3.48 0z" />
+                  </svg>
+                </span>
+                <div>
+                  <h2 className="text-lg font-semibold text-white">Emergency Security Alert</h2>
+                  <p className="text-xs text-[#F00500] uppercase tracking-wide">Wallet status is weak</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setWeakEmergencyModalOpen(false)}
+                className="w-9 h-9 rounded-full flex items-center justify-center text-slate-400 hover:text-white bg-slate-800/60 hover:bg-slate-700/80 border border-slate-600/50 transition"
+                aria-label="Close emergency alert"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <p className="text-sm text-slate-300 leading-relaxed">
+                Your wallet is currently in a weak protection state. Immediate action is recommended to reduce exposure to malicious approvals, scam tokens, and unsafe interactions.
+              </p>
+              <div className="rounded-xl border border-[#F00500]/35 bg-[#F00500]/10 p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-300 mb-1">Current status message</p>
+                <p className="text-sm text-white">{summary?.security_status?.message || "High-risk behavior detected. Run an immediate security rescan."}</p>
+              </div>
+              <div className="flex items-center justify-between rounded-xl border border-slate-700/60 bg-[#15182A] px-4 py-3">
+                <span className="text-sm text-slate-400">Security score</span>
+                <span className="text-lg font-semibold text-white">
+                  {summary?.security_status?.score != null ? `${summary.security_status.score}%` : "—"}
+                </span>
+              </div>
+            </div>
+
+            <div className="p-5 pt-0 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setWeakEmergencyModalOpen(false)}
+                className="flex-1 rounded-xl font-medium text-white py-3 px-4 transition border border-slate-600/50 hover:opacity-90"
+                style={{ background: "linear-gradient(to bottom, #4a4a4a 0%, #383838 100%)" }}
+              >
+                Dismiss
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setWeakEmergencyModalOpen(false);
+                  setHowToFixPage(1);
+                  setHowToFixModalOpen(true);
+                }}
+                className="flex-1 rounded-xl font-semibold text-white py-3 px-4 transition hover:opacity-95"
+                style={{ background: "linear-gradient(to bottom, #4066FF 0%, #0026FF 100%)", boxShadow: "0 4px 15px rgba(0,38,255,0.45)" }}
+              >
+                How to fix
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* How to fix modal - portaled to body */}
+      {howToFixModalOpen && typeof document !== "undefined" && createPortal(
+        <div
+          className="fixed inset-0 z-[10001] flex items-stretch md:items-center justify-center bg-black/75 backdrop-blur-sm p-0 md:p-4"
+          style={{ top: 0, left: 0, right: 0, bottom: 0, minHeight: "100vh" }}
+          onClick={() => setHowToFixModalOpen(false)}
+        >
+          <div
+            className="w-full h-full md:h-auto md:max-h-[90vh] md:max-w-2xl rounded-none md:rounded-2xl border-0 md:border border-slate-700/70 shadow-none md:shadow-2xl overflow-hidden flex flex-col"
+            style={{ backgroundColor: "#191D35" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-5 border-b border-slate-700/60" style={{ backgroundColor: "#15182A" }}>
+              <div>
+                <h2 className="text-lg font-semibold text-white">How to fix</h2>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {howToFixMeta ? `${howToFixMeta.count} issue(s) found • ${howToFixMeta.high_priority_count} high priority` : "Loading remediation plan..."}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setHowToFixModalOpen(false)}
+                className="w-9 h-9 rounded-full flex items-center justify-center text-slate-400 hover:text-white bg-slate-800/60 hover:bg-slate-700/80 border border-slate-600/50 transition"
+                aria-label="Close how to fix modal"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-5 flex-1 min-h-0 overflow-y-auto hide-scrollbar space-y-3">
+              {howToFixLoading ? (
+                <div className="rounded-xl border border-slate-700/60 bg-[#15182A] p-4 text-sm text-slate-300">
+                  Loading remediation guidance...
+                </div>
+              ) : howToFixError ? (
+                <div className="rounded-xl border border-[#F00500]/35 bg-[#F00500]/10 p-4 text-sm text-[#ff8c89]">
+                  {howToFixError}
+                </div>
+              ) : howToFixItems.length === 0 ? (
+                <div className="rounded-xl border border-emerald-500/35 bg-emerald-500/10 p-4 text-sm text-emerald-200">
+                  No urgent issues right now. Your wallet posture looks stable.
+                </div>
+              ) : (
+                howToFixItems.map((item) => (
+                  <div key={item.id} className="rounded-xl border border-slate-700/60 bg-[#15182A] p-4 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h3 className="text-sm md:text-base font-semibold text-white">{item.title}</h3>
+                      <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] uppercase tracking-wide ${getSeverityBadgeClass(item.severity)}`}>
+                        {item.severity}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400">
+                      Detected: {formatThreatDetectedAt(item.detected_at)}
+                    </p>
+                    <div className="space-y-1.5 text-sm">
+                      <p className="text-slate-300">
+                        <span className="text-slate-400">Where to fix:</span> {item.where_to_fix}
+                      </p>
+                      <p className="text-slate-300">
+                        <span className="text-slate-400">Recommended action:</span> {item.recommended_action}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-slate-400 mb-2">Fix steps</p>
+                      <ol className="space-y-2 list-decimal pl-5 text-sm text-slate-200">
+                        {(item.fix_steps || []).map((step, idx) => (
+                          <li key={`${item.id}-step-${idx}`}>{step}</li>
+                        ))}
+                      </ol>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="p-5 pt-0 flex items-center justify-between gap-3">
+              <div className="text-xs text-slate-400">
+                Page {howToFixPage} of {Math.max(1, Math.ceil((howToFixMeta?.count ?? 0) / HOW_TO_FIX_PER_PAGE))}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setHowToFixPage((p) => Math.max(1, p - 1))}
+                  disabled={howToFixPage <= 1 || howToFixLoading}
+                  className="rounded-lg border border-slate-600/60 bg-slate-700/40 px-3 py-2 text-sm text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Previous
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHowToFixPage((p) => p + 1)}
+                  disabled={
+                    howToFixLoading ||
+                    howToFixPage >= Math.max(1, Math.ceil((howToFixMeta?.count ?? 0) / HOW_TO_FIX_PER_PAGE))
+                  }
+                  className="rounded-lg border border-[#001a99] px-3 py-2 text-sm text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{ background: "linear-gradient(to bottom, #3366ff 0%, #0026FF 50%, #001fcc 100%)" }}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {/* Rescan modal - portaled to body */}
       {rescanModalOpen && typeof document !== "undefined" && createPortal(

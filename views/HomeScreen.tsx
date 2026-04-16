@@ -25,7 +25,7 @@ export default function HomeScreen() {
       {/* Hero Section */}
       <section
         ref={heroRef}
-        className="w-full flex flex-col relative overflow-visible pl-4 pr-4 md:pl-40 md:pr-0"
+        className="w-full flex flex-col relative overflow-visible pl-4 pr-4 md:px-8 lg:px-12 xl:pl-40 xl:pr-0"
       >
         {/* Starfield background scoped to hero only */}
         <div
@@ -38,7 +38,7 @@ export default function HomeScreen() {
           <div className="absolute inset-0 bg-gradient-to-b from-[#0a0a1a] via-transparent to-transparent" />
         </div>
         {/* Desktop rolling coin */}
-        <div className="hidden md:block absolute right-0 -top-20 md:-top-48 w-[28rem] h-[28rem] md:w-[64rem] md:h-[64rem] z-50 pointer-events-none">
+        <div className="hidden md:block absolute right-[-1rem] top-[-1rem] md:w-[20rem] md:h-[20rem] lg:right-[-2rem] lg:-top-16 lg:w-[32rem] lg:h-[32rem] xl:right-0 xl:-top-48 xl:w-[64rem] xl:h-[64rem] z-50 pointer-events-none">
           <Image
             src={handImage}
             alt="SenseiFi hand"
@@ -49,11 +49,11 @@ export default function HomeScreen() {
           />
         </div>
         {/* ...no animated coins... */}
-        <div className="w-full flex flex-col items-center md:items-start text-center md:text-left mt-2 md:mt-36">
-          <h1 className={`text-4xl md:text-6xl font-normal leading-tight mb-4 text-white drop-shadow-xl z-10 relative ${heroInView ? "animate-fade-slide-up" : "opacity-0"}`}>
+        <div className="w-full flex flex-col items-center md:items-start text-center md:text-left mt-2 md:mt-20 lg:mt-28 xl:mt-36 md:max-w-2xl lg:max-w-3xl xl:max-w-none">
+          <h1 className={`text-4xl md:text-5xl lg:text-6xl font-normal leading-tight mb-4 text-white drop-shadow-xl z-10 relative ${heroInView ? "animate-fade-slide-up" : "opacity-0"}`}>
             Protect Wallets. Detect Threats.<br className="hidden md:inline" /> Trade Crypto With Confidence
           </h1>
-          <p className={`text-lg md:text-xl text-white/80 mb-8 max-w-2xl z-10 relative ${heroInView ? "animate-fade-slide-up delay-200" : "opacity-0"}`}>
+          <p className={`text-lg md:text-lg lg:text-xl text-white/80 mb-8 max-w-2xl z-10 relative ${heroInView ? "animate-fade-slide-up delay-200" : "opacity-0"}`}>
             Where Artificial Intelligence Meets Financial Precision.
           </p>
           <div className="flex flex-row flex-wrap gap-3 mb-12 z-10 relative w-full justify-center md:justify-start">
@@ -89,21 +89,34 @@ export default function HomeScreen() {
         </div>
       </section>
       {/* Value Section */}
-      <section ref={valueRef} className="w-full px-4 flex flex-col items-center -mt-6 md:mt-52 mx-auto">
+      <section ref={valueRef} className="w-full px-4 flex flex-col items-center -mt-6 md:mt-52">
         <span className="mb-2 px-4 py-1 rounded-full border border-blue-400 text-blue-300 text-sm font-medium bg-[#0a0a1a]">Value</span>
-        <h2 className={`text-3xl md:text-5xl font-normal mb-2 text-white text-center ${valueInView ? "animate-fade-slide-up" : "opacity-0"}`}>Crypto Made Simple. Safe. Smart.</h2>
-        <p className={`text-base md:text-lg text-white/70 mb-8 text-center max-w-xl ${valueInView ? "animate-fade-slide-up delay-200" : "opacity-0"}`}>
-          Manage, protect, and grow your digital assets with AI-powered insights, robust security, and seamless spending all in one platform.
+        <h2 className={`text-3xl md:text-6xl font-normal mb-3 text-white text-center ${valueInView ? "animate-fade-slide-up" : "opacity-0"}`}>All-in-one Platform</h2>
+        <p className={`text-base md:text-3xl text-white/80 mb-10 text-center max-w-4xl leading-tight ${valueInView ? "animate-fade-slide-up delay-200" : "opacity-0"}`}>
+          Manage, protect and grow your digital assets with AI-powered intelligence in one platform.
         </p>
-        <div className="flex flex-row md:grid md:grid-cols-3 gap-3 md:gap-6 w-full max-w-5xl mx-auto">
-          <div className="rounded-lg md:rounded-2xl bg-[linear-gradient(180deg,_#3F3C4B_0%,_#0B111E_100%)] p-3 md:p-8 flex flex-col items-center justify-center shadow-lg min-h-20 md:min-h-48 w-1/3 md:w-auto">
-            <span className="text-base md:text-3xl font-medium mb-1 md:mb-2">Confidence</span>
+        <div className={`w-full mt-10 md:mt-16 ${valueInView ? "animate-fade-slide-up delay-300" : "opacity-0"}`}>
+          <div className="block md:hidden w-full overflow-hidden">
+            <div className="logo-marquee-track flex items-center gap-x-10 whitespace-nowrap">
+              <img src="/images/id9jl1arwx_logos 1.png" alt="Phantom" className="h-7 w-auto object-contain" />
+              <img src="/images/idR3970tUM_1775665826564 1.png" alt="Coinbase" className="h-7 w-auto object-contain" />
+              <img src="/images/g18.png" alt="Binance" className="h-7 w-auto object-contain" />
+              <img src="/images/Group.png" alt="WalletConnect Pay" className="h-6 w-auto object-contain" />
+              <img src="/images/MetaMask-logo-white 1.png" alt="MetaMask" className="h-7 w-auto object-contain" />
+
+              <img src="/images/id9jl1arwx_logos 1.png" alt="" aria-hidden="true" className="h-7 w-auto object-contain" />
+              <img src="/images/idR3970tUM_1775665826564 1.png" alt="" aria-hidden="true" className="h-7 w-auto object-contain" />
+              <img src="/images/g18.png" alt="" aria-hidden="true" className="h-7 w-auto object-contain" />
+              <img src="/images/Group.png" alt="" aria-hidden="true" className="h-6 w-auto object-contain" />
+              <img src="/images/MetaMask-logo-white 1.png" alt="" aria-hidden="true" className="h-7 w-auto object-contain" />
+            </div>
           </div>
-          <div className="rounded-lg md:rounded-2xl bg-[linear-gradient(180deg,_#3F3C4B_0%,_#0B111E_100%)] p-3 md:p-8 flex flex-col items-center justify-center shadow-lg min-h-20 md:min-h-48 w-1/3 md:w-auto">
-            <span className="text-base md:text-3xl font-medium mb-1 md:mb-2">Clarity</span>
-          </div>
-          <div className="rounded-lg md:rounded-2xl bg-[linear-gradient(180deg,_#3F3C4B_0%,_#0B111E_100%)] p-3 md:p-8 flex flex-col items-center justify-center shadow-lg min-h-20 md:min-h-48 w-1/3 md:w-auto">
-            <span className="text-base md:text-3xl font-medium mb-1 md:mb-2">Convenience</span>
+          <div className="hidden md:flex flex-nowrap items-center justify-center gap-x-10 text-white whitespace-nowrap">
+            <img src="/images/id9jl1arwx_logos 1.png" alt="Phantom" className="h-10 w-auto object-contain" />
+            <img src="/images/idR3970tUM_1775665826564 1.png" alt="Coinbase" className="h-10 w-auto object-contain" />
+            <img src="/images/g18.png" alt="Binance" className="h-10 w-auto object-contain" />
+            <img src="/images/Group.png" alt="WalletConnect Pay" className="h-9 w-auto object-contain" />
+            <img src="/images/MetaMask-logo-white 1.png" alt="MetaMask" className="h-10 w-auto object-contain" />
           </div>
         </div>
       </section>
@@ -149,17 +162,17 @@ export default function HomeScreen() {
         </div>
         {/* Desktop Features Section */}
         <div className="hidden md:block w-full">
-          <div className="flex w-full md:justify-start md:ml-40">
+          <div className="w-full flex justify-start px-6 lg:px-10 xl:pl-40">
             <span className="px-4 py-1 rounded-full border border-blue-400 text-blue-500 text-sm font-medium bg-transparent mb-20 inline-block">Features</span>
           </div>
-          <div className="w-full flex flex-row items-center mb-8" style={{marginTop: '-1.5rem'}}>
-            <h2 className={`text-3xl md:text-5xl font-medium text-black text-left max-w-2xl ml-40 ${featuresInView ? "animate-fade-slide-up" : "opacity-0"}`}>Crypto Made Simple. Safe. Smart.</h2>
-            <div className="flex-1"></div>
-            <p className={`text-lg md:text-2xl text-gray-600 text-left max-w-2xl mr-10 ${featuresInView ? "animate-fade-slide-up delay-200" : "opacity-0"}`}>
+          <div className="w-full flex flex-col lg:flex-row lg:items-center gap-6 mb-8 -mt-6 px-6 lg:px-10 xl:px-0">
+            <h2 className={`text-3xl md:text-5xl font-medium text-black text-left max-w-2xl xl:ml-40 ${featuresInView ? "animate-fade-slide-up" : "opacity-0"}`}>Crypto Made Simple. Safe. Smart.</h2>
+            <div className="hidden lg:block flex-1" />
+            <p className={`text-lg md:text-2xl text-gray-600 text-left max-w-2xl lg:ml-auto xl:mr-10 ${featuresInView ? "animate-fade-slide-up delay-200" : "opacity-0"}`}>
               Manage, protect, and grow your digital assets with AI-powered insights, robust security, and seamless spending all in one platform.
             </p>
           </div>
-          <div className="grid grid-cols-3 gap-8 w-full max-w-6xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-6xl px-6 lg:px-10 mx-auto">
             <div className="w-full flex justify-center items-center">
               <Image
                 src="/images/senseitrade.gif"

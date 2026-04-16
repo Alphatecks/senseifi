@@ -51,6 +51,6 @@
     }
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://senseifi-backend.onrender.com; img-src 'self' data: https://upload.wikimedia.org https://pbs.twimg.com https://api.qrserver.com;"
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://senseifi-backend.onrender.com; img-src 'self' data: https://upload.wikimedia.org https://pbs.twimg.com https://api.qrserver.com https://encrypted-tbn0.gstatic.com;"
   }
 }

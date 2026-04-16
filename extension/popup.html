@@ -277,7 +277,7 @@
         </div>
 
         <button type="button" class="cw-wallet-result-done" data-action="wallet-scan-done">Done</button>
-        <button type="button" class="cw-wallet-result-learn" data-action="wallet-scan-learn-more">Learn More</button>
+        <button type="button" class="cw-wallet-result-learn" data-action="wallet-scan-learn-more">View details on dashboard</button>
       </div>
 
       <div id="cw-risk-panel-view" class="cw-risk-panel view-hidden">
@@ -288,9 +288,9 @@
 
         <p class="cw-risk-panel-findings-title">Findings</p>
         <ul class="cw-risk-panel-findings">
-          <li><span>Site Reputation:</span><strong>Safe</strong></li>
-          <li><span>Contract Risk:</span><strong>Low</strong></li>
-          <li><span>User Reports:</span><strong>None</strong></li>
+          <li><span>Site Reputation:</span><strong id="cw-risk-site-reputation">Safe</strong></li>
+          <li><span>Contract Risk:</span><strong id="cw-risk-contract-risk">Low</strong></li>
+          <li><span>User Reports:</span><strong id="cw-risk-user-reports">None</strong></li>
         </ul>
 
         <button type="button" class="cw-wallet-result-done cw-risk-panel-done" data-action="risk-panel-done">Done</button>
@@ -300,16 +300,20 @@
         <h2 class="cw-analysis-engine-title">Sensei Analysis Engine</h2>
 
         <p class="cw-analysis-engine-label">Transaction Details:</p>
-        <p class="cw-analysis-engine-copy">This transaction grants unlimited access to your NFTs.</p>
+        <p id="cw-analysis-transaction-details" class="cw-analysis-engine-copy">This transaction grants unlimited access to your NFTs.</p>
+        <p class="cw-analysis-engine-debug">
+          <span>Transaction Risk:</span>
+          <strong id="cw-analysis-transaction-risk">None</strong>
+        </p>
 
         <div class="cw-analysis-engine-risk-row">
-          <span>Risk Level:</span>
-          <strong>Safe</strong>
+          <span>Decision Risk:</span>
+          <strong id="cw-analysis-risk-level">Safe</strong>
         </div>
 
         <div class="cw-analysis-engine-reco">
           <p class="cw-analysis-engine-label">Recommendation:</p>
-          <p class="cw-analysis-engine-copy">Limit approval or verify contract.</p>
+          <p id="cw-analysis-recommendation" class="cw-analysis-engine-copy">Limit approval or verify contract.</p>
         </div>
 
         <div class="cw-analysis-engine-switch-row">
@@ -331,17 +335,17 @@
       </div>
 
       <div id="cw-malicious-contract-view" class="cw-malicious-contract view-hidden">
-        <h2 class="cw-malicious-contract-title">Malicious Contract Detected</h2>
-        <p class="cw-malicious-contract-warning">🚨 Critical Warning</p>
+        <h2 id="cw-malicious-title" class="cw-malicious-contract-title">Malicious Contract Detected</h2>
+        <p id="cw-malicious-warning-text" class="cw-malicious-contract-warning">🚨 Critical Warning</p>
 
         <div class="cw-malicious-contract-row">
-          <span>Risk Level:</span>
-          <strong>9.6 / 10</strong>
+          <span>Contract Risk:</span>
+          <strong id="cw-malicious-risk-level">9.6 / 10</strong>
         </div>
 
         <div class="cw-malicious-contract-row cw-malicious-contract-row--muted">
-          <span>Reported incidents:</span>
-          <strong>23 wallets drained</strong>
+          <span>Detected incidents:</span>
+          <strong id="cw-malicious-incidents">23 wallets drained</strong>
         </div>
 
         <button type="button" class="cw-wallet-result-done cw-malicious-contract-block" data-action="malicious-block">
@@ -353,16 +357,16 @@
       </div>
 
       <div id="cw-scam-token-view" class="cw-scam-token view-hidden">
-        <h2 class="cw-scam-token-title">Scam Token Detected</h2>
-        <p class="cw-scam-token-warning">🚨 Critical Warning</p>
+        <h2 id="cw-scam-token-title-text" class="cw-scam-token-title">Scam Token Detected</h2>
+        <p id="cw-scam-token-warning-text" class="cw-scam-token-warning">🚨 Critical Warning</p>
 
         <div class="cw-scam-token-row">
           <span>Token:</span>
-          <strong>FREE-ETH-AIRDROP</strong>
+          <strong id="cw-scam-token-symbol">FREE-ETH-AIRDROP</strong>
         </div>
         <div class="cw-scam-token-row">
           <span>Risk Level:</span>
-          <strong>10/10</strong>
+          <strong id="cw-scam-token-risk-level">10/10</strong>
         </div>
 
         <div class="cw-scam-token-switch-row">
@@ -396,15 +400,58 @@
           Paste a smart contract link to begin a full SenseiGuard security analysis.
         </p>
 
-        <label for="cw-contract-link-input" class="cw-contract-scan-label">Smart contract link</label>
+        <label for="cw-contract-link-input" class="cw-contract-scan-label">Smart contract link or Contract address</label>
         <input
           id="cw-contract-link-input"
           class="cw-contract-scan-input"
-          type="url"
-          inputmode="url"
+          type="text"
+          inputmode="text"
           autocomplete="off"
-          placeholder="https://etherscan.io/address/0x..."
+          placeholder="https://etherscan.io/address/0x... or 0x..."
         />
+        <div id="cw-chain-select-wrap" class="cw-chain-select-wrap view-hidden">
+          <p class="cw-chain-select-label">Select network</p>
+          <button id="cw-chain-select-toggle" type="button" class="cw-chain-select-toggle" aria-expanded="false">
+            <span class="cw-chain-select-current">
+              <img
+                id="cw-chain-select-current-logo"
+                src="assets/scaled_logo.png"
+                data-remote-src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ-lBuqDXSiFE_McY-voa9YFoRqRJYzFcOghQ&s"
+                alt=""
+                width="18"
+                height="18"
+              />
+              <span id="cw-chain-select-current-name">Ethereum Mainnet</span>
+            </span>
+            <span class="cw-chain-select-caret" aria-hidden="true">▾</span>
+          </button>
+          <div id="cw-chain-select-menu" class="cw-chain-select-menu view-hidden">
+            <button type="button" class="cw-chain-option is-selected" data-chain-id="1" data-chain-name="Ethereum Mainnet">
+              <img src="assets/scaled_logo.png" data-remote-src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ-lBuqDXSiFE_McY-voa9YFoRqRJYzFcOghQ&s" alt="" width="18" height="18" />
+              <span>Ethereum Mainnet</span>
+            </button>
+            <button type="button" class="cw-chain-option" data-chain-id="56" data-chain-name="BNB Smart Chain">
+              <img src="assets/scaled_logo.png" data-remote-src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSc7MXnxUw6yE_1BXax7T4RVb74vtaBeyw1qg&s" alt="" width="18" height="18" />
+              <span>BNB Smart Chain</span>
+            </button>
+            <button type="button" class="cw-chain-option" data-chain-id="137" data-chain-name="Polygon">
+              <img src="assets/scaled_logo.png" data-remote-src="https://upload.wikimedia.org/wikipedia/commons/2/21/Polygon_Icon.svg" alt="" width="18" height="18" />
+              <span>Polygon</span>
+            </button>
+            <button type="button" class="cw-chain-option" data-chain-id="8453" data-chain-name="Base">
+              <img src="assets/scaled_logo.png" data-remote-src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRgJzE3esFDDQJwxXfIEQy-TlsXLnWvlEOyTQ&s" alt="" width="18" height="18" />
+              <span>Base</span>
+            </button>
+            <button type="button" class="cw-chain-option" data-chain-id="42161" data-chain-name="Arbitrum One">
+              <img src="assets/scaled_logo.png" data-remote-src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6mQ1pwxVT3lqCTZWhuUZzKTOqT0ZmYh2oeg&s" alt="" width="18" height="18" />
+              <span>Arbitrum One</span>
+            </button>
+            <button type="button" class="cw-chain-option" data-chain-id="10" data-chain-name="Optimism">
+              <img src="assets/scaled_logo.png" data-remote-src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTqidBq62tBzMjwxpb9WljM3BuKe6oEHzbJ6Q&s" alt="" width="18" height="18" />
+              <span>Optimism</span>
+            </button>
+          </div>
+        </div>
         <p id="cw-contract-scan-feedback" class="cw-contract-scan-feedback" role="status" aria-live="polite"></p>
 
         <button type="button" class="cw-wallet-result-done cw-contract-scan-start" data-action="contract-scan-start">

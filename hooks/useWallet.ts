@@ -2,10 +2,11 @@
 
 import { useAccount, useConnect, useDisconnect, useChainId } from 'wagmi';
 import { walletService } from '../services/walletService';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useDashboardUser } from '@/context/DashboardUserContext';
 
 const LAST_CONNECTED_WALLET_KEY = 'senseifi:last-connected-wallet';
+const LAST_CONNECTED_CONNECTOR_KEY = 'senseifi:last-connected-connector';
 
 export function useWallet() {
   const { setDashboardUser } = useDashboardUser();
@@ -14,6 +15,7 @@ export function useWallet() {
   const { disconnect } = useDisconnect();
   const chainId = useChainId();
   const [persistedAddress, setPersistedAddress] = useState<string | null>(null);
+  const autoReconnectAttemptedRef = useRef(false);
 
   const walletType: 'metamask' | 'coinbase' = (() => {
     const id = connector?.id ?? '';
@@ -35,9 +37,28 @@ export function useWallet() {
     if (typeof window === 'undefined') return;
     if (isConnected && address?.trim()) {
       window.localStorage.setItem(LAST_CONNECTED_WALLET_KEY, address.trim());
+      if (connector?.id) {
+        window.localStorage.setItem(LAST_CONNECTED_CONNECTOR_KEY, connector.id);
+      }
       setPersistedAddress(address.trim());
     }
-  }, [isConnected, address]);
+  }, [isConnected, address, connector]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (isConnected || isPending || autoReconnectAttemptedRef.current) return;
+    autoReconnectAttemptedRef.current = true;
+
+    const savedConnectorId = window.localStorage.getItem(LAST_CONNECTED_CONNECTOR_KEY)?.trim();
+    if (!savedConnectorId) return;
+
+    const savedConnector = connectors.find((c) => c.id === savedConnectorId);
+    if (!savedConnector) return;
+
+    void connectAsync({ connector: savedConnector }).catch(() => {
+      // Silently ignore auto-reconnect failures; user can reconnect manually.
+    });
+  }, [isConnected, isPending, connectors, connectAsync]);
 
   const connectedAddress = useMemo(() => {
     if (address?.trim()) return address.trim();
@@ -86,6 +107,7 @@ export function useWallet() {
       }
       if (typeof window !== 'undefined') {
         window.localStorage.removeItem(LAST_CONNECTED_WALLET_KEY);
+        window.localStorage.removeItem(LAST_CONNECTED_CONNECTOR_KEY);
       }
       setPersistedAddress(null);
       setDashboardUser(null);

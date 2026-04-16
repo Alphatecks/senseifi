@@ -47,6 +47,27 @@ document.addEventListener('DOMContentLoaded', function () {
   const contractScanBackBtn = document.querySelector('[data-action="contract-scan-back"]');
   const contractLinkInput = document.getElementById('cw-contract-link-input');
   const contractScanFeedback = document.getElementById('cw-contract-scan-feedback');
+  const chainSelectWrap = document.getElementById('cw-chain-select-wrap');
+  const chainSelectToggle = document.getElementById('cw-chain-select-toggle');
+  const chainSelectMenu = document.getElementById('cw-chain-select-menu');
+  const chainSelectCurrentLogo = document.getElementById('cw-chain-select-current-logo');
+  const chainSelectCurrentName = document.getElementById('cw-chain-select-current-name');
+  const chainOptionButtons = document.querySelectorAll('.cw-chain-option');
+  const analysisTransactionDetails = document.getElementById('cw-analysis-transaction-details');
+  const analysisTransactionRisk = document.getElementById('cw-analysis-transaction-risk');
+  const analysisRiskLevel = document.getElementById('cw-analysis-risk-level');
+  const analysisRecommendation = document.getElementById('cw-analysis-recommendation');
+  const riskSiteReputation = document.getElementById('cw-risk-site-reputation');
+  const riskContractRisk = document.getElementById('cw-risk-contract-risk');
+  const riskUserReports = document.getElementById('cw-risk-user-reports');
+  const maliciousTitle = document.getElementById('cw-malicious-title');
+  const maliciousRiskLevel = document.getElementById('cw-malicious-risk-level');
+  const maliciousIncidents = document.getElementById('cw-malicious-incidents');
+  const maliciousWarningText = document.getElementById('cw-malicious-warning-text');
+  const scamTokenSymbol = document.getElementById('cw-scam-token-symbol');
+  const scamTokenRiskLevel = document.getElementById('cw-scam-token-risk-level');
+  const scamTokenTitleText = document.getElementById('cw-scam-token-title-text');
+  const scamTokenWarningText = document.getElementById('cw-scam-token-warning-text');
   const autoBlockSaveBtn = document.querySelector('[data-action="autoblock-save"]');
   const autoBlockBackBtn = document.querySelector('[data-action="autoblock-back"]');
   const walletScanToggleBtns = document.querySelectorAll('.cw-wallet-result-switch[data-action^="toggle-"]');
@@ -59,6 +80,12 @@ document.addEventListener('DOMContentLoaded', function () {
   let contractScanTimerId = null;
   let currentWalletAddress = '';
   let walletHealthScoreSource = 'wallet';
+  let analysisEngineSource = 'wallet';
+  let selectedChainId = 1;
+  let lastContractScanPayload = null;
+  let lastAnalysisPayload = null;
+  let lastRiskPanelPayload = null;
+  let lastScamPayload = null;
 
   /** Main CTA uses last row chosen, else MetaMask */
   let lastWalletType = 'metamask';
@@ -91,6 +118,319 @@ document.addEventListener('DOMContentLoaded', function () {
     const n = Number(value);
     if (!Number.isFinite(n)) return 0;
     return Math.max(0, Math.min(100, Math.round(n)));
+  }
+
+  function extractApiData(json) {
+    if (!json || typeof json !== 'object') return null;
+    if (json.success && typeof json.data !== 'undefined') return json.data;
+    if (typeof json.data !== 'undefined') return json.data;
+    return json;
+  }
+
+  function formatRiskOutOf10(value, fallback) {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n <= 0) return fallback || 'None';
+    const normalized = n > 10 ? n / 10 : n;
+    return Math.max(0, Math.min(10, normalized)).toFixed(1) + ' / 10';
+  }
+
+  function pickFirstText(values, fallback) {
+    for (let i = 0; i < values.length; i += 1) {
+      const v = values[i];
+      if (typeof v === 'string' && v.trim()) return v.trim();
+      if (typeof v === 'number' && Number.isFinite(v) && v > 0) return String(v);
+    }
+    return fallback || 'None';
+  }
+
+  function pickFirstNumber(values) {
+    for (let i = 0; i < values.length; i += 1) {
+      const n = Number(values[i]);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+    return null;
+  }
+
+  function extractContractAddressFromLink(link) {
+    const input = String(link || '');
+    const m = input.match(/\/address\/(0x[a-fA-F0-9]{40})/);
+    return m ? m[1] : '';
+  }
+
+  function isContractAddress(value) {
+    return /^0x[a-fA-F0-9]{40}$/.test(String(value || '').trim());
+  }
+
+  function syncChainDropdownVisibility() {
+    const raw = contractLinkInput ? contractLinkInput.value.trim() : '';
+    if (!chainSelectWrap) return;
+    const show = isContractAddress(raw);
+    chainSelectWrap.classList.toggle('view-hidden', !show);
+    if (!show && chainSelectMenu) {
+      chainSelectMenu.classList.add('view-hidden');
+      if (chainSelectToggle) chainSelectToggle.setAttribute('aria-expanded', 'false');
+    }
+  }
+
+  function pickFirstNonEmptyString(values) {
+    for (let i = 0; i < values.length; i += 1) {
+      const v = values[i];
+      if (typeof v === 'string' && v.trim()) return v.trim();
+    }
+    return '';
+  }
+
+  async function callExtensionApi(path, payload) {
+    const isScanContractExtensionApi =
+      typeof path === 'string' && path.indexOf('/protection/extension/') === 0;
+    try {
+      const res = await fetch(getWalletApiBase() + path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload || {}),
+      });
+      const json = await res.json().catch(function () {
+        return null;
+      });
+      if (isScanContractExtensionApi) {
+        console.log('[SenseiGuard popup][extension api]', {
+          path: path,
+          request: payload || {},
+          status: res.status,
+          ok: res.ok,
+          response: json,
+        });
+      }
+      if (!res.ok || !json) return null;
+      return extractApiData(json);
+    } catch (err) {
+      if (isScanContractExtensionApi) {
+        console.error('[SenseiGuard popup][extension api][error]', {
+          path: path,
+          request: payload || {},
+          error: err && err.message ? err.message : String(err),
+        });
+      }
+      return null;
+    }
+  }
+
+  async function sendScreenAction(action, extra) {
+    if (!currentWalletAddress) return null;
+    const payload = {
+      wallet_address: currentWalletAddress,
+      action: action,
+      chain_id: 1,
+      ...(extra || {}),
+    };
+    return callExtensionApi('/protection/extension/screen-action', payload);
+  }
+
+  function renderAnalysisEngine(data) {
+    const source = data || {};
+    if (analysisTransactionDetails) {
+      analysisTransactionDetails.textContent = pickFirstText(
+        [source.transaction_details, source.details, source.summary, source.reason],
+        'None'
+      );
+    }
+    if (analysisTransactionRisk) {
+      const txRiskValue = pickFirstNumber([
+        source.transaction_risk_score,
+      ]);
+      analysisTransactionRisk.textContent = formatRiskOutOf10(
+        txRiskValue,
+        'None'
+      );
+    }
+    if (analysisRiskLevel) {
+      const riskValue = pickFirstNumber([
+        source.final_decision_score,
+        source.risk_score,
+        source.riskScore,
+      ]);
+      analysisRiskLevel.textContent = formatRiskOutOf10(
+        riskValue,
+        'None'
+      );
+    }
+    if (analysisRecommendation) {
+      analysisRecommendation.textContent = pickFirstText(
+        [source.recommendation, source.action_hint, source.next_step],
+        'None'
+      );
+    }
+  }
+
+  function renderRiskPanel(data) {
+    const source = data || {};
+    const findings =
+      source.findings && typeof source.findings === 'object' ? source.findings : {};
+    if (riskSiteReputation) {
+      const siteReputationValue = pickFirstText(
+        [
+          findings.site_reputation,
+          source.site_reputation,
+          source.safety,
+          source.site_safety,
+          source.domain_safety,
+        ],
+        'None'
+      );
+      riskSiteReputation.textContent = siteReputationValue;
+      const isWarning = String(siteReputationValue || '').trim().toLowerCase() === 'warning';
+      riskSiteReputation.classList.toggle('cw-risk-value-warning', isWarning);
+    }
+    if (riskContractRisk) {
+      const panelRiskValue = pickFirstNumber([
+        source.risk_level_10,
+        source.risk_score,
+        source.riskScore,
+      ]);
+      if (panelRiskValue !== null) {
+        riskContractRisk.textContent = formatRiskOutOf10(panelRiskValue, 'None');
+      } else {
+        riskContractRisk.textContent = pickFirstText(
+          [
+            findings.contract_risk,
+            source.contract_risk,
+            source.risk_level,
+            source.risk_band,
+          ],
+          'None'
+        );
+      }
+    }
+    if (riskUserReports) {
+      const incidents = pickFirstText(
+        [
+          findings.user_reports,
+          source.user_reports,
+          source.reported_incidents,
+          source.alert_count,
+        ],
+        ''
+      );
+      riskUserReports.textContent = incidents || 'None';
+    }
+  }
+
+  function renderMaliciousContract(data) {
+    const source = data || {};
+    const scoreRaw = pickFirstNumber([
+      source.contract_risk_score,
+      source.risk_level_10,
+      source.risk_score,
+      source.riskScore,
+    ]);
+    const riskPercent =
+      scoreRaw === null
+        ? null
+        : scoreRaw <= 10
+          ? Math.round(scoreRaw * 10)
+          : Math.round(scoreRaw);
+    if (maliciousRiskLevel) {
+      const riskValue = pickFirstNumber([
+        source.contract_risk_score,
+        source.risk_level_10,
+        source.risk_score,
+        source.riskScore,
+      ]);
+      maliciousRiskLevel.textContent = formatRiskOutOf10(
+        riskValue,
+        'None'
+      );
+    }
+    const titleRiskValue = pickFirstNumber([
+      source.contract_risk_score,
+      source.risk_level_10,
+      source.risk_score,
+      source.riskScore,
+    ]);
+    const titleRiskOutOf10 =
+      titleRiskValue === null ? null : (titleRiskValue > 10 ? titleRiskValue / 10 : titleRiskValue);
+    const titleDrained = pickFirstNumber([source.wallets_drained_estimate]);
+    if (maliciousTitle) {
+      const shouldUseSuspiciousTitle =
+        titleRiskOutOf10 !== null &&
+        titleRiskOutOf10 < 5 &&
+        titleDrained === 1;
+      maliciousTitle.textContent = shouldUseSuspiciousTitle
+        ? 'Quite Suspicious but not Malicious'
+        : 'Malicious Contract Detected';
+    }
+    if (maliciousWarningText) {
+      maliciousWarningText.classList.remove(
+        'cw-malicious-contract-warning--moderate',
+        'cw-malicious-contract-warning--good'
+      );
+      if (riskPercent !== null && riskPercent <= 50) {
+        maliciousWarningText.textContent = 'Critical level is good';
+        maliciousWarningText.classList.add('cw-malicious-contract-warning--good');
+      } else if (riskPercent !== null && riskPercent <= 60) {
+        maliciousWarningText.textContent = 'Critical level is moderate';
+        maliciousWarningText.classList.add('cw-malicious-contract-warning--moderate');
+      } else {
+        maliciousWarningText.textContent = '🚨 Critical Warning';
+      }
+    }
+    if (maliciousIncidents) {
+      const drained = pickFirstNumber([source.wallets_drained_estimate]);
+      if (drained !== null) {
+        maliciousIncidents.textContent = String(drained) + ' wallets drained';
+      } else {
+        const reported = pickFirstNumber([source.reported_incidents]);
+        if (reported !== null) {
+          maliciousIncidents.textContent = String(reported) + ' detected incidents';
+        } else {
+          maliciousIncidents.textContent = pickFirstText(
+            [source.reported_incidents_text, source.top_finding],
+            'None'
+          );
+        }
+      }
+    }
+  }
+
+  function renderScamToken(data) {
+    const source = data || {};
+    const isCriticalWarning = source.critical_warning === true;
+    if (scamTokenTitleText) {
+      scamTokenTitleText.textContent = isCriticalWarning
+        ? 'Scam Token Detected'
+        : 'Safe Token detected';
+    }
+    if (scamTokenWarningText) {
+      scamTokenWarningText.classList.remove('cw-scam-token-warning--safe');
+      if (isCriticalWarning) {
+        scamTokenWarningText.textContent = '🚨 Critical Warning';
+      } else {
+        scamTokenWarningText.textContent = '✅ Safe Token';
+        scamTokenWarningText.classList.add('cw-scam-token-warning--safe');
+      }
+    }
+    if (scamTokenSymbol) {
+      scamTokenSymbol.textContent = pickFirstText(
+        [source.token, source.token_symbol, source.symbol],
+        'None'
+      );
+    }
+    if (scamTokenRiskLevel) {
+      const riskLevelText = pickFirstNonEmptyString([source.risk_level]);
+      if (/^\d+(\.\d+)?\s*\/\s*10$/i.test(riskLevelText)) {
+        scamTokenRiskLevel.textContent = riskLevelText.replace(/\s*\/\s*/, ' / ');
+        return;
+      }
+      const riskValue = pickFirstNumber([
+        source.risk_level_10,
+        source.risk_score,
+        source.riskScore,
+      ]);
+      scamTokenRiskLevel.textContent = formatRiskOutOf10(
+        riskValue,
+        'None'
+      );
+    }
   }
 
   function showConnectOnlyView() {
@@ -166,8 +506,9 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
-  function showAnalysisEngineView() {
+  function showAnalysisEngineView(source) {
     if (!analysisEngineView) return;
+    analysisEngineSource = source === 'contract' ? 'contract' : 'wallet';
     if (walletScanView) walletScanView.classList.add('view-hidden');
     if (walletScanResultView) walletScanResultView.classList.add('view-hidden');
     if (riskPanelView) riskPanelView.classList.add('view-hidden');
@@ -265,6 +606,7 @@ document.addEventListener('DOMContentLoaded', function () {
       contractScanStartBtn.style.opacity = '';
     }
     setContractScanFeedback('', '');
+    syncChainDropdownVisibility();
   }
 
   function showAutoBlockView() {
@@ -336,8 +678,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
   async function runWalletScan(address) {
     if (!address) return null;
+    const path = '/dashboard/' + encodeURIComponent(address) + '/scan';
     try {
-      const res = await fetch(getWalletApiBase() + '/dashboard/' + encodeURIComponent(address) + '/scan', {
+      const res = await fetch(getWalletApiBase() + path, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: '{}',
@@ -345,9 +688,21 @@ document.addEventListener('DOMContentLoaded', function () {
       const json = await res.json().catch(function () {
         return null;
       });
+      console.log('[SenseiGuard popup][wallet scan api]', {
+        path: path,
+        request: { wallet_address: address },
+        status: res.status,
+        ok: res.ok,
+        response: json,
+      });
       if (!res.ok || !json || !json.success || !json.data) return null;
       return json.data;
-    } catch (_err) {
+    } catch (err) {
+      console.error('[SenseiGuard popup][wallet scan api][error]', {
+        path: path,
+        request: { wallet_address: address },
+        error: err && err.message ? err.message : String(err),
+      });
       return null;
     }
   }
@@ -380,9 +735,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
   function hydrateConnectAssets() {
     if (connectAssetsHydrated) return;
-    const imgs = document.querySelectorAll('#view-connect-wallet img[data-remote-src]');
+    const fallbackSrc = 'assets/scaled_logo.png';
+    const imgs = document.querySelectorAll('img[data-remote-src]');
     imgs.forEach(function (img) {
       const remoteSrc = img.getAttribute('data-remote-src');
+      img.onerror = function () {
+        if (img.getAttribute('src') !== fallbackSrc) {
+          img.setAttribute('src', fallbackSrc);
+        }
+      };
       if (remoteSrc) {
         img.setAttribute('src', remoteSrc);
       }
@@ -581,12 +942,50 @@ document.addEventListener('DOMContentLoaded', function () {
   analysisToggleBtns.forEach(function (btn) {
     btn.addEventListener('click', function () {
       btn.classList.toggle('is-on');
+      const action = btn.getAttribute('data-action') || '';
+      if (action === 'analysis-cancel-toggle') {
+        sendScreenAction('cancel');
+      } else if (action === 'analysis-proceed-toggle') {
+        sendScreenAction('proceed');
+      }
     });
   });
 
   scamToggleBtns.forEach(function (btn) {
     btn.addEventListener('click', function () {
       btn.classList.toggle('is-on');
+      const action = btn.getAttribute('data-action') || '';
+      if (action === 'scam-hide-toggle') {
+        sendScreenAction('hide_token', {
+          token_symbol:
+            pickFirstNonEmptyString([
+              lastScamPayload && lastScamPayload.token,
+              lastScamPayload && lastScamPayload.token_symbol,
+            ]) || undefined,
+          token_address:
+            pickFirstNonEmptyString([
+              lastScamPayload && lastScamPayload.token_address,
+              lastContractScanPayload && lastContractScanPayload.contract_address,
+            ]) || undefined,
+        });
+      } else if (action === 'scam-analyze-toggle') {
+        sendScreenAction('analyze_contract', {
+          contract_address: lastContractScanPayload && lastContractScanPayload.contract_address ? lastContractScanPayload.contract_address : undefined,
+        });
+      } else if (action === 'scam-report-toggle') {
+        sendScreenAction('report_scam', {
+          token_symbol:
+            pickFirstNonEmptyString([
+              lastScamPayload && lastScamPayload.token,
+              lastScamPayload && lastScamPayload.token_symbol,
+            ]) || undefined,
+          token_address:
+            pickFirstNonEmptyString([
+              lastScamPayload && lastScamPayload.token_address,
+              lastContractScanPayload && lastContractScanPayload.contract_address,
+            ]) || undefined,
+        });
+      }
     });
   });
 
@@ -598,80 +997,215 @@ document.addEventListener('DOMContentLoaded', function () {
 
   if (walletScanDoneBtn) {
     walletScanDoneBtn.addEventListener('click', function () {
-      showRiskPanelView();
+      setConnectedDashboardMode(true);
     });
   }
 
   if (walletScanLearnMoreBtn) {
     walletScanLearnMoreBtn.addEventListener('click', function () {
-      setCwStatus('Detailed wallet risk report coming soon.', '');
+      setCwStatus('Open the dashboard to view full wallet risk details.', '');
     });
   }
 
   if (riskPanelDoneBtn) {
-    riskPanelDoneBtn.addEventListener('click', function () {
-      showAnalysisEngineView();
+    riskPanelDoneBtn.addEventListener('click', async function () {
+      await sendScreenAction('done', {
+        contract_address: lastContractScanPayload && lastContractScanPayload.contract_address ? lastContractScanPayload.contract_address : undefined,
+      });
+      renderMaliciousContract(lastContractScanPayload || lastAnalysisPayload || lastRiskPanelPayload);
+      showMaliciousContractView();
     });
   }
 
   if (analysisEngineDoneBtn) {
-    analysisEngineDoneBtn.addEventListener('click', function () {
+    analysisEngineDoneBtn.addEventListener('click', async function () {
+      await sendScreenAction('done', {
+        contract_address: lastContractScanPayload && lastContractScanPayload.contract_address ? lastContractScanPayload.contract_address : undefined,
+      });
+      if (analysisEngineSource === 'contract') {
+        const riskPayload = {
+          wallet_address: currentWalletAddress,
+          contract_address: lastContractScanPayload && lastContractScanPayload.contract_address ? lastContractScanPayload.contract_address : '',
+          domain: lastContractScanPayload && lastContractScanPayload.domain ? lastContractScanPayload.domain : '',
+        };
+        const riskData = await callExtensionApi('/protection/extension/risk-panel', riskPayload);
+        if (riskData) {
+          lastRiskPanelPayload = riskData;
+          renderRiskPanel(riskData);
+        }
+        showRiskPanelView();
+        return;
+      }
       showMaliciousContractView();
     });
   }
 
   if (analysisEngineLearnBtn) {
-    analysisEngineLearnBtn.addEventListener('click', function () {
+    analysisEngineLearnBtn.addEventListener('click', async function () {
+      await sendScreenAction('go_back');
       showRiskPanelView();
     });
   }
 
   if (maliciousBlockBtn) {
-    maliciousBlockBtn.addEventListener('click', function () {
+    maliciousBlockBtn.addEventListener('click', async function () {
+      await sendScreenAction('analyze_contract', {
+        contract_address: lastContractScanPayload && lastContractScanPayload.contract_address ? lastContractScanPayload.contract_address : undefined,
+      });
+      const scamTokenSymbolValue = pickFirstNonEmptyString([
+        lastContractScanPayload && lastContractScanPayload.token,
+        lastContractScanPayload && lastContractScanPayload.token_symbol,
+        lastContractScanPayload && lastContractScanPayload.contract_name,
+      ]);
+      const scamTokenAddressValue = pickFirstNonEmptyString([
+        lastContractScanPayload && lastContractScanPayload.token_address,
+        lastContractScanPayload && lastContractScanPayload.contract_address,
+      ]);
+      const scamPayload = {
+        wallet_address: currentWalletAddress,
+        token_symbol: scamTokenSymbolValue || undefined,
+        token_address: scamTokenAddressValue || undefined,
+        contract_address:
+          (lastContractScanPayload && lastContractScanPayload.contract_address) || scamTokenAddressValue || '',
+        chain_id: selectedChainId,
+      };
+      const scamData = await callExtensionApi('/protection/extension/scam-token-detected', scamPayload);
+      if (scamData) {
+        lastScamPayload = scamData;
+        renderScamToken(scamData);
+      }
       showScamTokenView();
     });
   }
 
   if (maliciousProceedBtn) {
-    maliciousProceedBtn.addEventListener('click', function () {
+    maliciousProceedBtn.addEventListener('click', async function () {
+      await sendScreenAction('proceed', {
+        contract_address: lastContractScanPayload && lastContractScanPayload.contract_address ? lastContractScanPayload.contract_address : undefined,
+      });
       setCwStatus('You chose to proceed at your own risk.', 'error');
       setConnectedDashboardMode(true);
     });
   }
 
   if (contractScanBackBtn) {
-    contractScanBackBtn.addEventListener('click', function () {
+    contractScanBackBtn.addEventListener('click', async function () {
+      await sendScreenAction('go_back');
       setConnectedDashboardMode(true);
     });
   }
 
+  if (contractLinkInput) {
+    contractLinkInput.addEventListener('input', function () {
+      syncChainDropdownVisibility();
+    });
+  }
+
+  if (chainSelectToggle) {
+    chainSelectToggle.addEventListener('click', function () {
+      if (!chainSelectMenu || !chainSelectWrap || chainSelectWrap.classList.contains('view-hidden')) return;
+      const isOpen = !chainSelectMenu.classList.contains('view-hidden');
+      chainSelectMenu.classList.toggle('view-hidden', isOpen);
+      chainSelectToggle.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
+    });
+  }
+
+  chainOptionButtons.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      const chainId = Number(btn.getAttribute('data-chain-id'));
+      const chainName = btn.getAttribute('data-chain-name') || '';
+      const logo = btn.querySelector('img');
+      if (Number.isFinite(chainId)) selectedChainId = chainId;
+      chainOptionButtons.forEach(function (b) {
+        b.classList.remove('is-selected');
+      });
+      btn.classList.add('is-selected');
+      if (chainSelectCurrentName) chainSelectCurrentName.textContent = chainName || 'Select network';
+      if (chainSelectCurrentLogo && logo) {
+        const src = logo.getAttribute('src');
+        if (src) chainSelectCurrentLogo.setAttribute('src', src);
+      }
+      if (chainSelectMenu) chainSelectMenu.classList.add('view-hidden');
+      if (chainSelectToggle) chainSelectToggle.setAttribute('aria-expanded', 'false');
+    });
+  });
+
   if (contractScanStartBtn) {
-    contractScanStartBtn.addEventListener('click', function () {
+    contractScanStartBtn.addEventListener('click', async function () {
       const raw = contractLinkInput ? contractLinkInput.value.trim() : '';
       if (!raw) {
         setContractScanFeedback('Please enter a smart contract link.', 'error');
         return;
       }
 
+      const isAddressInput = isContractAddress(raw);
       let parsed = null;
-      try {
-        parsed = new URL(raw);
-      } catch (_err) {
-        parsed = null;
+      if (!isAddressInput) {
+        try {
+          parsed = new URL(raw);
+        } catch (_err) {
+          parsed = null;
+        }
       }
-      if (!parsed || (parsed.protocol !== 'https:' && parsed.protocol !== 'http:')) {
-        setContractScanFeedback('Enter a valid http(s) smart contract URL.', 'error');
+      if (!isAddressInput && (!parsed || (parsed.protocol !== 'https:' && parsed.protocol !== 'http:'))) {
+        setContractScanFeedback('Enter a valid smart contract URL or contract address.', 'error');
         return;
       }
 
-      setContractScanFeedback('Analysis started for ' + parsed.hostname, 'success');
+      setContractScanFeedback(
+        isAddressInput
+          ? 'Analysis started for contract address'
+          : 'Analysis started for ' + parsed.hostname,
+        'success'
+      );
       contractScanStartBtn.disabled = true;
       contractScanStartBtn.textContent = 'Analyzing...';
       contractScanStartBtn.style.opacity = '0.78';
-      if (contractScanTimerId) clearTimeout(contractScanTimerId);
-      contractScanTimerId = setTimeout(function () {
-        showAnalysisEngineView();
-      }, 900);
+      const contractAddress = isAddressInput ? raw : extractContractAddressFromLink(raw);
+      const scanContractPayload = {
+        wallet_address: currentWalletAddress,
+        contract_link: raw,
+        chain_id: selectedChainId,
+      };
+      const scanResult = await callExtensionApi('/protection/extension/scan-smart-contract', scanContractPayload);
+      if (!scanResult) {
+        setContractScanFeedback('Contract scan failed. Please try again.', 'error');
+        contractScanStartBtn.disabled = false;
+        contractScanStartBtn.textContent = 'Analyze Contract';
+        contractScanStartBtn.style.opacity = '';
+        return;
+      }
+      lastContractScanPayload = {
+        ...scanResult,
+        contract_address: scanResult.contract_address || contractAddress,
+        domain: parsed ? parsed.hostname : '',
+        contract_link: raw,
+      };
+      await sendScreenAction('analyze_contract', {
+        contract_address: lastContractScanPayload.contract_address || undefined,
+      });
+      const analyzePayload = {
+        wallet_address: currentWalletAddress,
+        method: 'eth_sendTransaction',
+        to: lastContractScanPayload.contract_address || contractAddress,
+        value: '0x0',
+        data: '0x',
+        chain_id: selectedChainId,
+      };
+      const analyzeResult = await callExtensionApi(
+        '/protection/extension/analyze-transaction-screen',
+        analyzePayload
+      );
+      if (analyzeResult) {
+        lastAnalysisPayload = analyzeResult;
+        renderAnalysisEngine(analyzeResult);
+      } else {
+        renderAnalysisEngine(lastContractScanPayload);
+      }
+      showAnalysisEngineView('contract');
+      contractScanStartBtn.disabled = false;
+      contractScanStartBtn.textContent = 'Analyze Contract';
+      contractScanStartBtn.style.opacity = '';
     });
   }
 
@@ -689,14 +1223,38 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   if (scamDoneBtn) {
-    scamDoneBtn.addEventListener('click', function () {
+    scamDoneBtn.addEventListener('click', async function () {
+      await sendScreenAction('done', {
+        token_symbol:
+          pickFirstNonEmptyString([
+            lastScamPayload && lastScamPayload.token,
+            lastScamPayload && lastScamPayload.token_symbol,
+          ]) || undefined,
+        token_address:
+          pickFirstNonEmptyString([
+            lastScamPayload && lastScamPayload.token_address,
+            lastContractScanPayload && lastContractScanPayload.contract_address,
+          ]) || undefined,
+      });
       setCwStatus('Scam token actions saved.', 'success');
       setConnectedDashboardMode(true);
     });
   }
 
   if (scamProceedBtn) {
-    scamProceedBtn.addEventListener('click', function () {
+    scamProceedBtn.addEventListener('click', async function () {
+      await sendScreenAction('proceed', {
+        token_symbol:
+          pickFirstNonEmptyString([
+            lastScamPayload && lastScamPayload.token,
+            lastScamPayload && lastScamPayload.token_symbol,
+          ]) || undefined,
+        token_address:
+          pickFirstNonEmptyString([
+            lastScamPayload && lastScamPayload.token_address,
+            lastContractScanPayload && lastContractScanPayload.contract_address,
+          ]) || undefined,
+      });
       setCwStatus('You chose to proceed at your own risk.', 'error');
       setConnectedDashboardMode(true);
     });

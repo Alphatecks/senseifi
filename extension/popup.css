@@ -594,6 +594,22 @@ body.welcome {
   color: #32bb1d;
 }
 
+.cw-hardcoded-note {
+  display: inline-flex;
+  align-items: center;
+  margin: 4px 0 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(248, 113, 113, 0.45);
+  background: rgba(127, 29, 29, 0.28);
+  color: #fecaca;
+  font-size: 11px;
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
 .cw-wallet-scan-view {
   min-height: 410px;
   padding: 14px 8px 0;
@@ -926,6 +942,11 @@ body.welcome {
   font-weight: 700;
 }
 
+.cw-risk-value-warning {
+  color: #df1717;
+  text-shadow: 0 0 10px rgba(223, 23, 23, 0.35);
+}
+
 .cw-risk-panel-done {
   margin-top: 16px;
 }
@@ -954,6 +975,21 @@ body.welcome {
   font-size: 14px;
   font-weight: 500;
   color: rgba(255, 255, 255, 0.25);
+}
+
+.cw-analysis-engine-debug {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.68);
+}
+
+.cw-analysis-engine-debug strong {
+  color: #ffffff;
+  font-size: 13px;
 }
 
 .cw-analysis-engine-risk-row {
@@ -1024,6 +1060,16 @@ body.welcome {
   text-shadow: 0 0 12px rgba(223, 23, 23, 0.35);
 }
 
+.cw-malicious-contract-warning--moderate {
+  color: #f59e0b;
+  text-shadow: 0 0 12px rgba(245, 158, 11, 0.35);
+}
+
+.cw-malicious-contract-warning--good {
+  color: #32bb1d;
+  text-shadow: 0 0 12px rgba(50, 187, 29, 0.28);
+}
+
 .cw-malicious-contract-row {
   display: flex;
   align-items: center;
@@ -1072,6 +1118,11 @@ body.welcome {
   font-weight: 700;
   color: #df1717;
   text-shadow: 0 0 12px rgba(223, 23, 23, 0.35);
+}
+
+.cw-scam-token-warning--safe {
+  color: #32bb1d;
+  text-shadow: 0 0 12px rgba(50, 187, 29, 0.28);
 }
 
 .cw-scam-token-row {
@@ -1157,6 +1208,91 @@ body.welcome {
 .cw-contract-scan-input:focus {
   border-color: rgba(105, 138, 255, 0.9);
   box-shadow: 0 0 0 2px rgba(64, 102, 255, 0.2);
+}
+
+.cw-chain-select-wrap {
+  margin-top: 10px;
+}
+
+.cw-chain-select-label {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.cw-chain-select-toggle {
+  width: 100%;
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid rgba(89, 116, 222, 0.6);
+  background: linear-gradient(180deg, rgba(20, 27, 50, 0.96) 0%, rgba(12, 18, 38, 0.95) 100%);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  cursor: pointer;
+}
+
+.cw-chain-select-current {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.cw-chain-select-current img {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.cw-chain-select-caret {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
+}
+
+.cw-chain-select-menu {
+  margin-top: 6px;
+  border-radius: 12px;
+  border: 1px solid rgba(89, 116, 222, 0.45);
+  background: linear-gradient(180deg, rgba(18, 24, 46, 0.98) 0%, rgba(9, 14, 30, 0.98) 100%);
+  overflow: hidden;
+}
+
+.cw-chain-option {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: transparent;
+  color: #fff;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+
+.cw-chain-option:last-child {
+  border-bottom: 0;
+}
+
+.cw-chain-option img {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.cw-chain-option.is-selected,
+.cw-chain-option:hover {
+  background: rgba(64, 102, 255, 0.22);
 }
 
 .cw-contract-scan-feedback {

@@ -268,10 +268,27 @@ async function callRiskBackend(payload, context) {
     if (!res.ok || !json) {
       throw new Error(`Backend risk call failed: ${res.status}`);
     }
+    const websiteScan =
+      json.website_scan && typeof json.website_scan === 'object' ? json.website_scan : null;
+    const websiteScanFindings = Array.isArray(websiteScan && websiteScan.findings)
+      ? websiteScan.findings.filter((item) => typeof item === 'string' && item.trim().length > 0)
+      : [];
+    const findings = [
+      ...(Array.isArray(json.findings) ? json.findings : []),
+      ...websiteScanFindings,
+    ];
+    const rawRiskLevel10 =
+      typeof json.risk_level_10 === 'number'
+        ? json.risk_level_10
+        : typeof json.riskScore === 'number'
+          ? (json.riskScore <= 10 ? json.riskScore : json.riskScore / 10)
+          : typeof json.risk_score === 'number'
+            ? (json.risk_score <= 10 ? json.risk_score : json.risk_score / 10)
+            : null;
     return {
       ok: true,
       score: clampRisk(json.risk_score ?? json.riskScore ?? 0),
-      findings: Array.isArray(json.findings) ? json.findings : [],
+      findings,
       breakdown: json.breakdown || null,
       band: typeof json.band === 'string' ? json.band : null,
       siteSafety: typeof json.site_safety === 'string' ? json.site_safety : null,
@@ -281,17 +298,13 @@ async function callRiskBackend(payload, context) {
           ? json.website_scan
           : json.website_scan && typeof json.website_scan.summary === 'string'
             ? json.website_scan.summary
+            : websiteScan && typeof websiteScan.safety === 'string'
+              ? websiteScan.safety
             : null,
+      websiteScanFindings,
       recommendation: typeof json.recommendation === 'string' ? json.recommendation : null,
       maliciousContractDetected: !!json.malicious_contract_detected,
-      riskLevel10:
-        typeof json.risk_level_10 === 'number'
-          ? json.risk_level_10
-          : typeof json.riskScore === 'number'
-            ? json.riskScore / 10
-            : typeof json.risk_score === 'number'
-              ? json.risk_score / 10
-              : null,
+      riskLevel10: rawRiskLevel10,
       reportedIncidents:
         typeof json.reported_incidents === 'number' ? json.reported_incidents : null,
       walletsDrainedEstimate:
@@ -313,6 +326,7 @@ async function callRiskBackend(payload, context) {
       siteSafety: null,
       siteSafe: null,
       websiteScanSummary: null,
+      websiteScanFindings: [],
       recommendation: null,
       maliciousContractDetected: false,
       riskLevel10: null,
@@ -342,22 +356,51 @@ async function callDappConnectionCheck(context) {
     if (!res.ok || !json) {
       throw new Error(`Dapp connection check failed: ${res.status}`);
     }
+    const websiteScan =
+      json.website_scan && typeof json.website_scan === 'object' ? json.website_scan : null;
+    const websiteScanFindings = Array.isArray(websiteScan && websiteScan.findings)
+      ? websiteScan.findings.filter((item) => typeof item === 'string' && item.trim().length > 0)
+      : [];
     const rawSiteSafety = typeof json.site_safety === 'string' ? json.site_safety : '';
-    const siteSafety = rawSiteSafety || (typeof json.band === 'string' ? json.band : null);
-    const findings = Array.isArray(json.findings) ? json.findings : [];
+    const siteSafety =
+      rawSiteSafety ||
+      (typeof json.band === 'string' ? json.band : null) ||
+      (websiteScan && typeof websiteScan.safety === 'string' ? websiteScan.safety : null);
+    const findings = [
+      ...(Array.isArray(json.findings) ? json.findings : []),
+      ...websiteScanFindings,
+    ];
+    const dappRiskScoreRaw =
+      typeof json.risk_score === 'number'
+        ? json.risk_score
+        : typeof json.riskScore === 'number'
+          ? json.riskScore
+          : websiteScan && typeof websiteScan.risk_score === 'number'
+            ? websiteScan.risk_score
+            : 0;
+    const riskLevel10Raw =
+      typeof json.risk_level_10 === 'number'
+        ? json.risk_level_10
+        : dappRiskScoreRaw <= 10
+          ? dappRiskScoreRaw
+          : dappRiskScoreRaw / 10;
     const websiteScanSummary =
       typeof json.website_scan === 'string'
         ? json.website_scan
         : json.website_scan && typeof json.website_scan.summary === 'string'
           ? json.website_scan.summary
+          : websiteScan && typeof websiteScan.safety === 'string'
+            ? websiteScan.safety
           : null;
     return {
       ok: true,
       siteSafety,
       siteSafe: typeof json.site_safe === 'boolean' ? json.site_safe : null,
-      riskScore: clampRisk(json.risk_score ?? json.riskScore ?? 0),
+      riskScore: clampRisk(dappRiskScoreRaw),
+      riskLevel10: Math.max(0, Math.min(10, riskLevel10Raw)),
       findings,
       websiteScanSummary,
+      websiteScanFindings,
       raw: json,
     };
   } catch (_error) {
@@ -366,8 +409,10 @@ async function callDappConnectionCheck(context) {
       siteSafety: null,
       siteSafe: null,
       riskScore: 0,
+      riskLevel10: null,
       findings: [],
       websiteScanSummary: null,
+      websiteScanFindings: [],
       raw: null,
     };
   }
@@ -632,9 +677,13 @@ async function evaluateTransaction(payload, sender) {
     CONNECT_METHODS.has(payload.method) &&
     decision.action === 'allow'
   ) {
+    const strictReviewRiskScore =
+      dappCheck && dappCheck.ok
+        ? clampRisk(dappCheck.riskScore || 0)
+        : decision.riskScore;
     decision = {
       action: 'warn',
-      riskScore: Math.max(decision.riskScore, settings.warningThreshold),
+      riskScore: strictReviewRiskScore,
       reason: 'Strict mode: wallet connection request requires review',
     };
     findings.push('Wallet connection request reviewed by SenseiGuard');
@@ -678,10 +727,21 @@ async function evaluateTransaction(payload, sender) {
     txUsdEstimate: txUsd,
     maliciousContractDetected: !!(backend && backend.maliciousContractDetected),
     maliciousEvidence,
-    riskLevel10: backend ? backend.riskLevel10 : null,
+    riskLevel10:
+      backend && typeof backend.riskLevel10 === 'number'
+        ? backend.riskLevel10
+        : dappCheck && typeof dappCheck.riskLevel10 === 'number'
+          ? dappCheck.riskLevel10
+          : null,
     reportedIncidents: backend ? backend.reportedIncidents : null,
     walletsDrainedEstimate: backend ? backend.walletsDrainedEstimate : null,
     backendBand: backend ? backend.band : null,
+    websiteScanFindings:
+      backend && Array.isArray(backend.websiteScanFindings) && backend.websiteScanFindings.length
+        ? backend.websiteScanFindings
+        : dappCheck && Array.isArray(dappCheck.websiteScanFindings)
+          ? dappCheck.websiteScanFindings
+          : [],
     at: nowIso(),
     tabId: sender?.tab?.id || null,
   };
@@ -700,10 +760,21 @@ async function evaluateTransaction(payload, sender) {
     findings,
     maliciousContractDetected: !!(backend && backend.maliciousContractDetected),
     maliciousEvidence,
-    riskLevel10: backend ? backend.riskLevel10 : null,
+    riskLevel10:
+      backend && typeof backend.riskLevel10 === 'number'
+        ? backend.riskLevel10
+        : dappCheck && typeof dappCheck.riskLevel10 === 'number'
+          ? dappCheck.riskLevel10
+          : null,
     reportedIncidents: backend ? backend.reportedIncidents : null,
     walletsDrainedEstimate: backend ? backend.walletsDrainedEstimate : null,
     backendBand: backend ? backend.band : null,
+    websiteScanFindings:
+      backend && Array.isArray(backend.websiteScanFindings) && backend.websiteScanFindings.length
+        ? backend.websiteScanFindings
+        : dappCheck && Array.isArray(dappCheck.websiteScanFindings)
+          ? dappCheck.websiteScanFindings
+          : [],
   });
 
   if (decision.action === 'block') {
@@ -722,10 +793,23 @@ async function evaluateTransaction(payload, sender) {
       txUsdEstimate: txUsd,
       maliciousContractDetected: !!(backend && backend.maliciousContractDetected),
       maliciousEvidence,
-      riskLevel10: backend ? backend.riskLevel10 : null,
+      riskLevel10:
+        backend && typeof backend.riskLevel10 === 'number'
+          ? backend.riskLevel10
+          : dappCheck && typeof dappCheck.riskLevel10 === 'number'
+            ? dappCheck.riskLevel10
+            : decision.riskScore <= 10
+              ? decision.riskScore
+              : decision.riskScore / 10,
       reportedIncidents: backend ? backend.reportedIncidents : null,
       walletsDrainedEstimate: backend ? backend.walletsDrainedEstimate : null,
       backendBand: backend ? backend.band : null,
+      websiteScanFindings:
+        backend && Array.isArray(backend.websiteScanFindings) && backend.websiteScanFindings.length
+          ? backend.websiteScanFindings
+          : dappCheck && Array.isArray(dappCheck.websiteScanFindings)
+            ? dappCheck.websiteScanFindings
+            : [],
       recommendation: backend ? backend.recommendation : null,
       siteSafety: backend ? backend.siteSafety : dappCheck ? dappCheck.siteSafety : null,
       siteSafe: backend ? backend.siteSafe : dappCheck ? dappCheck.siteSafe : null,

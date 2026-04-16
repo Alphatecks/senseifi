@@ -3,22 +3,57 @@ import { useInView } from "../utils/useInView";
 import Image from "next/image";
 import { useDashboardUser } from "@/context/DashboardUserContext";
 import {
-  createBillingPortal,
-  createSubscriptionCheckout,
   getSubscriptionPlans,
-  type BillingCycle,
   type SubscriptionPlanKey,
 } from "@/services/subscriptionService";
 import { useWallet } from "@/hooks/useWallet";
+import {
+  onchainSubscribe,
+} from "@/services/onchainPaymentService";
+import { usePublicClient, useSwitchChain, useWalletClient } from "wagmi";
+import { isHex, keccak256, stringToHex } from "viem";
 
 type PlanPricing = Record<SubscriptionPlanKey, { monthly: number; annual: number }>;
 type UnknownRecord = Record<string, unknown>;
+type Hex32 = `0x${string}`;
 
 const DEFAULT_PLAN_PRICING: PlanPricing = {
   pro: { monthly: 30, annual: 300 },
   pro_plus: { monthly: 50, annual: 500 },
   premium: { monthly: 200, annual: 2000 },
 };
+
+const ENV_ONCHAIN_USDC_CONTRACT = process.env.NEXT_PUBLIC_ONCHAIN_USDC_CONTRACT ?? "";
+const ENV_ONCHAIN_PAYMENT_CONTRACT = process.env.NEXT_PUBLIC_ONCHAIN_PAYMENT_CONTRACT ?? "";
+const ENV_ONCHAIN_CHAIN_ID = process.env.NEXT_PUBLIC_ONCHAIN_CHAIN_ID
+  ? Number(process.env.NEXT_PUBLIC_ONCHAIN_CHAIN_ID)
+  : null;
+
+const ERC20_APPROVE_ABI = [
+  {
+    type: "function",
+    name: "approve",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "spender", type: "address" },
+      { name: "value", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+  },
+] as const;
+
+const PAYMENT_UPSERT_BILLING_ABI = [
+  {
+    type: "function",
+    name: "upsertBilling",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "subscriptionId", type: "bytes32" },
+      { name: "maxChargeUsdcRaw", type: "uint256" },
+    ],
+    outputs: [],
+  },
+] as const;
 
 function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === "object" && value !== null;
@@ -31,6 +66,116 @@ function toAmount(value: unknown): number | null {
     if (Number.isFinite(num)) return num;
   }
   return null;
+}
+
+function readString(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function readNumberish(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+function readBaseUnits(value: unknown): bigint | null {
+  if (typeof value === "bigint") return value >= 0n ? value : null;
+  if (typeof value === "number") {
+    if (!Number.isSafeInteger(value) || value < 0) return null;
+    return BigInt(value);
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!/^\d+$/.test(trimmed)) return null;
+    try {
+      return BigInt(trimmed);
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+function isHex32(value: string): value is Hex32 {
+  return isHex(value) && /^0x[a-fA-F0-9]{64}$/.test(value);
+}
+
+function readSubscribeExecutionData(payload: unknown): {
+  subscriptionIdBytes32: Hex32;
+  amountUsdcPerPeriodBaseUnits: bigint;
+  maxChargeUsdcBaseUnits: bigint;
+  tokenContract: string;
+  paymentContract: string;
+  chainId: number | null;
+} {
+  const root = isRecord(payload) && isRecord(payload.data) ? payload.data : payload;
+  if (!isRecord(root)) {
+    throw new Error("Invalid subscribe response payload.");
+  }
+
+  const responseSubscriptionId = readString(root.subscription_id_bytes32) ?? readString(root.subscriptionIdBytes32);
+  const subscriptionSourceId =
+    readString(root.subscription_id) ??
+    readString(root.subscriptionId) ??
+    readString(root.id);
+  const subscriptionIdBytes32 = responseSubscriptionId && isHex32(responseSubscriptionId)
+    ? responseSubscriptionId
+    : subscriptionSourceId
+      ? keccak256(stringToHex(subscriptionSourceId))
+      : null;
+  if (!subscriptionIdBytes32 || !isHex32(subscriptionIdBytes32)) {
+    throw new Error("Subscribe response is missing a valid subscription id.");
+  }
+
+  const amountUsdcPerPeriodBaseUnits =
+    readBaseUnits(root.amount_usdc_per_period_base_units) ??
+    readBaseUnits(root.amountUsdcPerPeriodBaseUnits);
+  if (!amountUsdcPerPeriodBaseUnits || amountUsdcPerPeriodBaseUnits <= 0n) {
+    throw new Error("Subscribe response is missing amount_usdc_per_period_base_units.");
+  }
+
+  const maxChargeUsdcBaseUnits =
+    readBaseUnits(root.max_charge_usdc_base_units) ??
+    readBaseUnits(root.maxChargeUsdcBaseUnits) ??
+    amountUsdcPerPeriodBaseUnits;
+  if (!maxChargeUsdcBaseUnits || maxChargeUsdcBaseUnits < amountUsdcPerPeriodBaseUnits) {
+    throw new Error("Subscribe response has invalid max_charge_usdc_base_units.");
+  }
+
+  const tokenContract =
+    readString(root.token_contract) ??
+    readString(root.tokenContract) ??
+    readString(root.usdc_contract) ??
+    readString(root.usdcContract) ??
+    readString(ENV_ONCHAIN_USDC_CONTRACT) ??
+    "";
+  const paymentContract =
+    readString(root.payment_contract) ??
+    readString(root.paymentContract) ??
+    readString(ENV_ONCHAIN_PAYMENT_CONTRACT) ??
+    "";
+  if (!isAddress(tokenContract) || !isAddress(paymentContract)) {
+    throw new Error("Missing token/payment contract addresses for onchain approval.");
+  }
+
+  const chainId =
+    readNumberish(root.chain_id) ??
+    readNumberish(root.chainId) ??
+    (Number.isFinite(ENV_ONCHAIN_CHAIN_ID) ? ENV_ONCHAIN_CHAIN_ID : null);
+
+  return {
+    subscriptionIdBytes32,
+    amountUsdcPerPeriodBaseUnits,
+    maxChargeUsdcBaseUnits,
+    tokenContract,
+    paymentContract,
+    chainId: chainId && chainId > 0 ? Math.trunc(chainId) : null,
+  };
 }
 
 function readCycleAmount(value: unknown): number | null {
@@ -68,9 +213,24 @@ function parsePlanPricingPayload(payload: unknown): PlanPricing | null {
   return foundAtLeastOne ? nextPricing : null;
 }
 
+function isAddress(value: string): boolean {
+  return /^0x[a-fA-F0-9]{40}$/.test(value.trim());
+}
+
 export default function WhyTrustSection() {
-  const { connectedAddress, isConnectedOrRemembered, disconnectWallet, isDisconnecting } = useWallet();
+  const {
+    activeAddress,
+    connectedAddress,
+    isConnected,
+    isConnectedOrRemembered,
+    disconnectWallet,
+    isDisconnecting,
+    chainId,
+  } = useWallet();
   const { dashboardUser } = useDashboardUser();
+  const { data: walletClient } = useWalletClient();
+  const publicClient = usePublicClient();
+  const { switchChainAsync } = useSwitchChain();
   const [hasMounted, setHasMounted] = React.useState(false);
   const [mobileRef, mobileInView] = useInView<HTMLDivElement>({ threshold: 0.05 });
   const [desktopRef, desktopInView] = useInView<HTMLDivElement>({ threshold: 0.05 });
@@ -82,8 +242,9 @@ export default function WhyTrustSection() {
   const [isPremiumAnnual, setIsPremiumAnnual] = React.useState(false);
   const [planPricing, setPlanPricing] = React.useState<PlanPricing>(DEFAULT_PLAN_PRICING);
   const [checkoutLoadingPlan, setCheckoutLoadingPlan] = React.useState<SubscriptionPlanKey | null>(null);
-  const [portalLoading, setPortalLoading] = React.useState(false);
   const [billingError, setBillingError] = React.useState<string | null>(null);
+  const [billingSuccess, setBillingSuccess] = React.useState<string | null>(null);
+  const [paymentMethodPending, setPaymentMethodPending] = React.useState(false);
 
   const getAnnualBeforeDiscount = (monthly: number) => monthly * 12;
   const getAnnualSavings = (monthly: number, annual: number) =>
@@ -99,57 +260,82 @@ export default function WhyTrustSection() {
 
   const handleCheckout = async (plan: SubscriptionPlanKey, isAnnual: boolean) => {
     if (!dashboardUser?.user_id) {
-      setBillingError("Connect a wallet first to create a checkout session.");
+      setBillingSuccess(null);
+      setBillingError("Connect a wallet first to start onchain billing.");
+      return;
+    }
+
+    const payerAddress = activeAddress?.trim() ?? "";
+    if (!isAddress(payerAddress)) {
+      setBillingSuccess(null);
+      setBillingError("Connect a valid wallet address before continuing.");
+      return;
+    }
+    if (!isConnected || !walletClient || !publicClient) {
+      setBillingSuccess(null);
+      setBillingError(
+        "Wallet session is not active. Reconnect your wallet to approve and activate billing."
+      );
       return;
     }
 
     setBillingError(null);
+    setBillingSuccess(null);
+    setPaymentMethodPending(false);
     setCheckoutLoadingPlan(plan);
     try {
-      const billingCycle: BillingCycle = isAnnual ? "annual" : "monthly";
-      const result = await createSubscriptionCheckout({
+      const billingCycle = isAnnual ? "annual" : "monthly";
+      const subscribeResult = await onchainSubscribe({
         user_id: dashboardUser.user_id,
         plan,
         billing_cycle: billingCycle,
+        payer_address: payerAddress,
       });
 
-      if ("error" in result) {
-        setBillingError(result.error);
+      if (!subscribeResult.success) {
+        setBillingError(subscribeResult.error);
         return;
       }
 
-      if (!result.checkoutUrl) {
-        setBillingError("Unable to create checkout session. Please try again.");
-        return;
+      const executionData = readSubscribeExecutionData(subscribeResult.data);
+      const amountPerPeriodRaw = executionData.amountUsdcPerPeriodBaseUnits;
+      const maxChargeRaw = executionData.maxChargeUsdcBaseUnits;
+
+      if (executionData.chainId && chainId !== executionData.chainId) {
+        if (!switchChainAsync) {
+          setBillingError(`Switch wallet network to chain ${executionData.chainId} and try again.`);
+          return;
+        }
+        await switchChainAsync({ chainId: executionData.chainId });
       }
 
-      window.location.href = result.checkoutUrl;
+      setPaymentMethodPending(true);
+
+      const approveHash = await walletClient.writeContract({
+        address: executionData.tokenContract as `0x${string}`,
+        abi: ERC20_APPROVE_ABI,
+        functionName: "approve",
+        args: [executionData.paymentContract as `0x${string}`, amountPerPeriodRaw],
+      });
+      await publicClient.waitForTransactionReceipt({ hash: approveHash });
+
+      const upsertHash = await walletClient.writeContract({
+        address: executionData.paymentContract as `0x${string}`,
+        abi: PAYMENT_UPSERT_BILLING_ABI,
+        functionName: "upsertBilling",
+        args: [executionData.subscriptionIdBytes32, maxChargeRaw],
+      });
+      await publicClient.waitForTransactionReceipt({ hash: upsertHash });
+
+      setPaymentMethodPending(false);
+      setBillingSuccess(
+        `Payment method pending confirmation completed for ${plan.replace("_", " ").toUpperCase()} (${billingCycle}). Charges occur only after onchain billing + backend processing.`
+      );
     } catch {
-      setBillingError("Payment checkout failed. Please try again.");
+      setPaymentMethodPending(false);
+      setBillingError("Unable to complete billing setup. Reconnect wallet and try again.");
     } finally {
       setCheckoutLoadingPlan(null);
-    }
-  };
-
-  const handleOpenPortal = async () => {
-    if (!dashboardUser?.user_id) {
-      setBillingError("Connect a wallet first to open billing portal.");
-      return;
-    }
-
-    setBillingError(null);
-    setPortalLoading(true);
-    try {
-      const result = await createBillingPortal(dashboardUser.user_id);
-      if (!result?.portalUrl) {
-        setBillingError("Unable to open billing portal. Please try again.");
-        return;
-      }
-      window.location.href = result.portalUrl;
-    } catch {
-      setBillingError("Billing portal failed. Please try again.");
-    } finally {
-      setPortalLoading(false);
     }
   };
 
@@ -214,38 +400,38 @@ export default function WhyTrustSection() {
         </p>
       </div>
       <div className="relative flex flex-col items-center w-full">
-        <div className="hidden md:block">
-          <Image src="/images/cross.svg" alt="Cross" width={1200} height={1200} />
-          <div className="absolute left-1/2 top-0 -translate-x-1/2 mt-40 md:mt-56 w-full flex flex-col items-center">
-            <div className="flex items-center justify-center text-white font-normal text-2xl mb-2 gap-2">
-              <Image src="/images/icons/flash.png" alt="Flash" width={28} height={28} />
+        <div className="hidden md:block relative w-full max-w-[1200px]">
+          <Image src="/images/cross.svg" alt="Cross" width={1200} height={1200} className="w-full h-auto" />
+          <div className="absolute left-1/2 top-[18%] -translate-x-1/2 flex w-[210px] lg:w-[250px] flex-col items-center text-center">
+            <div className="flex items-center justify-center text-white font-normal text-lg lg:text-2xl mb-2 gap-2">
+              <Image src="/images/icons/flash.png" alt="Flash" width={24} height={24} />
               <span>Unmatched Speed</span>
             </div>
-            <div className="text-white/70 text-base text-center max-w-xs animate-zoom-in-out">Quick transactions, instant insights, and rapid access to your assets.</div>
+            <div className="text-white/70 text-sm lg:text-base animate-zoom-in-out">Quick transactions, instant insights, and rapid access to your assets.</div>
           </div>
           {/* Bottom card inside cross */}
-          <div className="absolute left-1/2 bottom-0 translate-x-[-50%] mb-4 md:mb-12 w-[220px] flex flex-col items-center">
-            <div className="flex items-center justify-center text-white font-normal text-xl mb-2 gap-2">
+          <div className="absolute left-1/2 bottom-[3%] -translate-x-1/2 flex w-[210px] lg:w-[250px] flex-col items-center text-center">
+            <div className="flex items-center justify-center text-white font-normal text-lg lg:text-xl mb-2 gap-2">
               <Image src="/images/icons/flash.png" alt="Flash" width={24} height={24} />
               <span>Smart Automation</span>
             </div>
-            <div className="text-white/70 text-base text-center max-w-xs animate-zoom-in-out">Automated trading tools and portfolio management for smarter decisions.</div>
+            <div className="text-white/70 text-sm lg:text-base animate-zoom-in-out">Automated trading tools and portfolio management for smarter decisions.</div>
           </div>
           {/* Left side card inside cross */}
-          <div className="absolute top-1/2 left-0 translate-y-1/4 ml-64 md:ml-96 w-[220px] flex flex-col items-center" style={{ marginRight: '120px' }}>
-            <div className="flex items-center justify-center text-white font-normal text-xl mb-2 gap-2">
+          <div className="absolute top-[58%] left-[5%] -translate-y-1/2 flex w-[190px] lg:w-[230px] flex-col items-center text-center">
+            <div className="flex items-center justify-center text-white font-normal text-lg lg:text-xl mb-2 gap-2">
               <Image src="/images/icons/flash.png" alt="Flash" width={24} height={24} />
               <span>Seamless Spending</span>
             </div>
-            <div className="text-white/70 text-base text-center max-w-xs animate-zoom-in-out">Instant crypto payments and subscription management.</div>
+            <div className="text-white/70 text-sm lg:text-base animate-zoom-in-out">Instant crypto payments and subscription management.</div>
           </div>
           {/* Right side card inside cross */}
-          <div className="absolute top-1/2 right-0 translate-y-1/4 mr-64 md:mr-96 w-[220px] flex flex-col items-center" style={{ marginLeft: '120px' }}>
-            <div className="flex items-center justify-center text-white font-normal text-xl mb-2 gap-2">
+          <div className="absolute top-[58%] right-[4%] -translate-y-1/2 flex w-[190px] lg:w-[230px] flex-col items-center text-center">
+            <div className="flex items-center justify-center text-white font-normal text-lg lg:text-xl mb-2 gap-2">
               <Image src="/images/icons/flash.png" alt="Flash" width={24} height={24} />
               <span>Advanced Security</span>
             </div>
-            <div className="text-white/70 text-base text-center max-w-xs animate-zoom-in-out">Multi-layered wallet protection and real-time threat alerts.</div>
+            <div className="text-white/70 text-sm lg:text-base animate-zoom-in-out">Multi-layered wallet protection and real-time threat alerts.</div>
           </div>
         </div>
       </div>
@@ -280,124 +466,18 @@ export default function WhyTrustSection() {
           </>
         )}
       </div>
-    {/* Testimonials Section */}
-    {/* Mobile Loved by Users Section */}
-    <section className="block md:hidden w-full py-16 bg-black text-white flex flex-col items-start">
-      <span className="px-4 py-1 rounded-full border border-blue-400 text-blue-300 text-sm font-medium bg-transparent mb-4 ml-4">Why</span>
-      <h2 className="text-2xl font-normal mb-4 leading-snug ml-4 text-left">Loved by Users Around<br/>the World</h2>
-      <div className="flex flex-row items-center justify-start gap-4 mb-6 w-full pl-4">
-        <button className="w-10 h-10 flex items-center justify-center rounded-lg bg-[#181C23] text-white"><span className="text-2xl">&#8592;</span></button>
-        <button className="w-10 h-10 flex items-center justify-center rounded-lg bg-[#0026FF] text-white"><span className="text-2xl">&#8594;</span></button>
-      </div>
-      <div className="flex flex-row gap-4 overflow-x-auto flex-nowrap hide-scrollbar w-full pl-4 pr-2 mb-4">
-        {/* Card 1: Rating and CTA */}
-        <div className="bg-[#181C23] rounded-2xl p-6 flex flex-col justify-between min-w-[280px] max-w-xs w-4/5">
-          <div>
-            <div className="flex items-center text-2xl font-medium mb-2">4.7 <img src="/images/icons/star.png" alt="star" className="ml-2 w-5 h-5 inline-block" /></div>
-            <div className="text-white/80 mb-6 text-base">Real feedback from crypto traders and enthusiasts who trust SenseiFi to manage, protect, and grow their digital assets.</div>
-          </div>
-          <div className="flex items-center mb-4">
-            <div className="flex items-center">
-              <img src="https://images.unsplash.com/photo-1511367461989-f85a21fda167?auto=format&fit=facearea&w=64&h=64&facepad=2" alt="avatar1" className="w-7 h-7 rounded-full border-2 border-white -ml-0 object-cover" />
-              <img src="https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?auto=format&fit=facearea&w=64&h=64&facepad=2" alt="avatar2" className="w-7 h-7 rounded-full border-2 border-white -ml-3 object-cover" />
-              <img src="https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?auto=format&fit=facearea&w=64&h=64&facepad=2" alt="avatar3" className="w-7 h-7 rounded-full border-2 border-white -ml-3 object-cover" />
-              <img src="https://images.unsplash.com/photo-1465101046530-73398c7f28ca?auto=format&fit=facearea&w=64&h=64&facepad=2" alt="avatar4" className="w-7 h-7 rounded-full border-2 border-white -ml-3 object-cover" />
-            </div>
-            <span className="text-[10px] text-white/60 ml-3">Used by 50,000+ calm souls worldwide</span>
-          </div>
-          <button className="w-full py-3 bg-white text-[#0026FF] text-base rounded-md transition-colors duration-200 font-medium">Explore Platform</button>
-        </div>
-        {/* Card 2: Testimonial */}
-        <div className="bg-[#181C23] rounded-2xl p-6 flex flex-col justify-between min-w-[280px] max-w-xs w-4/5">
-          <div className="text-white/90 text-lg mb-8">“SenseiFi completely changed how I manage my crypto. The AI signals are spot-on, and I feel secure knowing my wallet is protected.”</div>
-          <div className="flex items-center mt-auto">
-            <img src="https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=facearea&w=256&h=256&facepad=2" alt="Sofia Melendez" className="w-12 h-12 rounded-full mr-3 object-cover" />
-            <span className="text-white/80 text-sm mr-2">Sofia Melendez</span>
-            <span className="text-yellow-400 text-base">&#11088;&#11088;&#11088;&#11088;&#11088;</span>
-            <span className="ml-auto text-3xl text-white/30">&#10077;</span>
-          </div>
-        </div>
-        {/* Card 3: Testimonial */}
-        <div className="bg-[#181C23] rounded-2xl p-6 flex flex-col justify-between min-w-[280px] max-w-xs w-4/5">
-          <div className="text-white/90 text-lg mb-8">“I love using the SenseiFi Dashboard together with the AI tracking subscriptions. Nothing is easier or faster.”</div>
-          <div className="flex items-center mt-auto">
-            <img src="https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=facearea&w=256&h=256&facepad=2" alt="Noah Brunton" className="w-12 h-12 rounded-full mr-3 object-cover" />
-            <span className="text-white/80 text-sm mr-2">Noah Brunton</span>
-            <span className="text-yellow-400 text-base">&#11088;&#11088;&#11088;&#11088;&#11088;</span>
-            <span className="ml-auto text-3xl text-white/30">&#10077;</span>
-          </div>
-        </div>
-      </div>
-    </section>
-    {/* Desktop Loved by Users Section */}
-    <section className="hidden md:flex w-full py-24 bg-black text-white flex-col items-center">
-      <div className="w-full flex flex-col items-start mb-6 ml-80">
-        <span className="px-6 py-2 rounded-full border border-blue-400 text-blue-300 text-lg font-medium bg-transparent mt-4 mb-6">Why</span>
-        <h2 className="text-3xl md:text-5xl font-normal text-left">Loved by Users Around the World</h2>
-      </div>
-      <div className="flex items-center justify-end w-full max-w-6xl mb-8 gap-2">
-        <button className="w-10 h-10 flex items-center justify-center rounded-lg bg-[#181C23] text-white"><span className="text-2xl">&#8592;</span></button>
-        <button className="w-10 h-10 flex items-center justify-center rounded-lg bg-[#0026FF] text-white"><span className="text-2xl">&#8594;</span></button>
-      </div>
-      <div className="flex flex-row gap-6 w-full max-w-6xl">
-        {/* Card 1: Rating and CTA */}
-        <div className="bg-[#181C23] rounded-xl p-8 flex flex-col justify-between min-h-[440px] w-1/3">
-          <div>
-            <div className="flex items-center text-3xl font-medium mb-2">4.7 <img src="/images/icons/star.png" alt="star" className="ml-2 w-6 h-6 inline-block" /></div>
-            <div className="text-white/80 mb-8">Real feedback from crypto traders and enthusiasts who trust SenseiFi to manage, protect, and grow their digital assets.</div>
-          </div>
-          <div className="flex items-center mb-4">
-            <div className="flex items-center">
-              <img src="https://images.unsplash.com/photo-1511367461989-f85a21fda167?auto=format&fit=facearea&w=64&h=64&facepad=2" alt="avatar1" className="w-8 h-8 rounded-full border-2 border-white -ml-0 object-cover" />
-              <img src="https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?auto=format&fit=facearea&w=64&h=64&facepad=2" alt="avatar2" className="w-8 h-8 rounded-full border-2 border-white -ml-3 object-cover" />
-              <img src="https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?auto=format&fit=facearea&w=64&h=64&facepad=2" alt="avatar3" className="w-8 h-8 rounded-full border-2 border-white -ml-3 object-cover" />
-              <img src="https://images.unsplash.com/photo-1465101046530-73398c7f28ca?auto=format&fit=facearea&w=64&h=64&facepad=2" alt="avatar4" className="w-8 h-8 rounded-full border-2 border-white -ml-3 object-cover" />
-            </div>
-            <span className="text-xs text-white/60 ml-4">Used by 50,000+ calm souls worldwide</span>
-          </div>
-          <button className="w-full py-3 bg-white text-blue-600 text-base rounded-md transition-colors duration-200">Explore Platform</button>
-        </div>
-        {/* Card 2: Testimonial */}
-        <div className="bg-[#181C23] rounded-xl p-8 flex flex-col justify-between min-h-[440px] w-1/3">
-          <div className="text-white/90 text-lg mb-8">“SenseiFi completely changed how I manage my crypto. The AI signals are spot-on, and I feel secure knowing my wallet is protected.”</div>
-            <div className="flex items-center mt-auto">
-              <img src="https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=facearea&w=256&h=256&facepad=2" alt="Sofia Melendez" className="w-12 h-12 rounded-full mr-3 object-cover" />
-              <span className="text-white/80 text-sm mr-2">Sofia Melendez</span>
-              <span className="text-yellow-400 text-base">&#11088;&#11088;&#11088;&#11088;&#11088;</span>
-              <span className="ml-auto text-3xl text-white/30">&#10077;</span>
-            </div>
-        </div>
-        {/* Card 3: Testimonial */}
-        <div className="bg-[#181C23] rounded-xl p-8 flex flex-col justify-between min-h-[440px] w-1/3">
-          <div className="text-white/90 text-lg mb-8">“I love using the SenseiFi Dashboard together with the AI tracking subscriptions. Nothing is easier or faster.”</div>
-            <div className="flex items-center mt-auto">
-              <img src="https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=facearea&w=256&h=256&facepad=2" alt="Noah Brunton" className="w-12 h-12 rounded-full mr-3 object-cover" />
-              <span className="text-white/80 text-sm mr-2">Noah Brunton</span>
-              <span className="text-yellow-400 text-base">&#11088;&#11088;&#11088;&#11088;&#11088;</span>
-              <span className="ml-auto text-3xl text-white/30">&#10077;</span>
-            </div>
-        </div>
-      </div>
-    </section>
       {/* Pricing Section */}
       <div className="w-full py-24 bg-black text-white flex flex-col items-center">
         <h2 className="text-4xl md:text-5xl font-normal mb-16 text-center">Pick your perfect plan</h2>
-        <div className="w-full max-w-6xl flex items-center justify-end px-4 mb-6">
-          <button
-            type="button"
-            onClick={handleOpenPortal}
-            disabled={portalLoading}
-            className="text-sm text-blue-300 hover:text-blue-200 transition disabled:opacity-60"
-          >
-            {portalLoading ? "Opening portal..." : "Manage Billing"}
-          </button>
-        </div>
         {billingError && (
           <p className="w-full max-w-6xl px-4 mb-6 text-sm text-red-300">{billingError}</p>
         )}
-        <div className="flex flex-col md:flex-row gap-y-6 md:gap-y-0 md:gap-8 w-full max-w-6xl justify-center">
+        {billingSuccess && (
+          <p className="w-full max-w-6xl px-4 mb-6 text-sm text-green-300">{billingSuccess}</p>
+        )}
+        <div className="flex flex-row gap-6 w-full max-w-6xl overflow-x-auto hide-scrollbar px-4 xl:px-0 xl:overflow-visible xl:justify-center">
           {/* PRO PLAN */}
-          <div ref={proRef} className={`bg-[#181C23] rounded-xl flex flex-col max-w-sm w-10/12 md:min-w-[380px] md:max-w-[400px] min-h-[600px] md:w-full shadow-lg mx-auto ${proInView ? "animate-zoom-in-out" : "opacity-0"}`}>
+          <div ref={proRef} className={`bg-[#181C23] rounded-xl flex flex-col flex-shrink-0 w-[85vw] max-w-sm md:w-[380px] md:max-w-[400px] min-h-[600px] shadow-lg ${proInView ? "animate-zoom-in-out" : "opacity-0"}`}>
                   <div className="flex items-center justify-between mb-0 p-8 pb-0">
                 <span className="text-lg font-semibold">PRO PLAN</span>
                 <img src="/images/icons/pro.png" alt="Pro" className="w-16 h-16" />
@@ -415,14 +495,15 @@ export default function WhyTrustSection() {
               <div className="mt-auto">
                     <div className="bg-[#11131A] rounded-t-xl w-full flex flex-col items-start pl-8">
                       {renderBillingToggle(isProAnnual, () => setIsProAnnual((prev) => !prev), "pro plan")}
-                      <span className="text-3xl font-normal text-white mt-4">
-                        ${isProAnnual ? planPricing.pro.annual : planPricing.pro.monthly}USD
+                      <span className="text-3xl font-normal text-white mt-4 flex items-center gap-2">
+                        <Image src="/images/icons/usdc.svg" alt="USDC" width={26} height={26} />
+                        ${isProAnnual ? planPricing.pro.annual : planPricing.pro.monthly} USDC
                         <span className="text-base font-normal text-white/70">{isProAnnual ? "/year" : "/month"}</span>
                       </span>
                       {isProAnnual && (
                         <span className="text-xs text-white/60 mt-1">
-                          <span className="line-through">${getAnnualBeforeDiscount(planPricing.pro.monthly).toLocaleString()}USD</span>
-                          {" "}{"->"}{" "}saves ${getAnnualSavings(planPricing.pro.monthly, planPricing.pro.annual).toLocaleString()}USD
+                          <span className="line-through">${getAnnualBeforeDiscount(planPricing.pro.monthly).toLocaleString()} USDC</span>
+                          {" "}{"->"}{" "}saves ${getAnnualSavings(planPricing.pro.monthly, planPricing.pro.annual).toLocaleString()} USDC
                         </span>
                       )}
                      <button
@@ -432,14 +513,14 @@ export default function WhyTrustSection() {
                       className="w-11/12 py-3 mt-6 mb-6 text-white text-base font-normal rounded-full transition-colors duration-200 border-2 border-transparent bg-gradient-to-r from-indigo-400 via-blue-400 to-purple-400 bg-origin-border hover:from-blue-500 hover:to-indigo-600 disabled:opacity-60"
                       style={{background: 'linear-gradient(#181C23, #181C23) padding-box, linear-gradient(90deg, #7F5FFF, #01C8FF, #FFB86C) border-box', border: '2px solid transparent'}}
                     >
-                      {checkoutLoadingPlan === "pro" ? "Redirecting..." : "Go Pro"}
+                      {checkoutLoadingPlan === "pro" ? "Creating subscription..." : "Go Pro"}
                     </button>
                 </div>
               </div>
             </div>
             {/* PRO+ PLAN */}
           {/* PRO+ PLAN */}
-          <div ref={proPlusRef} className={`bg-[#181C23] rounded-xl flex flex-col max-w-sm w-10/12 md:min-w-[380px] md:max-w-[400px] min-h-[600px] md:w-full shadow-lg border-2 border-blue-600 mx-auto ${proPlusInView ? "animate-zoom-in-out delay-200" : "opacity-0"}`}>
+          <div ref={proPlusRef} className={`bg-[#181C23] rounded-xl flex flex-col flex-shrink-0 w-[85vw] max-w-sm md:w-[380px] md:max-w-[400px] min-h-[600px] shadow-lg border-2 border-blue-600 ${proPlusInView ? "animate-zoom-in-out delay-200" : "opacity-0"}`}>
                   <div className="flex items-center justify-between mb-0 p-8 pb-0">
                 <span className="text-lg font-semibold">PRO+ PLAN <span className="text-xs text-blue-400 ml-2">(Recommended)</span></span>
                 <img src="/images/icons/proplus.png" alt="Pro+" className="w-16 h-16" />
@@ -462,14 +543,15 @@ export default function WhyTrustSection() {
                       }}
                     >
                       {renderBillingToggle(isProPlusAnnual, () => setIsProPlusAnnual((prev) => !prev), "pro plus plan")}
-                      <span className="text-3xl font-normal text-white mt-4">
-                        ${isProPlusAnnual ? planPricing.pro_plus.annual : planPricing.pro_plus.monthly}USD
+                      <span className="text-3xl font-normal text-white mt-4 flex items-center gap-2">
+                        <Image src="/images/icons/usdc.svg" alt="USDC" width={26} height={26} />
+                        ${isProPlusAnnual ? planPricing.pro_plus.annual : planPricing.pro_plus.monthly} USDC
                         <span className="text-base font-normal text-white/70">{isProPlusAnnual ? "/year" : "/month"}</span>
                       </span>
                       {isProPlusAnnual && (
                         <span className="text-xs text-white/70 mt-1">
-                          <span className="line-through">${getAnnualBeforeDiscount(planPricing.pro_plus.monthly).toLocaleString()}USD</span>
-                          {" "}{"->"}{" "}saves ${getAnnualSavings(planPricing.pro_plus.monthly, planPricing.pro_plus.annual).toLocaleString()}USD
+                          <span className="line-through">${getAnnualBeforeDiscount(planPricing.pro_plus.monthly).toLocaleString()} USDC</span>
+                          {" "}{"->"}{" "}saves ${getAnnualSavings(planPricing.pro_plus.monthly, planPricing.pro_plus.annual).toLocaleString()} USDC
                         </span>
                       )}
                       <button
@@ -481,14 +563,14 @@ export default function WhyTrustSection() {
                           background: 'linear-gradient(135deg, #425EFF 40%, #7F5FFF 100%)',
                         }}
                       >
-                        {checkoutLoadingPlan === "pro_plus" ? "Redirecting..." : "Go Pro+"}
+                        {checkoutLoadingPlan === "pro_plus" ? "Creating subscription..." : "Go Pro+"}
                       </button>
                     </div>
               </div>
             </div>
             {/* PREMIUM PLAN */}
           {/* PREMIUM PLAN */}
-          <div ref={premiumRef} className={`bg-[#181C23] rounded-xl flex flex-col max-w-sm w-10/12 md:min-w-[380px] md:max-w-[400px] min-h-[600px] md:w-full shadow-lg mx-auto ${premiumInView ? "animate-zoom-in-out delay-[400ms]" : "opacity-0"}`}>
+          <div ref={premiumRef} className={`bg-[#181C23] rounded-xl flex flex-col flex-shrink-0 w-[85vw] max-w-sm md:w-[380px] md:max-w-[400px] min-h-[600px] shadow-lg ${premiumInView ? "animate-zoom-in-out delay-[400ms]" : "opacity-0"}`}>
                   <div className="flex items-center justify-between mb-0 p-8 pb-0">
                 <span className="text-lg font-semibold">PREMIUM PLAN</span>
                 <img src="/images/icons/premium.png" alt="Premium" className="w-16 h-16" />
@@ -506,14 +588,15 @@ export default function WhyTrustSection() {
               <div className="mt-auto">
                     <div className="bg-[#11131A] rounded-t-xl w-full flex flex-col items-start pl-8">
                       {renderBillingToggle(isPremiumAnnual, () => setIsPremiumAnnual((prev) => !prev), "premium plan")}
-                      <span className="text-3xl font-normal text-white mt-4">
-                        ${isPremiumAnnual ? planPricing.premium.annual : planPricing.premium.monthly}USD
+                      <span className="text-3xl font-normal text-white mt-4 flex items-center gap-2">
+                        <Image src="/images/icons/usdc.svg" alt="USDC" width={26} height={26} />
+                        ${isPremiumAnnual ? planPricing.premium.annual : planPricing.premium.monthly} USDC
                         <span className="text-base font-normal text-white/70">{isPremiumAnnual ? "/year" : "/month"}</span>
                       </span>
                       {isPremiumAnnual && (
                         <span className="text-xs text-white/60 mt-1">
-                          <span className="line-through">${getAnnualBeforeDiscount(planPricing.premium.monthly).toLocaleString()}USD</span>
-                          {" "}{"->"}{" "}saves ${getAnnualSavings(planPricing.premium.monthly, planPricing.premium.annual).toLocaleString()}USD
+                          <span className="line-through">${getAnnualBeforeDiscount(planPricing.premium.monthly).toLocaleString()} USDC</span>
+                          {" "}{"->"}{" "}saves ${getAnnualSavings(planPricing.premium.monthly, planPricing.premium.annual).toLocaleString()} USDC
                         </span>
                       )}
                      <button
@@ -523,7 +606,7 @@ export default function WhyTrustSection() {
                       className="w-11/12 py-3 mt-6 mb-6 text-white text-base font-normal rounded-full transition-colors duration-200 border-2 border-transparent bg-gradient-to-r from-indigo-400 via-blue-400 to-purple-400 bg-origin-border hover:from-blue-500 hover:to-indigo-600 disabled:opacity-60"
                       style={{background: 'linear-gradient(#181C23, #181C23) padding-box, linear-gradient(90deg, #7F5FFF, #01C8FF, #FFB86C) border-box', border: '2px solid transparent'}}
                     >
-                      {checkoutLoadingPlan === "premium" ? "Redirecting..." : "Get Premium"}
+                      {checkoutLoadingPlan === "premium" ? "Creating subscription..." : "Get Premium"}
                     </button>
                 </div>
               </div>

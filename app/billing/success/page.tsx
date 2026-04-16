@@ -1,16 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 
-type BillingSuccessPageProps = {
-  searchParams?: {
-    session_id?: string | string[];
-  };
-};
-
-export default function BillingSuccessPage({ searchParams }: BillingSuccessPageProps) {
-  const sessionIdRaw = searchParams?.session_id;
-  const sessionId = Array.isArray(sessionIdRaw) ? sessionIdRaw[0] : sessionIdRaw;
-
+export default function BillingSuccessPage() {
   return (
     <main className="min-h-screen bg-[#0a0a1a] text-white relative overflow-hidden">
       <div
@@ -41,17 +32,11 @@ export default function BillingSuccessPage({ searchParams }: BillingSuccessPageP
           </div>
 
           <h1 className="text-3xl md:text-4xl text-center font-medium mb-3">
-            Billing Successful
+            Onchain Billing Successful
           </h1>
           <p className="text-center text-white/75 text-base md:text-lg mb-8">
-            Your subscription is now active. You can manage your plan anytime from billing settings.
+            Your billing cycle was created onchain successfully. You can continue in your dashboard.
           </p>
-
-          {sessionId && (
-            <p className="text-center text-xs md:text-sm text-white/55 mb-8">
-              Session: <span className="font-mono">{sessionId}</span>
-            </p>
-          )}
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <Link
@@ -70,7 +55,7 @@ export default function BillingSuccessPage({ searchParams }: BillingSuccessPageP
               href="/#pricing"
               className="px-5 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white text-center font-medium border border-white/20 transition"
             >
-              Manage Plan
+              View Pricing
             </Link>
           </div>
         </div>

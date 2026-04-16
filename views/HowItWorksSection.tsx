@@ -44,16 +44,16 @@ export default function HowItWorksSection() {
       </section>
       {/* Desktop How It Works Section */}
       <section ref={desktopRef} className="w-full py-24 bg-black text-white flex-col items-center hidden md:flex">
-        <div className="w-full flex flex-row justify-between items-start mb-16">
-          <div className="flex flex-col items-start ml-40">
+        <div className="w-full max-w-6xl px-6 lg:px-10 flex flex-col lg:flex-row lg:justify-between lg:items-start gap-8 mb-16">
+          <div className="flex flex-col items-start">
             <span className="px-4 py-1 rounded-full border border-blue-400 text-blue-300 text-sm font-medium bg-transparent mb-8">How it works</span>
             <h2 className={`text-4xl md:text-5xl font-normal mb-4 leading-tight ${desktopInView ? "animate-fade-slide-up" : "opacity-0"}`}>From Secure to Smart<br />to Seamless</h2>
           </div>
-          <div className={`max-w-xl text-white/70 text-xl md:text-2xl mt-2 mr-20 ${desktopInView ? "animate-fade-slide-up delay-200" : "opacity-0"}`}>
+          <div className={`max-w-2xl text-white/70 text-lg lg:text-2xl lg:mt-2 ${desktopInView ? "animate-fade-slide-up delay-200" : "opacity-0"}`}>
             Protect your crypto, trade with intelligence, and spend effortlessly.<br />SenseiFi guides you every step of the way.
           </div>
         </div>
-        <div className="w-full max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="w-full max-w-6xl px-6 lg:px-10 mx-auto grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
           <div className={`rounded-2xl bg-[#181c2a] p-8 flex flex-col items-start justify-start shadow-lg min-h-80 border border-white/10 w-full max-w-[420px] ${desktopInView ? "animate-slide-in-left" : "opacity-0"}`}>
             <Image src="/images/why01.png" alt="Secure Wallet" width={320} height={210} className="mb-12" />
             <div className="flex items-center mb-2">

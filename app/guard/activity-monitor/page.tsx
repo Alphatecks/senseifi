@@ -169,14 +169,19 @@ export default function ActivityMonitorPage() {
   const [liveFeedFullOpen, setLiveFeedFullOpen] = useState(false);
   const [liveFeedSearch, setLiveFeedSearch] = useState("");
 
+  const activityMonitorParams = { user_id: dashboardUser?.user_id ?? undefined, wallet_address: address ?? undefined };
+
   useEffect(() => {
+    if (!activityMonitorParams.user_id && !activityMonitorParams.wallet_address) {
+      setOverview(null);
+      setOverviewLoading(false);
+      return;
+    }
     setOverviewLoading(true);
-    getDashboardOverview(20)
+    getDashboardOverview(20, activityMonitorParams)
       .then((data) => setOverview(data ?? null))
       .finally(() => setOverviewLoading(false));
-  }, []);
-
-  const activityMonitorParams = { user_id: dashboardUser?.user_id ?? undefined, wallet_address: address ?? undefined };
+  }, [activityMonitorParams.user_id, activityMonitorParams.wallet_address]);
 
   useEffect(() => {
     if (connectedTab !== "wallet") return;

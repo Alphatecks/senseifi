@@ -245,6 +245,10 @@
         #${ALERT_OVERLAY_ID} .senseiguard-row-muted {
           color: rgba(255, 255, 255, 0.32);
         }
+        #${ALERT_OVERLAY_ID} .senseiguard-finding-low {
+          color: #32bb1d !important;
+          font-weight: 700;
+        }
         #${ALERT_OVERLAY_ID} .senseiguard-btn {
           width: 100%;
           border: none;
@@ -338,7 +342,7 @@
               <span id="senseiguard-alert-risk">9.6 / 10</span>
             </div>
             <div class="senseiguard-row senseiguard-row-muted">
-              <span id="senseiguard-alert-meta-label">Reported incidents:</span>
+              <span id="senseiguard-alert-meta-label">Detected incidents:</span>
               <span id="senseiguard-alert-incidents">Multiple wallets drained</span>
             </div>
             <button type="button" class="senseiguard-btn senseiguard-btn-block" id="senseiguard-btn-block">
@@ -402,17 +406,41 @@
     const blockBtn = overlay.querySelector('#senseiguard-btn-block');
     const proceedBtn = overlay.querySelector('#senseiguard-btn-proceed');
     const titleNode = overlay.querySelector('.senseiguard-detected-title');
+    const findingPrefixRegex = /^\s*\[(low|medium|high|critical)\]\s*/i;
+    function parseFinding(rawFinding) {
+      const source = typeof rawFinding === 'string' ? rawFinding : '';
+      const match = source.match(findingPrefixRegex);
+      const severity = match ? String(match[1] || '').toLowerCase() : null;
+      const cleaned = source.replace(findingPrefixRegex, '').trim();
+      return {
+        severity,
+        cleaned: cleaned || source.trim(),
+      };
+    }
 
     const riskScore = Number(decision && decision.riskScore ? decision.riskScore : 96);
     const riskLevel10 =
       typeof decision?.riskLevel10 === 'number'
         ? decision.riskLevel10
-        : Math.max(0, Math.min(10, riskScore / 10));
+        : Math.max(0, Math.min(10, riskScore <= 10 ? riskScore : riskScore / 10));
+    const normalizedRiskLevel10 = Math.max(0, Math.min(10, riskLevel10));
     if (riskTextNode) {
-      riskTextNode.textContent = `${Math.max(0, Math.min(10, riskLevel10)).toFixed(1)} / 10`;
+      riskTextNode.textContent = `${normalizedRiskLevel10.toFixed(1)} / 10`;
     }
 
     const malicious = isMaliciousDecision(decision);
+    const websiteScanFindings = Array.isArray(decision?.websiteScanFindings)
+      ? decision.websiteScanFindings
+      : [];
+    const preferredRawFinding =
+      websiteScanFindings.length > 0
+        ? websiteScanFindings[0]
+        : Array.isArray(decision?.findings) && decision.findings.length > 0
+          ? decision.findings[0]
+          : '';
+    const parsedTopFinding = parseFinding(preferredRawFinding);
+    const hasLowTopFinding = parsedTopFinding.severity === 'low';
+    const useSafeProceedOnly = !malicious && hasLowTopFinding && normalizedRiskLevel10 >= 7;
 
     if (titleNode) {
       titleNode.textContent = malicious ? 'Malicious Contract Detected' : 'Scan Issue Detected';
@@ -424,7 +452,19 @@
       criticalNode.classList.toggle('senseiguard-critical-warning', !malicious);
     }
     if (incidentsLabelNode) {
-      incidentsLabelNode.textContent = malicious ? 'Reported incidents:' : 'Top finding:';
+      incidentsLabelNode.textContent = malicious ? 'Detected incidents:' : 'Top finding:';
+    }
+    if (incidentsNode) {
+      incidentsNode.classList.remove('senseiguard-finding-low');
+    }
+
+    if (blockBtn) {
+      blockBtn.style.display = 'block';
+      blockBtn.textContent = 'Block Transaction (recommended)';
+    }
+    if (proceedBtn) {
+      proceedBtn.style.display = 'block';
+      proceedBtn.textContent = 'Proceed at your own risk';
     }
 
     if (incidentsNode) {
@@ -438,13 +478,22 @@
         typeof decision?.reportedIncidents === 'number' &&
         Number.isFinite(decision.reportedIncidents)
       ) {
-        incidentsNode.textContent = `${decision.reportedIncidents} reported incidents`;
+        incidentsNode.textContent = `${decision.reportedIncidents} detected incidents`;
       } else {
         const fallback =
           malicious ? 'Critical malicious contract activity' : 'Suspicious activity reported';
+        const preferredFinding = parsedTopFinding.cleaned || fallback;
         incidentsNode.textContent =
-          Array.isArray(decision?.findings) && decision.findings.length > 0 ? decision.findings[0] : fallback;
+          preferredFinding;
+        if (hasLowTopFinding) {
+          incidentsNode.classList.add('senseiguard-finding-low');
+        }
       }
+    }
+
+    if (useSafeProceedOnly) {
+      if (blockBtn) blockBtn.style.display = 'none';
+      if (proceedBtn) proceedBtn.textContent = 'Safe to proceed';
     }
 
     if (blockBtn) {
@@ -475,7 +524,6 @@
         overlay.classList.remove('senseiguard-visible');
         resolve('proceed');
       };
-      proceedBtn.style.display = 'block';
     }
 
     const closeBtn = overlay.querySelector('.senseiguard-close');
