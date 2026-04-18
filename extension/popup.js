@@ -90,6 +90,34 @@ document.addEventListener('DOMContentLoaded', function () {
   /** Main CTA uses last row chosen, else MetaMask */
   let lastWalletType = 'metamask';
 
+  function initSiteAccessBanner() {
+    const banner = document.getElementById('site-access-banner');
+    const btn = document.getElementById('site-access-grant');
+    const hint = document.getElementById('site-access-hint');
+    if (!banner || !btn) return;
+    if (typeof chrome === 'undefined' || !chrome.permissions) return;
+    chrome.permissions.contains({ origins: ['http://*/*', 'https://*/*'] }, function (has) {
+      if (!has) banner.classList.remove('view-hidden');
+    });
+    btn.addEventListener('click', function () {
+      chrome.permissions.request({ origins: ['http://*/*', 'https://*/*'] }, function (granted) {
+        if (granted) {
+          banner.classList.add('view-hidden');
+          if (hint) {
+            hint.textContent = '';
+            hint.classList.add('view-hidden');
+          }
+        } else if (hint) {
+          hint.classList.remove('view-hidden');
+          hint.textContent =
+            'Permission was not granted. You can tap Allow again here or enable site access in Chrome’s extension details for SenseiFi Trade Insight.';
+        }
+      });
+    });
+  }
+
+  initSiteAccessBanner();
+
   function setCwStatus(text, kind) {
     if (!cwStatus) return;
     cwStatus.textContent = text || '';

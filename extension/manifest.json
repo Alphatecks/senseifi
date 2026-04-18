@@ -32,9 +32,11 @@
     "alarms"
   ],
   "host_permissions": [
-    "http://*/*",
-    "https://*/*",
     "https://senseifi-backend.onrender.com/*"
+  ],
+  "optional_host_permissions": [
+    "http://*/*",
+    "https://*/*"
   ],
   "content_scripts": [
     {

@@ -8,6 +8,15 @@
 </head>
 <body class="welcome">
   <div class="welcome-scroll-shell">
+    <div id="site-access-banner" class="site-access-banner view-hidden" role="region" aria-label="Site protection access">
+      <div class="site-access-banner-inner">
+        <p class="site-access-banner-text">
+          <strong>Enable site protection</strong> — Allow access to the sites you visit so SenseiGuard can monitor dApps and reach your wallet on the page. You can change this anytime in the extension’s site settings.
+        </p>
+        <button type="button" class="site-access-banner-btn" id="site-access-grant">Allow</button>
+      </div>
+      <p id="site-access-hint" class="site-access-hint view-hidden" role="status"></p>
+    </div>
     <!-- Step 1: feature list -->
     <div id="view-welcome" class="welcome-container">
       <header class="welcome-header">

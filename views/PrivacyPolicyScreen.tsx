@@ -92,6 +92,37 @@ export default function PrivacyPolicyScreen() {
                 <strong>Note:</strong> Sensitive payment data is handled by regulated third-party payment processors and is not stored
                 directly by SenseiFi.
               </p>
+
+              <h3 className="text-lg text-white font-normal mt-8">2.6 SenseiFi Trade Insight (SenseiGuard) browser extension</h3>
+              <p>
+                If you install our Chrome extension (&quot;SenseiFi Trade Insight&quot; / SenseiGuard), the following applies in addition to the
+                categories above. We keep this list aligned with what the extension actually stores and sends.
+              </p>
+              <p>
+                <strong>Local storage on your device (via Chrome <code className="text-white/90">storage.local</code>):</strong> user
+                protection settings (thresholds, toggles), a list of recent security alerts, a cache of threat-intelligence data fetched
+                from our servers, your wallet session / connected public address after you connect, a short queue of security-relevant
+                events pending upload, and per-tab domain risk snapshots used to show warnings. We do{" "}
+                <strong>not</strong> store private keys, seed phrases, or wallet secrets in the extension.
+              </p>
+              <p>
+                <strong>Network requests to our API (HTTPS):</strong> the extension may call our backend to (a) analyze a pending
+                transaction or signing request, (b) check dApp/site context when connecting, (c) register your connected wallet address
+                and chain when you choose to connect, (d) download a periodic threat feed (e.g. malicious contract/domain lists), and (e)
+                send queued telemetry events (for example transaction evaluation outcomes, domain-risk detections, and sync heartbeats).
+                Payloads are limited to what is needed for security analysis and service operation.
+              </p>
+              <p>
+                <strong>Site access:</strong> broad access to websites you visit (<code className="text-white/90">http(s)://*/*</code>) is{" "}
+                <strong>optional</strong> and requested when you enable site protection or connect a wallet from the extension, so we can
+                inject our protection script and interact with the page&apos;s wallet provider on dApps. If you do not grant this access,
+                in-page protection and wallet connect on normal tabs will not work until you allow it. Access to our API host is separate
+                and used for the requests described above.
+              </p>
+              <p>
+                <strong>Notifications:</strong> the extension may show system notifications when we block or warn on a high-risk
+                transaction or flag a suspicious domain, so you notice even if the tab is in the background.
+              </p>
             </section>
 
             <section className="space-y-4">

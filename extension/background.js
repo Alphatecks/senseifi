@@ -121,8 +121,20 @@ function shouldSkipRecentInjection(tabId, url) {
   return false;
 }
 
+/** User-granted optional host access (http/https) — required for programmatic MAIN-world injection. */
+async function hasBroadSiteAccess() {
+  try {
+    return await chrome.permissions.contains({
+      origins: ['http://*/*', 'https://*/*'],
+    });
+  } catch (_e) {
+    return false;
+  }
+}
+
 async function injectProtectionHook(tabId, url) {
   if (!tabId || !shouldInjectUrl(url)) return;
+  if (!(await hasBroadSiteAccess())) return;
   if (shouldSkipRecentInjection(tabId, url)) return;
   try {
     await chrome.scripting.executeScript({

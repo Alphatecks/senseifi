@@ -275,6 +275,59 @@ body.welcome {
   text-decoration: underline;
 }
 
+/* Optional site access (broad host permission) banner */
+.site-access-banner {
+  flex-shrink: 0;
+  padding: 12px 16px 10px;
+  border-bottom: 1px solid rgba(64, 102, 255, 0.25);
+  background: linear-gradient(180deg, rgba(25, 29, 53, 0.95) 0%, rgba(8, 10, 26, 0.98) 100%);
+}
+
+.site-access-banner-inner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.site-access-banner-text {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #c7cbe0;
+}
+
+.site-access-banner-text strong {
+  color: #e2e8f0;
+  font-weight: 600;
+}
+
+.site-access-banner-btn {
+  flex-shrink: 0;
+  margin-top: 2px;
+  padding: 8px 14px;
+  border: none;
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  color: #fff;
+  background: linear-gradient(135deg, #4066ff 0%, #0026ff 100%);
+}
+
+.site-access-banner-btn:hover {
+  filter: brightness(1.08);
+}
+
+.site-access-hint {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #94a3b8;
+}
+
 /* View switching */
 .view-hidden {
   display: none !important;

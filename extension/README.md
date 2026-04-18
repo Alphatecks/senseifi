@@ -38,7 +38,8 @@ SenseiGuard extension for real-time wallet protection. The current runtime now i
 
 - Same contract as **`services/walletService.ts`**: **`POST {base}/wallets/connect`** with `{ address, chain_id, wallet_type }`. Base URL: **`config.js`** → `SENSEIGUARD.WALLET_API_BASE_URL` (default matches `NEXT_PUBLIC_WALLET_API_URL`).
 - **Permissions:** `activeTab`, `scripting`, `storage`, `tabs`, `webNavigation`, `notifications`, `alarms`.
-- **Host permissions:** API origin + `http/https` web pages for monitoring/interception.
+- **Host permissions:** required — SenseiFi API origin (`https://senseifi-backend.onrender.com/*`) for risk APIs, telemetry, threat feed, wallet connect. **Optional** — `http://*/*` and `https://*/*` (user-granted via popup “Allow site protection” or when connecting a wallet) so content scripts and `scripting` injection can run on dApp pages.
+- **Chrome Web Store copy:** see **`CHROME_WEB_STORE_LISTING.md`** (single purpose, host justification, permission blurbs).
 - **`wallet-connect.js`** runs `eth_requestAccounts` in the **active tab’s MAIN world** (wallets inject on web pages, not in the popup), then notifies background with `SENSEIGUARD_REGISTER_WALLET`.
 - **Usage:** Focus a normal **`https://`** tab → open the popup → **Connect** (pick MetaMask or Coinbase, or use the main button after a row sets the provider). Approve in the wallet.
 - Response is stored under **`chrome.storage.local`** key **`senseiguard_wallet_connect`**.

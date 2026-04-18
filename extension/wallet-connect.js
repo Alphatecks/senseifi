@@ -13,12 +13,34 @@
   }
 
   /**
+   * Optional broad site access — required for executeScript on arbitrary https tabs.
+   * @returns {Promise<boolean>}
+   */
+  function ensureBroadSiteAccess() {
+    if (typeof chrome === 'undefined' || !chrome.permissions) {
+      return Promise.resolve(true);
+    }
+    return new Promise(function (resolve) {
+      chrome.permissions.contains({ origins: ['http://*/*', 'https://*/*'] }, function (has) {
+        if (has) return resolve(true);
+        chrome.permissions.request({ origins: ['http://*/*', 'https://*/*'] }, resolve);
+      });
+    });
+  }
+
+  /**
    * @param {'metamask'|'coinbase'} walletType
    * @returns {Promise<{ address: string, chainId: number }>}
    */
   async function connectViaActiveTab(walletType) {
     if (typeof chrome === 'undefined' || !chrome.tabs || !chrome.scripting) {
       throw new Error('Extension APIs unavailable. Reload the extension.');
+    }
+    var allowed = await ensureBroadSiteAccess();
+    if (!allowed) {
+      throw new Error(
+        'Allow SenseiGuard to access sites so we can connect to your wallet on the page you have open.'
+      );
     }
     var tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     var tab = tabs[0];
