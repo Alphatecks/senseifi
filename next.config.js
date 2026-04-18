@@ -1,4 +1,5 @@
 /** @type {import('next').NextConfig} */
+const path = require('path');
 
 const nextConfig = {
   reactStrictMode: true,
@@ -72,6 +73,10 @@ const nextConfig = {
     ],
   },
   webpack: (config, { isServer }) => {
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      '@react-native-async-storage/async-storage': path.resolve(__dirname, 'lib/stubs/async-storage-web.js'),
+    };
     config.module.rules.unshift({
       test: /\.svg$/,
       oneOf: [
@@ -88,10 +93,8 @@ const nextConfig = {
       ],
     });
     if (!isServer) {
-      // Ignore optional dependencies that are not needed for browser
       config.resolve.fallback = {
         ...config.resolve.fallback,
-        '@react-native-async-storage/async-storage': false,
         'pino-pretty': false,
       };
     }
