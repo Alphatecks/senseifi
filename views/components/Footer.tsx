@@ -67,7 +67,14 @@ export default function Footer() {
 
       <div className="w-full mt-10 border-t border-white/10 pt-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-xs text-white/60 pl-9 pr-6 md:pl-40 md:pr-8">
         <span>©2025 SenseiFi. All Rights Reserved.</span>
-        <a href="#" className="hover:text-white transition">Terms &amp; Condition</a>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <a href="/privacy" className="hover:text-white transition">
+            Privacy Policy
+          </a>
+          <a href="#" className="hover:text-white transition">
+            Terms &amp; Condition
+          </a>
+        </div>
       </div>
     </footer>
   );
