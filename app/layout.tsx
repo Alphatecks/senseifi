@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   title: 'SenseiFi - AI-Powered Trading Intelligence',
   description: 'Join the waiting list for SenseiFi - AI-powered trading intelligence, security tools, and exclusive launch benefits.',
   other: {
-    'base:app_id': '69d8831234c69936dc95d6b2',
+    'base:app_id': '69e4887887970a2e83bef35d',
   },
   icons: {
     icon: [
