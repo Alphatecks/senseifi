@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useWallet } from "@/hooks/useWallet";
-import { runFullScan } from "@/services/dashboardService";
+import { runFullScan, refreshWalletHealth } from "@/services/dashboardService";
 import type { RunFullScanData } from "@/services/dashboardService";
 
 type RescanModalContextValue = {
@@ -48,9 +48,10 @@ export function RescanModalProvider({ children }: { children: React.ReactNode })
     setScanTriggered(true);
     setScanInProgress(true);
     runFullScan(address)
-      .then((data) => {
+      .then(async (data) => {
         if (data) {
           setScanResult(data);
+          await refreshWalletHealth(address);
           setScanCompleteTimestamp(Date.now());
         }
       })

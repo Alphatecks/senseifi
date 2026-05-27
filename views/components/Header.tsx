@@ -81,8 +81,16 @@ export default function Header({ hideGetStarted }: HeaderProps) {
         </div>
         
         <ul className="hidden md:flex flex-1 items-center justify-center gap-4 lg:gap-8 xl:gap-10 text-gray-300 text-sm lg:text-base">
-          <li><a href="/" className="hover:text-white transition">Home</a></li>
-          <li><a href="/about" className="hover:text-white transition">About</a></li>
+          <li>
+            <Link href="/" className="hover:text-white transition">
+              Home
+            </Link>
+          </li>
+          <li>
+            <Link href="/about" prefetch className="hover:text-white transition">
+              About
+            </Link>
+          </li>
           <li><a href="#" className="hover:text-white transition">Pricing</a></li>
           <li><a href="#" className="hover:text-white transition">Features</a></li>
           <li><a href="#" className="hover:text-white transition">Contact</a></li>
@@ -180,7 +188,20 @@ export default function Header({ hideGetStarted }: HeaderProps) {
             { label: 'Contact us', href: '#' },
           ].map((item) => (
             <li key={item.label} className="py-4">
-              <a href={item.href} className="block hover:text-white transition">{item.label}</a>
+              {item.href.startsWith('/') ? (
+                <Link
+                  href={item.href}
+                  prefetch={item.href === '/about'}
+                  className="block hover:text-white transition"
+                  onClick={() => setOpen(false)}
+                >
+                  {item.label}
+                </Link>
+              ) : (
+                <a href={item.href} className="block hover:text-white transition">
+                  {item.label}
+                </a>
+              )}
             </li>
           ))}
         </ul>

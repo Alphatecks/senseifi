@@ -142,6 +142,21 @@ document.addEventListener('DOMContentLoaded', function () {
     return String(raw).replace(/\/$/, '');
   }
 
+  function getDashboardUrl() {
+    const g = window.SENSEIGUARD || {};
+    const raw = g.DASHBOARD_URL || 'https://senseifi.io/guard';
+    return String(raw).replace(/\/$/, '');
+  }
+
+  function openDashboardPage() {
+    const url = getDashboardUrl();
+    if (typeof chrome !== 'undefined' && chrome.tabs && chrome.tabs.create) {
+      chrome.tabs.create({ url: url });
+      return;
+    }
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+
   function clampScore(value) {
     const n = Number(value);
     if (!Number.isFinite(n)) return 0;
@@ -283,10 +298,14 @@ document.addEventListener('DOMContentLoaded', function () {
       );
     }
     if (analysisRecommendation) {
-      analysisRecommendation.textContent = pickFirstText(
-        [source.recommendation, source.action_hint, source.next_step],
+      const correlation = source.correlation && typeof source.correlation === 'object' ? source.correlation : null;
+      const recommendationText = pickFirstText(
+        [source.recommended_action, source.recommendation, source.action_hint, source.next_step],
         'None'
       );
+      analysisRecommendation.textContent = correlation && correlation.narrative
+        ? recommendationText + ' ' + correlation.narrative
+        : recommendationText;
     }
   }
 
@@ -330,6 +349,7 @@ document.addEventListener('DOMContentLoaded', function () {
       }
     }
     if (riskUserReports) {
+      const correlation = source.correlation && typeof source.correlation === 'object' ? source.correlation : null;
       const incidents = pickFirstText(
         [
           findings.user_reports,
@@ -339,7 +359,11 @@ document.addEventListener('DOMContentLoaded', function () {
         ],
         ''
       );
-      riskUserReports.textContent = incidents || 'None';
+      if (correlation && correlation.narrative) {
+        riskUserReports.textContent = correlation.narrative;
+      } else {
+        riskUserReports.textContent = incidents || 'None';
+      }
     }
   }
 
@@ -676,16 +700,29 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
-  function renderWalletScanResult(scanData) {
-    const score = clampScore(scanData && scanData.score);
+  function renderWalletScanResult(resultData) {
+    const score = clampScore(resultData && resultData.score);
     if (walletScoreBadge) walletScoreBadge.textContent = score + ' / 100';
+
+    const subtitle = document.querySelector('#cw-wallet-scan-result-view .cw-wallet-result-subtitle');
+    if (subtitle) {
+      const status = resultData && resultData.status ? String(resultData.status) : '';
+      const message = resultData && resultData.message ? String(resultData.message) : '';
+      if (message) {
+        subtitle.textContent = message;
+      } else if (status) {
+        subtitle.textContent = 'Status: ' + status.charAt(0).toUpperCase() + status.slice(1);
+      } else {
+        subtitle.textContent = 'Full insight on your wallet Security score';
+      }
+    }
 
     if (walletGaugeNeedle) {
       const angle = -160 + (score / 100) * 140;
       walletGaugeNeedle.style.transform = 'rotate(' + angle + 'deg)';
     }
 
-    const observations = Array.isArray(scanData && scanData.observations) ? scanData.observations : [];
+    const observations = Array.isArray(resultData && resultData.observations) ? resultData.observations : [];
     const approvals = observations.filter(function (o) {
       const t = String((o && o.title) || '') + ' ' + String((o && o.description) || '');
       return /approval/i.test(t);
@@ -702,6 +739,69 @@ document.addEventListener('DOMContentLoaded', function () {
     if (walletFindingApprovals) walletFindingApprovals.textContent = String(approvals);
     if (walletFindingAirdrops) walletFindingAirdrops.textContent = String(airdrops);
     if (walletFindingDrainer) walletFindingDrainer.textContent = drainer ? 'Yes' : 'No';
+  }
+
+  async function fetchDashboardSummary(address) {
+    if (!address) return null;
+    const path = '/dashboard/' + encodeURIComponent(address) + '/summary';
+    try {
+      const res = await fetch(getWalletApiBase() + path, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const json = await res.json().catch(function () {
+        return null;
+      });
+      console.log('[SenseiGuard popup][dashboard summary api]', {
+        path: path,
+        request: { wallet_address: address },
+        status: res.status,
+        ok: res.ok,
+        response: json,
+      });
+      if (!res.ok || !json || !json.success || !json.data) return null;
+      return json.data;
+    } catch (err) {
+      console.error('[SenseiGuard popup][dashboard summary api][error]', {
+        path: path,
+        request: { wallet_address: address },
+        error: err && err.message ? err.message : String(err),
+      });
+      return null;
+    }
+  }
+
+  async function refreshWalletHealth(address) {
+    if (!address) return null;
+    const path = '/dashboard/' + encodeURIComponent(address) + '/health/refresh';
+    try {
+      const res = await fetch(getWalletApiBase() + path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      const json = await res.json().catch(function () {
+        return null;
+      });
+      console.log('[SenseiGuard popup][wallet health refresh api]', {
+        path: path,
+        request: { wallet_address: address },
+        status: res.status,
+        ok: res.ok,
+        response: json,
+      });
+      if (!res.ok || !json) return null;
+      if (json.success && json.data) return json.data;
+      if (json.data && json.data.security_status) return json.data;
+      return null;
+    } catch (err) {
+      console.error('[SenseiGuard popup][wallet health refresh api][error]', {
+        path: path,
+        request: { wallet_address: address },
+        error: err && err.message ? err.message : String(err),
+      });
+      return null;
+    }
   }
 
   async function runWalletScan(address) {
@@ -744,6 +844,8 @@ document.addEventListener('DOMContentLoaded', function () {
     showWalletScanView();
     const startedAt = Date.now();
     const scanData = await runWalletScan(currentWalletAddress);
+    await refreshWalletHealth(currentWalletAddress);
+    const summary = await fetchDashboardSummary(currentWalletAddress);
     const elapsed = Date.now() - startedAt;
     const minDelayMs = 1200;
     if (elapsed < minDelayMs) {
@@ -751,12 +853,20 @@ document.addEventListener('DOMContentLoaded', function () {
         setTimeout(resolve, minDelayMs - elapsed);
       });
     }
-    if (!scanData) {
+
+    const securityStatus = summary && summary.security_status ? summary.security_status : null;
+    if (!securityStatus && !scanData) {
       setCwStatus('Wallet scan failed. Please try again.', 'error');
       setConnectedDashboardMode(true);
       return;
     }
-    renderWalletScanResult(scanData);
+
+    renderWalletScanResult({
+      score: securityStatus ? securityStatus.score : scanData.score,
+      status: securityStatus ? securityStatus.status : scanData && scanData.status,
+      message: securityStatus ? securityStatus.message : '',
+      observations: scanData && Array.isArray(scanData.observations) ? scanData.observations : [],
+    });
     setWalletResultTogglesVisible(walletHealthScoreSource === 'contract');
     showWalletScanResultView();
   }
@@ -1031,7 +1141,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   if (walletScanLearnMoreBtn) {
     walletScanLearnMoreBtn.addEventListener('click', function () {
-      setCwStatus('Open the dashboard to view full wallet risk details.', '');
+      openDashboardPage();
     });
   }
 

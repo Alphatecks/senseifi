@@ -4,8 +4,9 @@ import React, { useState, useEffect, useMemo } from "react";
 import Image from "next/image";
 
 import { useWallet } from "@/hooks/useWallet";
-import { getDomainThreatFeed, getSecurityOverview, getLiveScamSignalDetails } from "@/services/dashboardService";
-import type { DomainThreatFeedData, SecurityOverviewData, LiveScamSignalDetailsData } from "@/services/dashboardService";
+import { useGuardSearch } from "@/context/GuardSearchContext";
+import { getDomainThreatFeed, getSecurityOverview, getLiveScamSignalsSummary, getLiveScamSignalDetails, getThreatCampaigns } from "@/services/dashboardService";
+import type { DomainThreatFeedData, SecurityOverviewData, LiveScamSignalSummary, LiveScamSignalDetailsData, ThreatCampaign } from "@/services/dashboardService";
 
 import alertIcon from "@/assets/icons/alert.png";
 import scanIcon from "@/assets/icons/scan.png";
@@ -87,7 +88,6 @@ const CHART_W = 280;
 const CHART_H = 100;
 const COMMUNITY_ROWS_PER_PAGE = 10;
 const LIVE_SIGNALS_PER_PAGE = 4;
-type LiveScamSignalSummary = NonNullable<SecurityOverviewData["live_scam_signals"]>[number];
 
 function smoothCurvePath(points: Array<{ x: number; y: number }>, tension: number = 0.3): string {
   if (points.length < 2) return "";
@@ -139,13 +139,41 @@ function formatUpdatedAt(dateValue: string | null | undefined): string {
   });
 }
 
+function formatCampaignType(value: string): string {
+  return String(value || "")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
 function extractLiveSignalId(signal: LiveScamSignalSummary): string {
-  const possible = [signal.id, signal.signal_id, signal.threat_id];
-  for (let i = 0; i < possible.length; i += 1) {
-    const value = possible[i];
+  const raw = signal as Record<string, unknown>;
+  const candidates = [
+    signal.id,
+    signal.signal_id,
+    signal.threat_id,
+    signal.uuid,
+    raw.signalId,
+    raw.live_signal_id,
+    raw.live_scam_signal_id,
+    typeof raw.id === "number" ? String(raw.id) : null,
+  ];
+  for (let i = 0; i < candidates.length; i += 1) {
+    const value = candidates[i];
     if (typeof value === "string" && value.trim()) return value.trim();
   }
   return "";
+}
+
+function liveSignalSummaryToDetails(signal: LiveScamSignalSummary): LiveScamSignalDetailsData {
+  return {
+    title: signal.threat_type,
+    address: signal.address,
+    threat_type: signal.threat_type,
+    risk_level: signal.risk_level,
+    detected_at: signal.detected_at,
+    description:
+      "Summary from live scam signals list. Full detail requires a signal id on each summary row from the backend.",
+  };
 }
 
 function detailValueToText(value: unknown): string {
@@ -165,7 +193,7 @@ export default function ThreatIntelligencePage() {
   const [securityOverviewLoading, setSecurityOverviewLoading] = useState(false);
   const [domainThreatFeed, setDomainThreatFeed] = useState<DomainThreatFeedData | null>(null);
   const [domainThreatFeedLoading, setDomainThreatFeedLoading] = useState(false);
-  const [search, setSearch] = useState("");
+  const { query, setQuery } = useGuardSearch();
   const [riskFilter, setRiskFilter] = useState("All");
   const [page, setPage] = useState(1);
   const [liveSignalsPage, setLiveSignalsPage] = useState(1);
@@ -176,6 +204,10 @@ export default function ThreatIntelligencePage() {
   const [liveSignalDetailsError, setLiveSignalDetailsError] = useState("");
   const [selectedLiveSignal, setSelectedLiveSignal] = useState<LiveScamSignalSummary | null>(null);
   const [selectedLiveSignalDetails, setSelectedLiveSignalDetails] = useState<LiveScamSignalDetailsData | null>(null);
+  const [liveScamSignals, setLiveScamSignals] = useState<LiveScamSignalSummary[]>([]);
+  const [liveScamSignalsLoading, setLiveScamSignalsLoading] = useState(false);
+  const [threatCampaigns, setThreatCampaigns] = useState<ThreatCampaign[]>([]);
+  const [threatCampaignsLoading, setThreatCampaignsLoading] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -200,6 +232,22 @@ export default function ThreatIntelligencePage() {
       .finally(() => setDomainThreatFeedLoading(false));
   }, [mounted]);
 
+  useEffect(() => {
+    if (!mounted) return;
+    setLiveScamSignalsLoading(true);
+    getLiveScamSignalsSummary(address?.trim() || undefined, 50)
+      .then(setLiveScamSignals)
+      .finally(() => setLiveScamSignalsLoading(false));
+  }, [mounted, address]);
+
+  useEffect(() => {
+    if (!mounted) return;
+    setThreatCampaignsLoading(true);
+    getThreatCampaigns(address?.trim() || undefined)
+      .then(setThreatCampaigns)
+      .finally(() => setThreatCampaignsLoading(false));
+  }, [mounted, address]);
+
   const communityThreatRows = useMemo<CommunityThreatRow[]>(() => {
     if (!domainThreatFeed) return [];
     const maliciousSourceMetadata = `activity:${domainThreatFeed.sources?.from_activity_feed ?? 0}, env:${domainThreatFeed.sources?.from_env_blocklist ?? 0}`;
@@ -222,28 +270,27 @@ export default function ThreatIntelligencePage() {
   }, [domainThreatFeed]);
 
   const filteredCommunityRows = useMemo(() => {
-    const query = search.trim().toLowerCase();
+    const q = query.trim().toLowerCase();
     return communityThreatRows.filter((row) => {
       const matchesSearch =
-        !query ||
-        row.domain.toLowerCase().includes(query) ||
-        row.listType.toLowerCase().includes(query) ||
-        row.siteSafety.toLowerCase().includes(query);
+        !q ||
+        row.domain.toLowerCase().includes(q) ||
+        row.listType.toLowerCase().includes(q) ||
+        row.siteSafety.toLowerCase().includes(q);
       const matchesRisk = riskFilter === "All" || row.siteSafety === riskFilter;
       return matchesSearch && matchesRisk;
     });
-  }, [communityThreatRows, riskFilter, search]);
+  }, [communityThreatRows, riskFilter, query]);
 
   useEffect(() => {
     setPage(1);
-  }, [search, riskFilter]);
+  }, [query, riskFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredCommunityRows.length / COMMUNITY_ROWS_PER_PAGE));
   const pagedCommunityRows = filteredCommunityRows.slice(
     (page - 1) * COMMUNITY_ROWS_PER_PAGE,
     page * COMMUNITY_ROWS_PER_PAGE
   );
-  const liveScamSignals = securityOverview?.live_scam_signals ?? [];
   const liveSignalsTotalPages = Math.max(1, Math.ceil(liveScamSignals.length / LIVE_SIGNALS_PER_PAGE));
   const pagedLiveScamSignals = liveScamSignals.slice(
     (liveSignalsPage - 1) * LIVE_SIGNALS_PER_PAGE,
@@ -269,22 +316,36 @@ export default function ThreatIntelligencePage() {
 
   const openLiveSignalDetails = async (signal: LiveScamSignalSummary) => {
     const signalId = extractLiveSignalId(signal);
-    if (!signalId || !address?.trim()) {
-      setLiveSignalDetailsError("Signal details are not available for this record.");
-      setSelectedLiveSignal(signal);
-      setSelectedLiveSignalDetails(null);
-      setLiveSignalDetailsOpen(true);
-      return;
-    }
+    console.log('[Threat Intelligence] Live scam signal clicked:', {
+      signalId: signalId || null,
+      walletAddress: address?.trim() || null,
+      signal,
+      signalKeys: Object.keys(signal as object),
+    });
     setSelectedLiveSignal(signal);
     setSelectedLiveSignalDetails(null);
     setLiveSignalDetailsError("");
     setLiveSignalDetailsOpen(true);
+
+    if (!signalId) {
+      console.warn(
+        '[Threat Intelligence] No signal id on live scam signals summary row — cannot call GET /dashboard/live-scam-signals/{id}. Backend should include id, signal_id, or threat_id on each item.',
+        signal
+      );
+      setLiveSignalDetailsError(
+        "This signal has no id in the summary response, so the detail API cannot be called. Showing summary data only — ask backend to include signal id on GET /live-scam-signals/summary items."
+      );
+      setSelectedLiveSignalDetails(liveSignalSummaryToDetails(signal));
+      return;
+    }
+
     setLiveSignalDetailsLoading(true);
     try {
-      const details = await getLiveScamSignalDetails(signalId, address.trim());
+      const details = await getLiveScamSignalDetails(signalId, address?.trim() || undefined);
+      console.log('[Threat Intelligence] Live scam signal details result:', details);
       if (!details) {
-        setLiveSignalDetailsError("Could not load signal details.");
+        setLiveSignalDetailsError("Could not load signal details. Check console for API response.");
+        setSelectedLiveSignalDetails(liveSignalSummaryToDetails(signal));
       } else {
         setSelectedLiveSignalDetails(details);
       }
@@ -595,15 +656,15 @@ export default function ThreatIntelligencePage() {
               <button type="button" className="text-sm font-medium text-white hover:underline">View all</button>
             </div>
             <ul className="space-y-3">
-              {!mounted || !address ? (
-                <li className="rounded-xl p-4 bg-[#25283D] border border-slate-700/50 text-slate-500 text-sm">Connect your wallet to see live scam signals.</li>
-              ) : securityOverviewLoading || securityOverview === null ? (
+              {!mounted ? (
                 <li className="rounded-xl p-4 bg-[#25283D] border border-slate-700/50 text-slate-500 text-sm">Loading…</li>
-              ) : !securityOverview.live_scam_signals?.length ? (
+              ) : liveScamSignalsLoading ? (
+                <li className="rounded-xl p-4 bg-[#25283D] border border-slate-700/50 text-slate-500 text-sm">Loading live scam signals…</li>
+              ) : !liveScamSignals.length ? (
                 <li className="rounded-xl p-4 bg-[#25283D] border border-slate-700/50 text-slate-500 text-sm">No live scam signals.</li>
               ) : (
                 pagedLiveScamSignals.map((signal, i) => (
-                  <li key={`${signal.address}-${i}`} className="rounded-xl p-4 bg-[#25283D] border border-slate-700/50">
+                  <li key={extractLiveSignalId(signal) || `${signal.address}-${i}`} className="rounded-xl p-4 bg-[#25283D] border border-slate-700/50">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex flex-col gap-0.5 min-w-0">
                         <p className="text-base font-semibold text-white" style={{ fontFamily: "'Satoshi', sans-serif" }}>{signal.address}</p>
@@ -627,7 +688,7 @@ export default function ThreatIntelligencePage() {
                 ))
               )}
             </ul>
-            {!securityOverviewLoading && liveScamSignals.length > LIVE_SIGNALS_PER_PAGE && (
+            {!liveScamSignalsLoading && liveScamSignals.length > LIVE_SIGNALS_PER_PAGE && (
               <div className="flex items-center justify-between gap-3 mt-3">
                 <button
                   type="button"
@@ -651,6 +712,46 @@ export default function ThreatIntelligencePage() {
               </div>
             )}
           </div>
+
+          <div className="mt-6 pt-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-base font-medium text-slate-200">Threat campaigns</h3>
+              <span className="text-xs text-slate-500">Correlated activity clusters</span>
+            </div>
+            <ul className="space-y-3">
+              {!mounted ? (
+                <li className="rounded-xl p-4 bg-[#25283D] border border-slate-700/50 text-slate-500 text-sm">Loading…</li>
+              ) : threatCampaignsLoading ? (
+                <li className="rounded-xl p-4 bg-[#25283D] border border-slate-700/50 text-slate-500 text-sm">Loading threat campaigns…</li>
+              ) : !threatCampaigns.length ? (
+                <li className="rounded-xl p-4 bg-[#25283D] border border-slate-700/50 text-slate-500 text-sm">No correlated campaigns detected.</li>
+              ) : (
+                threatCampaigns.slice(0, 5).map((campaign) => (
+                  <li key={campaign.id} className="rounded-xl p-4 bg-[#25283D] border border-slate-700/50 space-y-2">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-white">{formatCampaignType(campaign.campaign_type)}</p>
+                        <p className="text-xs text-slate-500 mt-0.5 capitalize">{campaign.status}</p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-sm font-bold text-[#F00500]">Risk {campaign.risk_score}</p>
+                        <p className="text-xs text-slate-400">{campaign.confidence_score}% confidence</p>
+                      </div>
+                    </div>
+                    <p className="text-sm text-slate-300 leading-relaxed">{campaign.narrative}</p>
+                    {campaign.signal_categories?.length ? (
+                      <p className="text-xs text-slate-400">
+                        Signals: {campaign.signal_categories.join(", ")}
+                      </p>
+                    ) : null}
+                    <p className="text-xs text-slate-500">
+                      {campaign.evidence_count} evidence item{campaign.evidence_count !== 1 ? "s" : ""} · Last seen {formatUpdatedAt(campaign.last_seen_at)}
+                    </p>
+                  </li>
+                ))
+              )}
+            </ul>
+          </div>
         </div>
       </div>
 
@@ -666,8 +767,8 @@ export default function ThreatIntelligencePage() {
               <input
                 type="search"
                 placeholder="Search"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
                 className="w-full rounded-lg border bg-[#25283D] border-[#25283D] text-white text-sm placeholder:text-slate-500 pl-4 pr-10 py-2.5 focus:outline-none focus:ring-1 focus:ring-slate-500"
               />
               <svg className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">

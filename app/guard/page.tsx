@@ -3,13 +3,12 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
-import localFont from "next/font/local";
 import { useRouter } from "next/navigation";
 
 import { useWallet } from "@/hooks/useWallet";
 import { useDashboardUser } from "@/context/DashboardUserContext";
 import { useRescanModal } from "@/context/RescanModalContext";
-import { getDashboardSummary, getWalletAssets, syncWalletAssets, getDashboardActivity, getWalletsForAddress, scanContract, getScanContractDetails, getUnreadAlerts, getThreatIntelligence } from "@/services/dashboardService";
+import { getDashboardSummary, getWalletAssets, syncWalletAssets, getDashboardActivity, getWalletsForAddress, scanContract, getScanContractDetails, getUnreadAlerts, getThreatIntelligence, markAlertRead, markAllAlertsRead } from "@/services/dashboardService";
 import type { DashboardSummaryData, WalletAsset, DashboardActivity, WalletListItem, ScanContractResult, ScanContractDetailResponse, UnreadAlertsData, ThreatIntelligenceItem } from "@/services/dashboardService";
 
 /** Resolve logo URL for connected wallet: API logo_url, known provider logo, or default icon. */
@@ -40,17 +39,7 @@ import liveActivityTitleIcon from "@/assets/icons/Frame 2147237579.png";
 import walletHealthIcon from "@/assets/icons/Frame 2147237579 (1).png";
 import shieldIcon from "@/assets/icons/Shield.png";
 import securityStatusIcon from "@/assets/icons/Vector.png";
-import senseiCardIcon from "@/assets/icons/wallets.png";
-import senseiCardLogo from "@/assets/icons/Mono.png";
-import senseiCardPattern from "@/assets/icons/SVG.svg";
 import walletCardBg from "@/assets/icons/Rectangle 1000002102.png";
-const beVietnamPro = localFont({
-  src: [
-    { path: "../../assets/fonts/Be_Vietnam_Pro/BeVietnamPro-Medium.ttf", weight: "500", style: "normal" },
-    { path: "../../assets/fonts/Be_Vietnam_Pro/BeVietnamPro-SemiBold.ttf", weight: "600", style: "normal" },
-    { path: "../../assets/fonts/Be_Vietnam_Pro/BeVietnamPro-Bold.ttf", weight: "700", style: "normal" },
-  ],
-});
 
 function formatLastScan(lastScanAt: string | null): string {
   if (!lastScanAt) return "Never";
@@ -90,6 +79,7 @@ export default function GuardDashboardPage() {
   const [unreadAlertModalOpen, setUnreadAlertModalOpen] = useState(false);
   const [unreadAlertsData, setUnreadAlertsData] = useState<UnreadAlertsData | null>(null);
   const [unreadAlertsLoading, setUnreadAlertsLoading] = useState(false);
+  const [markingAlertsRead, setMarkingAlertsRead] = useState(false);
   const [connectedWalletModalOpen, setConnectedWalletModalOpen] = useState(false);
   const [connectedWalletsList, setConnectedWalletsList] = useState<WalletListItem[] | null>(null);
   const [connectedWalletsLoading, setConnectedWalletsLoading] = useState(false);
@@ -172,6 +162,38 @@ export default function GuardDashboardPage() {
       .then((res) => setUnreadAlertsData(res ?? null))
       .finally(() => setUnreadAlertsLoading(false));
   }, [unreadAlertModalOpen, address]);
+
+  const handleMarkAllAlertsRead = async () => {
+    if (!address?.trim()) return;
+    setMarkingAlertsRead(true);
+    try {
+      const ok = await markAllAlertsRead(address);
+      if (ok) {
+        setUnreadAlertsData((prev) =>
+          prev ? { ...prev, alerts: [] } : prev
+        );
+        getDashboardSummary(address).then((fresh) => fresh && setSummary(fresh));
+      }
+    } finally {
+      setMarkingAlertsRead(false);
+    }
+  };
+
+  const handleMarkAlertRead = async (alertId: string) => {
+    if (!address?.trim()) return;
+    setMarkingAlertsRead(true);
+    try {
+      const ok = await markAlertRead(address, alertId);
+      if (ok) {
+        setUnreadAlertsData((prev) =>
+          prev ? { ...prev, alerts: prev.alerts.filter((a) => a.id !== alertId) } : prev
+        );
+        getDashboardSummary(address).then((fresh) => fresh && setSummary(fresh));
+      }
+    } finally {
+      setMarkingAlertsRead(false);
+    }
+  };
 
   useEffect(() => {
     if (!connectedWalletModalOpen || !address) {
@@ -447,37 +469,7 @@ export default function GuardDashboardPage() {
           )}
         </section>
 
-        {/* Sensei Card - under Live Activity on mobile, same design as desktop */}
-        <section className="-mx-8 w-[calc(100%+4rem)] rounded-2xl bg-slate-900/80 border border-slate-800/80 p-4 flex flex-col">
-          <div className="flex items-center gap-2 mb-3">
-            <Image src={senseiCardIcon} alt="" width={22} height={22} className="w-5 h-5 shrink-0 object-contain opacity-90" />
-            <h2 className="text-base font-semibold text-white">Sensei Card</h2>
-          </div>
-          <div className="relative rounded-2xl overflow-hidden aspect-[1.6/1] flex flex-col justify-between p-4 border border-slate-500/50 shadow-[0_4px_14px_rgba(0,0,0,0.25)]" style={{ background: "linear-gradient(165deg, #2d3561 0%, #1e2442 50%, #161b32 100%)" }}>
-            <div className="absolute bottom-0 right-0 w-[55%] h-[60%] opacity-60 pointer-events-none" style={{ backgroundImage: `url(${typeof senseiCardPattern === "string" ? senseiCardPattern : (senseiCardPattern as { src?: string }).src})`, backgroundSize: "contain", backgroundRepeat: "no-repeat", backgroundPosition: "100% 100%" }} aria-hidden />
-            <div className="relative z-10 flex items-start justify-between">
-              <div className="w-9 h-9 rounded-lg overflow-hidden shrink-0 shadow-md">
-                <Image src={senseiCardLogo} alt="" width={36} height={36} className="w-full h-full object-contain" />
-              </div>
-              <span className={`text-white text-sm font-semibold tracking-tight ${beVietnamPro.className}`}>SenseiCard</span>
-            </div>
-            <p className={`relative z-10 text-white text-lg font-bold ${beVietnamPro.className}`}>5022 3386 9820 1246</p>
-            <div className="relative z-10 flex items-center justify-between text-xs text-white/80">
-              <span>Finances</span>
-              <span>01/10</span>
-            </div>
-          </div>
-          <div className="flex gap-2 mt-3">
-            <button type="button" className="flex-1 rounded-lg px-3 py-2.5 text-sm font-medium text-white transition hover:opacity-90" style={{ backgroundColor: "#27283B" }}>Withdraw</button>
-            <button type="button" className="flex-1 rounded-lg bg-gradient-to-b from-[#4066FF] to-[#0026FF] hover:from-[#3355FF] hover:to-[#001fcc] text-white text-sm font-medium py-2.5 transition shadow-[0_4px_12px_rgba(0,38,255,0.25)] ring-1 ring-inset ring-[#4066FF]/90">Transfer</button>
-          </div>
-          <p className="mt-3 pt-3 text-sm text-slate-500 flex items-center gap-1.5 shrink-0 border-t border-slate-700/60">
-            <svg className="w-4 h-4 text-slate-500 shrink-0" fill="currentColor" viewBox="0 0 24 24"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" /></svg>
-            Information needed
-          </p>
-        </section>
-
-        {/* Security Tip - after Sensei Card on mobile */}
+        {/* Security Tip */}
         <section className="-mx-8 w-[calc(100%+4rem)] rounded-2xl bg-slate-900/80 border border-slate-800/80 p-4 flex flex-col gap-3">
           <div className="flex items-center gap-2 shrink-0">
             <Image src={liveActivityTitleIcon} alt="" width={22} height={22} className="w-5 h-5 object-contain opacity-90" />
@@ -633,8 +625,8 @@ export default function GuardDashboardPage() {
             </div>
           </section>
 
-          {/* Bottom row: left column = Live Activity + Wallet health + Revoke; right column = Sensei Card */}
-          <div className="flex flex-col lg:flex-row gap-6 items-stretch">
+          {/* Bottom row: Live Activity + Wallet health + Security Tip */}
+          <div className="flex flex-col gap-6">
             <div className="flex-1 min-w-0 lg:min-w-[600px] flex flex-col gap-6">
               <div className="flex flex-col lg:flex-row gap-6 items-start">
             {/* Live Activity - constrained width and compact height */}
@@ -749,37 +741,6 @@ export default function GuardDashboardPage() {
                 </div>
                 </div>
               </div>
-            </div>
-
-            {/* Sensei Card - max-width so it doesn't dominate when row has only 2 flex children */}
-            <div className="flex-[1.8] min-w-0 max-w-[420px] rounded-2xl bg-slate-900/80 border border-slate-800/80 p-5 shrink-0 flex flex-col">
-                <div className="flex items-center gap-2 mb-4">
-                  <Image src={senseiCardIcon} alt="" width={24} height={24} className="w-6 h-6 shrink-0 object-contain opacity-90" />
-                  <h2 className="text-lg font-semibold text-white">Sensei Card</h2>
-                </div>
-                <div className="relative rounded-2xl overflow-hidden aspect-[1.6/1] flex flex-col justify-between p-4 border border-slate-500/50 shadow-[0_4px_14px_rgba(0,0,0,0.25)]" style={{ background: "linear-gradient(165deg, #2d3561 0%, #1e2442 50%, #161b32 100%)" }}>
-                  {/* SVG pattern at bottom-right of card */}
-                  <div className="absolute bottom-0 right-0 w-[55%] h-[60%] opacity-60 pointer-events-none" style={{ backgroundImage: `url(${typeof senseiCardPattern === "string" ? senseiCardPattern : (senseiCardPattern as { src?: string }).src})`, backgroundSize: "contain", backgroundRepeat: "no-repeat", backgroundPosition: "100% 100%" }} aria-hidden />
-                  <div className="relative z-10 flex items-start justify-between">
-                    <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 shadow-md">
-                      <Image src={senseiCardLogo} alt="" width={40} height={40} className="w-full h-full object-contain" />
-                    </div>
-                    <span className={`text-white text-sm font-semibold tracking-tight ${beVietnamPro.className}`}>SenseiCard</span>
-                  </div>
-                  <p className={`relative z-10 text-white text-xl sm:text-2xl font-bold ${beVietnamPro.className}`}>5022 3386 9820 1246</p>
-                  <div className="relative z-10 flex items-center justify-between text-sm text-white/80">
-                    <span>Finances</span>
-                    <span>01/10</span>
-                  </div>
-                </div>
-                <div className="flex gap-2 mt-4">
-                  <button type="button" className="flex-1 rounded-lg px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90" style={{ backgroundColor: "#27283B" }}>Withdraw</button>
-                  <button type="button" className="flex-1 rounded-lg bg-gradient-to-b from-[#4066FF] to-[#0026FF] hover:from-[#3355FF] hover:to-[#001fcc] text-white text-sm font-medium py-2.5 transition shadow-[0_4px_12px_rgba(0,38,255,0.25)] ring-1 ring-inset ring-[#4066FF]/90">Transfer</button>
-                </div>
-                <p className="mt-auto pt-4 text-lg text-slate-500 flex items-center gap-1.5 shrink-0">
-                  <svg className="w-5 h-5 text-slate-500 shrink-0" fill="currentColor" viewBox="0 0 24 24"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" /></svg>
-                  Information needed
-                </p>
             </div>
           </div>
       </div>
@@ -1039,20 +1000,41 @@ export default function GuardDashboardPage() {
                       <p className="text-white font-semibold truncate">{alert.title}</p>
                       {alert.body && <p className="text-slate-400 text-sm mt-0.5 line-clamp-2">{alert.body}</p>}
                     </div>
-                    <div className="text-right shrink-0">
-                      <p className={`font-medium text-sm capitalize ${alert.severity === "high" || alert.severity === "critical" ? "text-[#F00500]" : alert.severity === "medium" ? "text-amber-500" : "text-slate-300"}`}>{alert.severity}</p>
-                      <p className="text-slate-400 text-xs mt-0.5">{formatContractScanDate(alert.created_at)}</p>
+                    <div className="text-right shrink-0 flex flex-col items-end gap-2">
+                      <div>
+                        <p className={`font-medium text-sm capitalize ${alert.severity === "high" || alert.severity === "critical" ? "text-[#F00500]" : alert.severity === "medium" ? "text-amber-500" : "text-slate-300"}`}>{alert.severity}</p>
+                        <p className="text-slate-400 text-xs mt-0.5">{formatContractScanDate(alert.created_at)}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleMarkAlertRead(alert.id)}
+                        disabled={markingAlertsRead}
+                        className="text-xs text-[#4066FF] hover:text-white disabled:opacity-50"
+                      >
+                        Mark read
+                      </button>
                     </div>
                   </div>
                 ))
               )}
             </div>
             <div className="p-5 flex gap-3 border-t border-slate-700/50">
-              <button type="button" onClick={() => setUnreadAlertModalOpen(false)} className="flex-1 rounded-xl font-bold text-white py-3 px-4 transition hover:opacity-90" style={{ background: "linear-gradient(to bottom, #4a4a4a 0%, #414141 50%, #383838 100%)" }}>
-                Done
+              <button
+                type="button"
+                onClick={() => setUnreadAlertModalOpen(false)}
+                className="flex-1 rounded-xl font-bold text-white py-3 px-4 transition hover:opacity-90"
+                style={{ background: "linear-gradient(to bottom, #4a4a4a 0%, #414141 50%, #383838 100%)" }}
+              >
+                Close
               </button>
-              <button type="button" onClick={() => setUnreadAlertModalOpen(false)} className="flex-1 rounded-xl font-medium text-white py-3 px-4 transition hover:opacity-95" style={{ background: "linear-gradient(to bottom, #3366ff 0%, #0026FF 50%, #001fcc 100%)" }}>
-                Done
+              <button
+                type="button"
+                onClick={handleMarkAllAlertsRead}
+                disabled={markingAlertsRead || !unreadAlertsData?.alerts?.length}
+                className="flex-1 rounded-xl font-medium text-white py-3 px-4 transition hover:opacity-95 disabled:opacity-50"
+                style={{ background: "linear-gradient(to bottom, #3366ff 0%, #0026FF 50%, #001fcc 100%)" }}
+              >
+                {markingAlertsRead ? "Updating…" : "Mark all read"}
               </button>
             </div>
           </div>

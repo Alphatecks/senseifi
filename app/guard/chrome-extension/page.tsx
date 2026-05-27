@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
+import { useGuardSearch } from "@/context/GuardSearchContext";
 
 const CARD_STYLE = "rounded-2xl border p-5 flex flex-col shadow-sm";
 const CARD_BG = { backgroundColor: "#191D35", borderColor: "#191D35" };
@@ -18,8 +19,16 @@ const TRADE_ROWS = [
 ];
 
 export default function ChromeExtensionPage() {
-  const [search, setSearch] = useState("");
+  const { query, setQuery } = useGuardSearch();
   const [days, setDays] = useState("7");
+
+  const filteredTradeRows = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    if (!term) return TRADE_ROWS;
+    return TRADE_ROWS.filter((row) =>
+      `${row.wallet} ${row.network} ${row.activity} ${row.risk} ${row.insight} ${row.time}`.toLowerCase().includes(term)
+    );
+  }, [query]);
 
   return (
     <div className="rounded-2xl bg-blue-950/25 border border-blue-900/40 p-6 space-y-6">
@@ -101,7 +110,7 @@ export default function ChromeExtensionPage() {
           <div className="flex items-center gap-2 flex-wrap min-w-0">
             <div className="flex-1 min-w-[160px] flex items-center gap-2 rounded-lg bg-slate-800/80 border border-slate-700/50 px-3 py-2.5">
               <svg className="w-4 h-4 text-slate-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8" strokeWidth={2} /><path d="M21 21l-4.35-4.35" strokeWidth={2} /></svg>
-              <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search" className="flex-1 min-w-0 bg-transparent text-sm text-white placeholder:text-slate-500 outline-none" />
+              <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search" className="flex-1 min-w-0 bg-transparent text-sm text-white placeholder:text-slate-500 outline-none" />
             </div>
             <button type="button" className="w-10 h-10 rounded-lg bg-slate-800/80 border border-slate-700/50 flex items-center justify-center text-slate-400 hover:text-white transition" aria-label="Filter">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" /></svg>
@@ -127,7 +136,7 @@ export default function ChromeExtensionPage() {
               </tr>
             </thead>
             <tbody>
-              {TRADE_ROWS.map((row, i) => (
+              {filteredTradeRows.map((row, i) => (
                 <tr key={i} className="border-b border-slate-700/40 hover:bg-slate-800/40 transition">
                   <td className="py-3 px-4">
                     <span className="block font-semibold text-white">{row.wallet}</span>

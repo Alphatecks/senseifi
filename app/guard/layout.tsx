@@ -7,8 +7,11 @@ import { usePathname, useRouter } from "next/navigation";
 import { useDashboardUser } from "@/context/DashboardUserContext";
 import { RescanModalProvider } from "@/context/RescanModalContext";
 import { ConnectNetworksModalProvider } from "@/context/ConnectWalletsModalContext";
+import { GuardSearchProvider } from "@/context/GuardSearchContext";
 import { useWallet } from "@/hooks/useWallet";
 import { getDashboardSummary } from "@/services/dashboardService";
+import GuardHeaderSearch from "@/app/guard/components/GuardHeaderSearch";
+import ClaimXpModal from "@/views/components/ClaimXpModal";
 
 import chromeIcon from "@/assets/icons/chrome.png";
 import needHelpBackground from "@/assets/icons/Background.png";
@@ -100,15 +103,54 @@ function formatBalance(totalAssetUsd: string | null | undefined): string {
   return totalAssetUsd.startsWith("$") ? totalAssetUsd : `$${totalAssetUsd}`;
 }
 
+function NitroIcon({ className }: { className?: string }) {
+  const gradientId = React.useId().replace(/:/g, "");
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <defs>
+        <linearGradient id={`nitro-${gradientId}`} x1="5" y1="3" x2="19" y2="21" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#5865F2" />
+          <stop stopColor="#9B59FF" />
+          <stop stopColor="#FF6AD5" />
+        </linearGradient>
+      </defs>
+      <path d="M12 2.5 4.5 7v10L12 21.5 19.5 17V7L12 2.5Z" fill={`url(#nitro-${gradientId})`} />
+      <path d="M12 2.5v19M4.5 7l7.5 4.25L19.5 7M4.5 17l7.5-4.25L19.5 17" stroke="white" strokeOpacity="0.28" strokeWidth="0.75" />
+    </svg>
+  );
+}
+
+function XpLabel({ iconClassName = "w-4 h-4 shrink-0" }: { iconClassName?: string }) {
+  return (
+    <span className="flex items-center gap-1.5">
+      <NitroIcon className={iconClassName} />
+      XP
+    </span>
+  );
+}
+
 export default function GuardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { activeAddress: address } = useWallet();
+  const { activeAddress: address, isConnected, isPending } = useWallet();
   const { dashboardUser } = useDashboardUser();
   const [totalAssetUsd, setTotalAssetUsd] = useState<string | null>(null);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
+  const [xpModalOpen, setXpModalOpen] = useState(false);
+  const [walletGateReady, setWalletGateReady] = useState(false);
+
+  useEffect(() => {
+    setWalletGateReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!walletGateReady || isPending) return;
+    if (!isConnected || !address?.trim()) {
+      router.replace("/");
+    }
+  }, [walletGateReady, isPending, isConnected, address, router]);
 
   useEffect(() => {
     if (!address) {
@@ -148,9 +190,19 @@ export default function GuardLayout({ children }: { children: React.ReactNode })
 
   const title = pathname === "/guard/wallet-security" ? "Wallet Security" : pathname === "/guard/contract-scanner" ? "Contract Scanner" : pathname === "/guard/chrome-extension" ? "Chrome extension" : pathname === "/guard/activity-monitor" ? "Activity Monitor" : pathname === "/guard/threat-intelligence" ? "Threat Intelligence" : pathname === "/guard/settings" ? "Settings" : "Dashboard";
 
+  const hasSignedInWallet = Boolean(isConnected && address?.trim());
+  if (!walletGateReady || isPending || !hasSignedInWallet) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#0a0a1a] text-slate-400 text-sm">
+        {!walletGateReady || isPending ? "Loading…" : "Redirecting…"}
+      </div>
+    );
+  }
+
   return (
     <RescanModalProvider>
     <ConnectNetworksModalProvider>
+    <GuardSearchProvider>
     <div className="h-screen flex overflow-hidden bg-[#0a0a1a] text-white relative">
       <div className="dashboard-hack-bg fixed inset-0 pointer-events-none z-0" aria-hidden />
       {/* Mobile only: visible blockchain / crypto background animation */}
@@ -281,6 +333,9 @@ export default function GuardLayout({ children }: { children: React.ReactNode })
             <span className="font-semibold text-white text-xl">SenseiFi</span>
           </div>
           <div className="flex items-center gap-2">
+            <button type="button" onClick={() => setXpModalOpen(true)} className="flex items-center justify-center h-10 px-3 rounded-xl border-2 border-white/25 bg-[#0f1220] text-sm font-semibold text-[#4066FF] hover:bg-white/10 transition shrink-0" aria-label="Experience points">
+              <XpLabel />
+            </button>
             <div className="relative" ref={mobileNotificationRef}>
               <button type="button" onClick={() => setNotificationsOpen((v) => !v)} className="relative flex items-center justify-center w-10 h-10 rounded-xl border-2 border-white/25 bg-[#0f1220] text-slate-400 hover:text-white transition" aria-label="Notifications">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
@@ -372,25 +427,15 @@ export default function GuardLayout({ children }: { children: React.ReactNode })
             <span className="text-white font-semibold text-sm sm:text-base">{title}</span>
           </div>
           <div className="hidden md:flex flex-1 min-w-0 mx-4" style={{ minWidth: "320px" }}>
-            <div className="emboss-inset-3d-input w-full flex items-center rounded-lg bg-[#1a1d24] overflow-hidden min-w-0 border border-slate-800/50">
-              <input
-                type="search"
-                placeholder="Search"
-                className="flex-1 min-w-0 w-0 bg-transparent px-4 py-3.5 text-sm text-white placeholder:text-slate-500 outline-none border-none"
-                aria-label="Search"
-              />
-              <button type="button" className="emboss-raised flex items-center justify-center w-11 h-12 rounded-r-lg bg-[#23262e] text-slate-400 hover:text-white transition shrink-0" aria-label="Search">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-              </button>
-            </div>
+            <GuardHeaderSearch />
           </div>
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <button type="button" className="emboss-inset-3d-input flex items-center gap-2 rounded-lg bg-[#1a1d24] px-3 py-3 sm:px-4 sm:py-3.5 text-white text-sm font-medium hover:bg-[#1e2128] transition border border-slate-800/50">
               <Image src="/images/icons/wallet-header.png" alt="" width={24} height={24} className="w-5 h-5 sm:w-6 sm:h-6 opacity-80" />
               <span className="hidden min-[400px]:inline">{formatBalance(totalAssetUsd)}</span>
             </button>
-            <button type="button" className="emboss-raised flex items-center justify-center w-10 h-11 sm:w-11 sm:h-12 rounded-lg bg-[#1a1d24] hover:bg-[#1e2128] transition shrink-0" aria-label="Network">
-              <Image src="/images/icons/wifi-icon.png" alt="" width={22} height={22} className="w-5 h-5 sm:w-6 sm:h-6" />
+            <button type="button" onClick={() => setXpModalOpen(true)} className="emboss-inset-3d-input flex items-center rounded-lg bg-[#1a1d24] px-3 py-3 sm:px-4 sm:py-3.5 text-sm font-semibold text-[#4066FF] hover:bg-[#1e2128] transition border border-slate-800/50 shrink-0" aria-label="Experience points">
+              <XpLabel iconClassName="w-4 h-4 sm:w-[18px] sm:h-[18px] shrink-0" />
             </button>
             <div className="relative shrink-0" ref={notificationRef}>
               <button type="button" onClick={() => setNotificationsOpen((v) => !v)} className="emboss-raised relative flex items-center justify-center w-10 h-11 sm:w-11 sm:h-12 rounded-lg bg-[#1a1d24] text-slate-400 hover:text-white hover:bg-[#1e2128] transition shrink-0" aria-label="Notifications" aria-expanded={notificationsOpen}>
@@ -454,7 +499,9 @@ export default function GuardLayout({ children }: { children: React.ReactNode })
         </header>
         <div className={`flex-1 min-h-0 overflow-auto p-6 ${["/guard", "/guard/wallet-security", "/guard/activity-monitor", "/guard/threat-intelligence", "/guard/contract-scanner", "/guard/settings"].includes(pathname) ? "hide-scrollbar" : ""}`}>{children}</div>
       </main>
+      <ClaimXpModal open={xpModalOpen} onClose={() => setXpModalOpen(false)} />
     </div>
+    </GuardSearchProvider>
     </ConnectNetworksModalProvider>
     </RescanModalProvider>
   );

@@ -60,7 +60,7 @@ async function dashboardFetch<T>(
       headers: { 'Content-Type': 'application/json', ...(options.headers as Record<string, string>) },
       ...options,
     });
-    const data = res.ok ? await res.json().catch(() => null) : null;
+    const data = (await res.json().catch(() => null)) as T | null;
     return { ok: res.ok, status: res.status, data };
   } catch (error) {
     console.error('[Dashboard API] Network error:', {
@@ -151,10 +151,12 @@ export interface SecurityOverviewData {
     id?: string;
     signal_id?: string;
     threat_id?: string;
+    uuid?: string;
     address: string;
     threat_type: string;
     detected_at: string;
     risk_level: string;
+    [key: string]: unknown;
   }>;
   ai_threat_explanation?: {
     description: string;
@@ -177,6 +179,46 @@ export async function getSecurityOverview(walletAddress: string): Promise<Securi
   return null;
 }
 
+export interface LiveScamSignalSummary {
+  id?: string;
+  signal_id?: string;
+  threat_id?: string;
+  uuid?: string;
+  address: string;
+  threat_type: string;
+  detected_at: string;
+  risk_level: string;
+  [key: string]: unknown;
+}
+
+export async function getLiveScamSignalsSummary(
+  walletAddress?: string,
+  limit: number = 50
+): Promise<LiveScamSignalSummary[]> {
+  const params = new URLSearchParams({ limit: String(Math.min(100, Math.max(1, limit))) });
+  if (walletAddress?.trim()) {
+    params.set('wallet_address', walletAddress.trim());
+  }
+  const endpoint = `/dashboard/live-scam-signals/summary?${params}`;
+  const url = `${DASHBOARD_API_BASE_URL}${endpoint}`;
+  console.log('[Dashboard API] Live scam signals summary — request:', {
+    walletAddress: walletAddress?.trim() || null,
+    limit,
+    method: 'GET',
+    url,
+    endpoint,
+  });
+  const { ok, status, data } = await dashboardFetch<{ success?: boolean; data?: LiveScamSignalSummary[] }>(
+    endpoint
+  );
+  console.log('[Dashboard API] Live scam signals summary — response:', { ok, status, data, endpoint });
+  if (!data) return [];
+  const parsed = data as { success?: boolean; data?: LiveScamSignalSummary[] };
+  if (Array.isArray(parsed.data)) return parsed.data;
+  if (Array.isArray(data)) return data as LiveScamSignalSummary[];
+  return [];
+}
+
 export interface LiveScamSignalDetailsData {
   id?: string;
   signal_id?: string;
@@ -192,16 +234,28 @@ export interface LiveScamSignalDetailsData {
 
 export async function getLiveScamSignalDetails(
   signalId: string,
-  walletAddress: string
+  walletAddress?: string
 ): Promise<LiveScamSignalDetailsData | null> {
-  if (!signalId?.trim() || !walletAddress?.trim()) return null;
-  const params = new URLSearchParams({ wallet_address: walletAddress.trim() });
+  if (!signalId?.trim()) return null;
+  const endpoint = walletAddress?.trim()
+    ? `/dashboard/live-scam-signals/${encodeURIComponent(signalId.trim())}?${new URLSearchParams({ wallet_address: walletAddress.trim() })}`
+    : `/dashboard/live-scam-signals/${encodeURIComponent(signalId.trim())}`;
+  const url = `${DASHBOARD_API_BASE_URL}${endpoint}`;
+  console.log('[Dashboard API] Live scam signal details — request:', {
+    signalId: signalId.trim(),
+    walletAddress: walletAddress?.trim() || null,
+    method: 'GET',
+    url,
+    endpoint,
+  });
   const { ok, status, data } = await dashboardFetch<{ success?: boolean; data?: LiveScamSignalDetailsData } | LiveScamSignalDetailsData>(
-    `/dashboard/live-scam-signals/${encodeURIComponent(signalId.trim())}?${params}`
+    endpoint
   );
-  if (status === 404 || !ok || !data) return null;
+  console.log('[Dashboard API] Live scam signal details — response:', { ok, status, data, endpoint });
+  if (!data) return null;
   const wrapped = data as { success?: boolean; data?: LiveScamSignalDetailsData };
   if (wrapped.success && wrapped.data) return wrapped.data;
+  if (wrapped.success === false) return null;
   return data as LiveScamSignalDetailsData;
 }
 
@@ -401,7 +455,49 @@ export async function getRiskyTokens(walletAddress: string, limit: number = 20):
   return Array.isArray(list) ? list : [];
 }
 
-// --- Analyze Transaction (Protection) ---
+// --- Threat correlation (shared across protection + dashboard APIs) ---
+
+export interface ThreatCorrelation {
+  campaign_id: string;
+  campaign_type: string;
+  confidence_score: number;
+  risk_score: number;
+  narrative: string;
+  evidence_count: number;
+  last_seen_at: string;
+}
+
+export interface ThreatCampaign {
+  id: string;
+  wallet_address: string;
+  campaign_type: string;
+  status: string;
+  confidence_score: number;
+  risk_score: number;
+  narrative: string;
+  signal_categories: string[];
+  evidence_count: number;
+  first_seen_at: string;
+  last_seen_at: string;
+}
+
+export async function getThreatCampaigns(walletAddress?: string): Promise<ThreatCampaign[]> {
+  const params = new URLSearchParams();
+  if (walletAddress?.trim()) {
+    params.set('wallet_address', walletAddress.trim());
+  }
+  const qs = params.toString();
+  const endpoint = `/dashboard/threat-campaigns${qs ? `?${qs}` : ''}`;
+  const { ok, status, data } = await dashboardFetch<{ success?: boolean; data?: ThreatCampaign[] }>(endpoint);
+  console.log('[Dashboard API] Threat campaigns response:', { ok, status, data, endpoint });
+  if (!data) return [];
+  const parsed = data as { success?: boolean; data?: ThreatCampaign[] };
+  if (Array.isArray(parsed.data)) return parsed.data;
+  if (Array.isArray(data)) return data as ThreatCampaign[];
+  return [];
+}
+
+// --- Analyze Transaction (Protection / Dashboard) ---
 
 export interface AnalyzeTransactionRequest {
   wallet_address: string;
@@ -411,6 +507,14 @@ export interface AnalyzeTransactionRequest {
   chain_id: number;
 }
 
+export interface AnalyzeTransactionRiskBreakdown {
+  approval_risk: number;
+  delegatecall_risk?: number;
+  destination_risk?: number;
+  value_exposure_risk?: number;
+  simulation_drain: number;
+}
+
 export interface AnalyzeTransactionResponse {
   skipped: boolean;
   risk_score: number;
@@ -418,18 +522,22 @@ export interface AnalyzeTransactionResponse {
   threat_types: string[] | null;
   explanation: string;
   recommendation: string;
-  risk_breakdown: {
-    approval_risk: number;
-    simulation_drain: number;
-  };
+  warning?: string;
+  recommended_action?: string;
+  risk_breakdown: AnalyzeTransactionRiskBreakdown;
+  correlation?: ThreatCorrelation | null;
 }
 
 export async function analyzeTransaction(body: AnalyzeTransactionRequest): Promise<AnalyzeTransactionResponse | null> {
-  const { ok, data } = await dashboardFetch<AnalyzeTransactionResponse>(
-    '/protection/transaction/analyze',
-    { method: 'POST', body: JSON.stringify(body) }
-  );
-  if (!ok || !data) return null;
+  const walletAddress = body.wallet_address?.trim();
+  if (!walletAddress) return null;
+  const endpoint = `/dashboard/${encodeURIComponent(walletAddress)}/analyze-tx`;
+  const { ok, status, data } = await dashboardFetch<AnalyzeTransactionResponse>(endpoint, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  console.log('[Dashboard API] Analyze transaction response:', { ok, status, data, endpoint });
+  if (!data) return null;
   return data;
 }
 
@@ -777,9 +885,9 @@ export async function getSecurityAlerts(
   return null;
 }
 
-// --- How to fix (emergency remediation) ---
+// --- Threat lifecycle (active / history / resolve / dismiss) ---
 
-export interface HowToFixThreatItem {
+export interface WalletThreatItem {
   id: string;
   title: string;
   severity: string;
@@ -787,6 +895,301 @@ export interface HowToFixThreatItem {
   surface: string;
   source_contract: string | null;
   detected_at: string;
+  status?: string;
+  where_to_fix?: string;
+  recommended_action?: string;
+  fix_steps?: string[];
+  resolved_at?: string | null;
+  dismissed_at?: string | null;
+}
+
+export interface ActiveThreatsMeta {
+  count: number;
+  high_priority_count?: number;
+}
+
+export interface ActiveThreatsResponse {
+  data: WalletThreatItem[];
+  meta: ActiveThreatsMeta;
+}
+
+export interface ThreatHistoryMeta {
+  page: number;
+  per_page: number;
+  total: number;
+}
+
+export interface ThreatHistoryResponse {
+  data: WalletThreatItem[];
+  meta: ThreatHistoryMeta;
+}
+
+export interface ThreatActionResponse {
+  success: boolean;
+  data?: WalletThreatItem;
+  message?: string;
+}
+
+export interface WalletHealthRefreshData {
+  security_status: DashboardSecurityStatus;
+  open_threats_count?: number;
+}
+
+export interface ThreatVerifyResponse {
+  success: boolean;
+  data?: {
+    verified?: boolean;
+    resolved?: boolean;
+    threat?: WalletThreatItem;
+    message?: string;
+  };
+  message?: string;
+}
+
+export interface VerifyAllThreatsResponse {
+  success: boolean;
+  data?: {
+    verified_count?: number;
+    resolved_count?: number;
+    still_open_count?: number;
+    results?: Array<{ threat_id: string; verified: boolean; resolved: boolean }>;
+  };
+  message?: string;
+}
+
+export type ThreatRemediationAction =
+  | 'revoke_approval'
+  | 'block_contract'
+  | 'disconnect_dapp'
+  | 'hide_token';
+
+export interface ThreatRemediationPayload {
+  action: ThreatRemediationAction;
+  metadata: Record<string, unknown>;
+}
+
+export interface ThreatRemediationRecordResponse {
+  success: boolean;
+  data?: WalletThreatItem;
+  message?: string;
+}
+
+export function inferThreatRemediation(item: WalletThreatItem): ThreatRemediationPayload | null {
+  const type = String(item.threat_type || '').toLowerCase();
+  const contract = item.source_contract?.trim() || undefined;
+
+  if (type.includes('approval') || type.includes('allowance')) {
+    return {
+      action: 'revoke_approval',
+      metadata: {
+        spender_address: contract,
+        note: 'Recorded via SenseiGuard dashboard',
+        chain_id: 1,
+      },
+    };
+  }
+  if (type.includes('contract') || type.includes('malicious') || type.includes('drainer') || type.includes('block')) {
+    return {
+      action: 'block_contract',
+      metadata: {
+        contract_address: contract,
+        note: 'Recorded via SenseiGuard dashboard',
+      },
+    };
+  }
+  if (type.includes('phishing') || type.includes('dapp') || type.includes('domain') || type.includes('connect')) {
+    const domain = String(item.surface || item.where_to_fix || '').trim();
+    if (!domain) return null;
+    return {
+      action: 'disconnect_dapp',
+      metadata: {
+        domain,
+        note: 'Recorded via SenseiGuard dashboard',
+      },
+    };
+  }
+  if (type.includes('token') || type.includes('scam') || type.includes('rug')) {
+    if (!contract) return null;
+    return {
+      action: 'hide_token',
+      metadata: {
+        token_address: contract,
+        note: 'Recorded via SenseiGuard dashboard',
+      },
+    };
+  }
+  return null;
+}
+
+export async function verifyThreat(
+  walletAddress: string,
+  threatId: string
+): Promise<ThreatVerifyResponse | null> {
+  if (!walletAddress?.trim() || !threatId?.trim()) return null;
+  const endpoint = `/dashboard/${encodeURIComponent(walletAddress.trim())}/threats/${encodeURIComponent(threatId.trim())}/verify`;
+  const url = `${DASHBOARD_API_BASE_URL}${endpoint}`;
+  console.log('[Dashboard API] Verify threat — request:', {
+    walletAddress: walletAddress.trim(),
+    threatId: threatId.trim(),
+    method: 'POST',
+    url,
+    endpoint,
+  });
+  const { ok, status, data } = await dashboardFetch<ThreatVerifyResponse>(endpoint, {
+    method: 'POST',
+    body: '{}',
+  });
+  console.log('[Dashboard API] Verify threat — response:', { ok, status, data, endpoint });
+  if (!data) return null;
+  return data;
+}
+
+export async function verifyAllThreats(
+  walletAddress: string
+): Promise<VerifyAllThreatsResponse | null> {
+  if (!walletAddress?.trim()) return null;
+  const { ok, data } = await dashboardFetch<VerifyAllThreatsResponse>(
+    `/dashboard/${encodeURIComponent(walletAddress.trim())}/threats/verify-all`,
+    { method: 'POST', body: '{}' }
+  );
+  if (!ok || !data) return null;
+  return data;
+}
+
+export async function recordThreatRemediationAction(
+  walletAddress: string,
+  threatId: string,
+  payload: ThreatRemediationPayload
+): Promise<ThreatRemediationRecordResponse | null> {
+  if (!walletAddress?.trim() || !threatId?.trim()) return null;
+  const { ok, data } = await dashboardFetch<ThreatRemediationRecordResponse>(
+    `/dashboard/${encodeURIComponent(walletAddress.trim())}/threats/${encodeURIComponent(threatId.trim())}/actions`,
+    { method: 'POST', body: JSON.stringify(payload) }
+  );
+  if (!ok || !data) return null;
+  return data;
+}
+
+export async function getActiveThreats(
+  walletAddress: string,
+  limit: number = 20
+): Promise<ActiveThreatsResponse | null> {
+  if (!walletAddress?.trim()) return null;
+  const params = new URLSearchParams({ limit: String(Math.min(50, Math.max(1, limit))) });
+  const { ok, data } = await dashboardFetch<{
+    success?: boolean;
+    data?: WalletThreatItem[];
+    meta?: ActiveThreatsMeta;
+  }>(`/dashboard/${encodeURIComponent(walletAddress.trim())}/threats/active?${params}`);
+  if (!ok || !data) return null;
+  const parsed = data as { success?: boolean; data?: WalletThreatItem[]; meta?: ActiveThreatsMeta };
+  const list = Array.isArray(parsed.data) ? parsed.data : [];
+  const meta = parsed.meta ?? {
+    count: list.length,
+    high_priority_count: list.filter((item) => String(item.severity).toLowerCase() === 'high').length,
+  };
+  return { data: list, meta };
+}
+
+export async function getThreatHistory(
+  walletAddress: string,
+  page: number = 1,
+  perPage: number = 10
+): Promise<ThreatHistoryResponse | null> {
+  if (!walletAddress?.trim()) return null;
+  const params = new URLSearchParams({
+    page: String(Math.max(1, page)),
+    per_page: String(Math.min(50, Math.max(1, perPage))),
+  });
+  const { ok, data } = await dashboardFetch<{
+    success?: boolean;
+    data?: WalletThreatItem[];
+    meta?: ThreatHistoryMeta;
+  }>(`/dashboard/${encodeURIComponent(walletAddress.trim())}/threats/history?${params}`);
+  if (!ok || !data) return null;
+  const parsed = data as { success?: boolean; data?: WalletThreatItem[]; meta?: ThreatHistoryMeta };
+  const list = Array.isArray(parsed.data) ? parsed.data : [];
+  const meta = parsed.meta ?? { page, per_page: perPage, total: list.length };
+  return { data: list, meta };
+}
+
+export async function resolveThreat(
+  walletAddress: string,
+  threatId: string,
+  resolutionNote?: string
+): Promise<ThreatActionResponse | null> {
+  if (!walletAddress?.trim() || !threatId?.trim()) return null;
+  const body = resolutionNote?.trim()
+    ? JSON.stringify({ resolution_note: resolutionNote.trim() })
+    : '{}';
+  const { ok, data } = await dashboardFetch<ThreatActionResponse>(
+    `/dashboard/${encodeURIComponent(walletAddress.trim())}/threats/${encodeURIComponent(threatId.trim())}/resolve`,
+    { method: 'POST', body }
+  );
+  if (!ok || !data) return null;
+  return data;
+}
+
+export async function dismissThreat(
+  walletAddress: string,
+  threatId: string,
+  dismissReason?: string
+): Promise<ThreatActionResponse | null> {
+  if (!walletAddress?.trim() || !threatId?.trim()) return null;
+  const body = dismissReason?.trim()
+    ? JSON.stringify({ dismiss_reason: dismissReason.trim() })
+    : '{}';
+  const { ok, data } = await dashboardFetch<ThreatActionResponse>(
+    `/dashboard/${encodeURIComponent(walletAddress.trim())}/threats/${encodeURIComponent(threatId.trim())}/dismiss`,
+    { method: 'POST', body }
+  );
+  if (!ok || !data) return null;
+  return data;
+}
+
+export async function refreshWalletHealth(
+  walletAddress: string
+): Promise<WalletHealthRefreshData | null> {
+  if (!walletAddress?.trim()) return null;
+  const { ok, data } = await dashboardFetch<{ success?: boolean; data?: WalletHealthRefreshData }>(
+    `/dashboard/${encodeURIComponent(walletAddress.trim())}/health/refresh`,
+    { method: 'POST', body: '{}' }
+  );
+  if (!ok || !data) return null;
+  const parsed = data as { success?: boolean; data?: WalletHealthRefreshData };
+  if (parsed?.success && parsed.data) return parsed.data;
+  if (parsed?.data?.security_status) return parsed.data;
+  return null;
+}
+
+export async function markAlertRead(
+  walletAddress: string,
+  alertId: string
+): Promise<boolean> {
+  if (!walletAddress?.trim() || !alertId?.trim()) return false;
+  const { ok, data } = await dashboardFetch<{ success?: boolean }>(
+    `/dashboard/${encodeURIComponent(walletAddress.trim())}/alerts/${encodeURIComponent(alertId.trim())}/read`,
+    { method: 'POST', body: '{}' }
+  );
+  if (!ok) return false;
+  const parsed = data as { success?: boolean } | null;
+  return parsed?.success !== false;
+}
+
+export async function markAllAlertsRead(walletAddress: string): Promise<boolean> {
+  if (!walletAddress?.trim()) return false;
+  const { ok, data } = await dashboardFetch<{ success?: boolean }>(
+    `/dashboard/${encodeURIComponent(walletAddress.trim())}/alerts/read-all`,
+    { method: 'POST', body: '{}' }
+  );
+  if (!ok) return false;
+  const parsed = data as { success?: boolean } | null;
+  return parsed?.success !== false;
+}
+
+// --- How to fix (emergency remediation) ---
+
+export interface HowToFixThreatItem extends WalletThreatItem {
   where_to_fix: string;
   recommended_action: string;
   fix_steps: string[];
@@ -883,6 +1286,7 @@ export interface ApprovalIngestResponse {
   risk_score: number;
   should_alert: boolean;
   warning: string | null;
+  correlation?: ThreatCorrelation | null;
 }
 
 export async function ingestApproval(payload: ApprovalIngestPayload): Promise<ApprovalIngestResponse | null> {

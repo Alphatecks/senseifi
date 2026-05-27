@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
 
 import { getDashboardOverview, getActivityFeed, getActivityMonitorWallets, getActivityMonitorDapps } from "@/services/dashboardService";
 import type { DashboardOverviewData, ActivityFeedItem, ActivityFeedPagination, ActivityMonitorWalletItem, ActivityMonitorDappItem } from "@/services/dashboardService";
 import { useDashboardUser } from "@/context/DashboardUserContext";
+import { useGuardSearch } from "@/context/GuardSearchContext";
 import { useRescanModal } from "@/context/RescanModalContext";
 import { useWallet } from "@/hooks/useWallet";
 
@@ -153,7 +154,7 @@ export default function ActivityMonitorPage() {
   const { activeAddress: address } = useWallet();
   const { dashboardUser } = useDashboardUser();
   const { openRescanModal } = useRescanModal();
-  const [search, setSearch] = useState("");
+  const { query, setQuery } = useGuardSearch();
   const [connectedWalletsList, setConnectedWalletsList] = useState<ActivityMonitorWalletItem[] | null>(null);
   const [connectedWalletsLoading, setConnectedWalletsLoading] = useState(false);
   const [connectedDappsList, setConnectedDappsList] = useState<ActivityMonitorDappItem[] | null>(null);
@@ -245,9 +246,21 @@ export default function ActivityMonitorPage() {
     </span>
   );
 
-  const filteredFeedForFull = liveFeedSearch.trim()
-    ? feedData.filter((row) => `${row.wallet} ${row.type}`.toLowerCase().includes(liveFeedSearch.trim().toLowerCase()))
-    : feedData;
+  const filteredFeedForFull = useMemo(() => {
+    const term = (liveFeedSearch || query).trim().toLowerCase();
+    if (!term) return feedData;
+    return feedData.filter((row) =>
+      `${row.wallet} ${row.type} ${row.asset} ${row.counterparty} ${row.risk_level} ${row.status}`.toLowerCase().includes(term)
+    );
+  }, [feedData, liveFeedSearch, query]);
+
+  const filteredFeed = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    if (!term) return feedData;
+    return feedData.filter((row) =>
+      `${row.wallet} ${row.type} ${row.asset} ${row.counterparty} ${row.risk_level} ${row.status}`.toLowerCase().includes(term)
+    );
+  }, [feedData, query]);
 
   return (
     <>
@@ -748,8 +761,8 @@ export default function ActivityMonitorPage() {
                 <input
                   type="search"
                   placeholder="Search"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
                   className="w-full rounded-lg border bg-[#25283D] border-[#25283D] text-white text-sm placeholder:text-slate-500 pl-4 pr-10 py-2.5 focus:outline-none focus:ring-1 focus:ring-slate-500"
                 />
                 <svg className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -805,8 +818,12 @@ export default function ActivityMonitorPage() {
                   <tr>
                     <td colSpan={7} className="py-8 px-4 text-center text-slate-500 text-sm">No activity yet.</td>
                   </tr>
+                ) : filteredFeed.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-8 px-4 text-center text-slate-500 text-sm">No activity matches your search.</td>
+                  </tr>
                 ) : (
-                  feedData.map((row) => {
+                  filteredFeed.map((row) => {
                     const riskLabel = capitalizeFirst(row.risk_level);
                     const statusLabel = capitalizeFirst(row.status);
                     const riskClass = RISK_CLASS[riskLabel as RiskLevel] ?? "text-slate-400";

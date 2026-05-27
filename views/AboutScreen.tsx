@@ -45,6 +45,7 @@ export default function AboutScreen() {
                   loop
                   muted
                   playsInline
+                  preload="metadata"
                   className="w-full h-[280px] md:h-[420px] lg:h-[500px] object-contain mix-blend-screen contrast-125 brightness-110"
                 />
               </div>
@@ -81,20 +82,21 @@ export default function AboutScreen() {
 
       <section className="w-full px-4 md:px-8 lg:px-12 xl:px-20 mt-12 md:mt-16">
         <div className="w-full max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-5">
-          <div className="rounded-[26px] border border-white/10 bg-[#0e1630] p-6 md:p-8 min-h-[360px] md:min-h-[420px] flex flex-col justify-between">
+          <div className="rounded-[26px] border border-white/10 bg-[#0e1630] p-6 md:p-8 min-h-[480px] md:min-h-[640px] flex flex-col justify-between">
             <h2 className="text-4xl md:text-5xl font-normal leading-tight max-w-md">
               Built for a Smarter,
               <br />
               Safer Crypto Future
             </h2>
-            <div className="mt-8 rounded-2xl overflow-hidden border border-white/10">
+            <div className="mt-8 relative w-full h-[340px] md:h-[440px] lg:h-[520px] overflow-hidden">
               <video
                 src="/images/about%20mid%20gif.mp4"
                 autoPlay
                 loop
                 muted
                 playsInline
-                className="w-full h-[180px] md:h-[220px] object-cover"
+                preload="none"
+                className="absolute inset-x-0 bottom-0 h-[130%] w-full object-cover object-bottom mix-blend-screen contrast-125 brightness-110"
               />
             </div>
           </div>

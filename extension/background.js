@@ -86,6 +86,8 @@ const STRICT_METHODS = new Set([
 ]);
 
 const CONNECT_METHODS = new Set(['eth_requestAccounts', 'wallet_requestPermissions']);
+/** Out of 10 — at or below is "safe to proceed"; above requires block/review modal. */
+const RISK_LEVEL10_REVIEW_THRESHOLD = 3;
 
 const INJECTION_DEBOUNCE_MS = 1500;
 const BACKEND_RISK_TIMEOUT_MS = 1200;
@@ -180,6 +182,17 @@ function clampRisk(score) {
   return Math.max(0, Math.min(100, Math.round(score)));
 }
 
+function resolveRiskLevel10({ backend, dappCheck, riskScore }) {
+  if (backend && typeof backend.riskLevel10 === 'number') {
+    return Math.max(0, Math.min(10, backend.riskLevel10));
+  }
+  if (dappCheck && typeof dappCheck.riskLevel10 === 'number') {
+    return Math.max(0, Math.min(10, dappCheck.riskLevel10));
+  }
+  const score = typeof riskScore === 'number' ? riskScore : 0;
+  return Math.max(0, Math.min(10, score <= 10 ? score : score / 10));
+}
+
 function makeDecision(score, settings) {
   const riskScore = clampRisk(score);
   if (!settings.enabled) {
@@ -257,6 +270,24 @@ function txValueToUsd(payload) {
   }
 }
 
+function extractCorrelation(json) {
+  if (!json || typeof json.correlation !== 'object' || !json.correlation) return null;
+  const correlation = json.correlation;
+  if (!correlation.campaign_id) return null;
+  return correlation;
+}
+
+function appendCorrelationFindings(findings, correlation) {
+  if (!correlation || !Array.isArray(findings)) return;
+  if (typeof correlation.narrative === 'string' && correlation.narrative.trim()) {
+    findings.push(`Correlated campaign: ${correlation.narrative.trim()}`);
+    return;
+  }
+  if (typeof correlation.campaign_type === 'string' && correlation.campaign_type.trim()) {
+    findings.push(`Correlated campaign type: ${correlation.campaign_type.trim()}`);
+  }
+}
+
 async function callRiskBackend(payload, context) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), BACKEND_RISK_TIMEOUT_MS);
@@ -289,6 +320,8 @@ async function callRiskBackend(payload, context) {
       ...(Array.isArray(json.findings) ? json.findings : []),
       ...websiteScanFindings,
     ];
+    const correlation = extractCorrelation(json);
+    appendCorrelationFindings(findings, correlation);
     const rawRiskLevel10 =
       typeof json.risk_level_10 === 'number'
         ? json.risk_level_10
@@ -315,6 +348,15 @@ async function callRiskBackend(payload, context) {
             : null,
       websiteScanFindings,
       recommendation: typeof json.recommendation === 'string' ? json.recommendation : null,
+      recommendedAction:
+        typeof json.recommended_action === 'string'
+          ? json.recommended_action
+          : typeof json.recommendation === 'string'
+            ? json.recommendation
+            : null,
+      warning: typeof json.warning === 'string' ? json.warning : null,
+      threatTypes: Array.isArray(json.threat_types) ? json.threat_types : [],
+      correlation,
       maliciousContractDetected: !!json.malicious_contract_detected,
       riskLevel10: rawRiskLevel10,
       reportedIncidents:
@@ -340,6 +382,10 @@ async function callRiskBackend(payload, context) {
       websiteScanSummary: null,
       websiteScanFindings: [],
       recommendation: null,
+      recommendedAction: null,
+      warning: null,
+      threatTypes: [],
+      correlation: null,
       maliciousContractDetected: false,
       riskLevel10: null,
       reportedIncidents: null,
@@ -382,6 +428,8 @@ async function callDappConnectionCheck(context) {
       ...(Array.isArray(json.findings) ? json.findings : []),
       ...websiteScanFindings,
     ];
+    const correlation = extractCorrelation(json);
+    appendCorrelationFindings(findings, correlation);
     const dappRiskScoreRaw =
       typeof json.risk_score === 'number'
         ? json.risk_score
@@ -413,6 +461,7 @@ async function callDappConnectionCheck(context) {
       findings,
       websiteScanSummary,
       websiteScanFindings,
+      correlation,
       raw: json,
     };
   } catch (_error) {
@@ -425,6 +474,7 @@ async function callDappConnectionCheck(context) {
       findings: [],
       websiteScanSummary: null,
       websiteScanFindings: [],
+      correlation: null,
       raw: null,
     };
   }
@@ -684,21 +734,22 @@ async function evaluateTransaction(payload, sender) {
     findings.push('Backend unavailable: proceeding with caution using local checks only');
   }
 
-  if (
-    settings.strictMode &&
-    CONNECT_METHODS.has(payload.method) &&
-    decision.action === 'allow'
-  ) {
-    const strictReviewRiskScore =
-      dappCheck && dappCheck.ok
-        ? clampRisk(dappCheck.riskScore || 0)
-        : decision.riskScore;
-    decision = {
-      action: 'warn',
-      riskScore: strictReviewRiskScore,
-      reason: 'Strict mode: wallet connection request requires review',
-    };
-    findings.push('Wallet connection request reviewed by SenseiGuard');
+  if (isConnectMethod) {
+    const connectRiskLevel10 = resolveRiskLevel10({
+      backend,
+      dappCheck,
+      riskScore: combinedScore,
+    });
+    if (connectRiskLevel10 > RISK_LEVEL10_REVIEW_THRESHOLD && decision.action === 'allow') {
+      decision = {
+        action: 'warn',
+        riskScore: Math.max(decision.riskScore, clampRisk(connectRiskLevel10 * 10)),
+        reason: settings.strictMode
+          ? 'Strict mode: wallet connection request requires review'
+          : 'Connection risk exceeds safe threshold',
+      };
+      findings.push('Wallet connection request reviewed by SenseiGuard');
+    }
   }
 
   const maliciousEvidence =
@@ -754,6 +805,8 @@ async function evaluateTransaction(payload, sender) {
         : dappCheck && Array.isArray(dappCheck.websiteScanFindings)
           ? dappCheck.websiteScanFindings
           : [],
+    correlation:
+      (backend && backend.correlation) || (dappCheck && dappCheck.correlation) || null,
     at: nowIso(),
     tabId: sender?.tab?.id || null,
   };
@@ -805,14 +858,11 @@ async function evaluateTransaction(payload, sender) {
       txUsdEstimate: txUsd,
       maliciousContractDetected: !!(backend && backend.maliciousContractDetected),
       maliciousEvidence,
-      riskLevel10:
-        backend && typeof backend.riskLevel10 === 'number'
-          ? backend.riskLevel10
-          : dappCheck && typeof dappCheck.riskLevel10 === 'number'
-            ? dappCheck.riskLevel10
-            : decision.riskScore <= 10
-              ? decision.riskScore
-              : decision.riskScore / 10,
+      riskLevel10: resolveRiskLevel10({
+        backend,
+        dappCheck,
+        riskScore: decision.riskScore,
+      }),
       reportedIncidents: backend ? backend.reportedIncidents : null,
       walletsDrainedEstimate: backend ? backend.walletsDrainedEstimate : null,
       backendBand: backend ? backend.band : null,
@@ -823,6 +873,11 @@ async function evaluateTransaction(payload, sender) {
             ? dappCheck.websiteScanFindings
             : [],
       recommendation: backend ? backend.recommendation : null,
+      recommendedAction: backend ? backend.recommendedAction : null,
+      warning: backend ? backend.warning : null,
+      threatTypes: backend && Array.isArray(backend.threatTypes) ? backend.threatTypes : [],
+      correlation:
+        (backend && backend.correlation) || (dappCheck && dappCheck.correlation) || null,
       siteSafety: backend ? backend.siteSafety : dappCheck ? dappCheck.siteSafety : null,
       siteSafe: backend ? backend.siteSafe : dappCheck ? dappCheck.siteSafe : null,
       websiteScanSummary:

@@ -14,6 +14,26 @@
   const ALERT_OVERLAY_ID = 'senseiguard-alert-overlay';
   const STYLE_ID = 'senseiguard-scan-overlay-style';
   const pendingRequests = new Set();
+  const CONNECT_METHODS = new Set(['eth_requestAccounts', 'wallet_requestPermissions']);
+  /** Risk scores at or below this (out of 10) show "Safe to proceed" only. */
+  const RISK_LEVEL10_REVIEW_THRESHOLD = 3;
+
+  function isConnectMethod(method) {
+    return CONNECT_METHODS.has(method);
+  }
+
+  function getRiskLevel10(decision) {
+    const riskScore = typeof decision?.riskScore === 'number' ? decision.riskScore : 0;
+    const riskLevel10 =
+      typeof decision?.riskLevel10 === 'number'
+        ? decision.riskLevel10
+        : Math.max(0, Math.min(10, riskScore <= 10 ? riskScore : riskScore / 10));
+    return Math.max(0, Math.min(10, riskLevel10));
+  }
+
+  function isLowRiskDecision(decision) {
+    return getRiskLevel10(decision) <= RISK_LEVEL10_REVIEW_THRESHOLD;
+  }
 
   function isExtensionContextAlive() {
     return typeof chrome !== 'undefined' && !!(chrome.runtime && chrome.runtime.id);
@@ -59,42 +79,45 @@
           display: flex;
         }
         #${OVERLAY_ID} .senseiguard-card {
-          width: min(980px, 100%);
-          border-radius: 34px;
+          width: min(400px, 100%);
+          border-radius: 20px;
           border: 1px solid #1f4bff;
           background: radial-gradient(120% 140% at 50% 10%, #0a1032 0%, #060a24 40%, #030516 100%);
-          box-shadow: 0 0 0 1px rgba(30, 63, 255, 0.35) inset, 0 30px 80px rgba(0, 0, 0, 0.45);
+          box-shadow: 0 0 0 1px rgba(30, 63, 255, 0.35) inset, 0 20px 48px rgba(0, 0, 0, 0.45);
           color: #ffffff;
           overflow: hidden;
           font-family: "Satoshi", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+          font-size: 13px;
+          line-height: 1.45;
         }
         #${OVERLAY_ID} .senseiguard-header {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          padding: 22px 28px 16px;
+          padding: 14px 18px 12px;
           border-bottom: 1px solid rgba(255, 255, 255, 0.08);
         }
         #${OVERLAY_ID} .senseiguard-brand {
           display: flex;
           align-items: center;
-          gap: 10px;
-          font-size: clamp(26px, 4vw, 54px);
+          gap: 8px;
+          font-size: 15px;
           font-weight: 700;
           letter-spacing: -0.02em;
         }
         #${OVERLAY_ID} .senseiguard-logo {
-          width: clamp(38px, 4vw, 56px);
-          height: clamp(38px, 4vw, 56px);
+          width: 26px;
+          height: 26px;
           object-fit: contain;
         }
         #${OVERLAY_ID} .senseiguard-close {
-          width: 42px;
-          height: 42px;
+          width: 32px;
+          height: 32px;
           border: none;
-          border-radius: 10px;
+          border-radius: 8px;
           cursor: pointer;
-          font-size: 24px;
+          font-size: 18px;
+          line-height: 1;
           color: rgba(255, 255, 255, 0.35);
           background: transparent;
         }
@@ -103,12 +126,12 @@
           background: rgba(255, 255, 255, 0.08);
         }
         #${OVERLAY_ID} .senseiguard-body {
-          padding: clamp(18px, 3vw, 34px) clamp(22px, 4vw, 38px) clamp(34px, 4vw, 52px);
+          padding: 16px 20px 22px;
           text-align: center;
         }
         #${OVERLAY_ID} .senseiguard-progress-track {
           width: 100%;
-          height: 26px;
+          height: 8px;
           border-radius: 999px;
           background: rgba(8, 14, 39, 0.9);
           box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
@@ -122,26 +145,26 @@
           animation: senseiguard-progress 1.2s ease-in-out infinite alternate;
         }
         #${OVERLAY_ID} .senseiguard-title {
-          margin: 28px 0 8px;
-          font-size: clamp(36px, 5.5vw, 66px);
-          line-height: 1.06;
+          margin: 18px 0 4px;
+          font-size: 18px;
+          line-height: 1.2;
           font-weight: 600;
           letter-spacing: -0.02em;
         }
         #${OVERLAY_ID} .senseiguard-subtitle {
-          margin: 0 0 10px;
-          font-size: clamp(18px, 2.4vw, 28px);
+          margin: 0 0 8px;
+          font-size: 13px;
           color: rgba(255, 255, 255, 0.92);
         }
         #${OVERLAY_ID} .senseiguard-list {
-          margin: 8px auto 0;
+          margin: 6px auto 0;
           padding: 0;
           list-style: none;
-          max-width: 660px;
+          max-width: 100%;
         }
         #${OVERLAY_ID} .senseiguard-list li {
-          margin: 7px 0;
-          font-size: clamp(20px, 3vw, 30px);
+          margin: 4px 0;
+          font-size: 13px;
           font-weight: 600;
           color: rgba(255, 255, 255, 0.22);
           letter-spacing: -0.01em;
@@ -169,42 +192,45 @@
           display: flex;
         }
         #${ALERT_OVERLAY_ID} .senseiguard-card {
-          width: min(980px, 100%);
-          border-radius: 34px;
+          width: min(400px, 100%);
+          border-radius: 20px;
           border: 1px solid #1f4bff;
           background: radial-gradient(120% 140% at 50% 10%, #0a1032 0%, #060a24 40%, #030516 100%);
-          box-shadow: 0 0 0 1px rgba(30, 63, 255, 0.35) inset, 0 30px 80px rgba(0, 0, 0, 0.45);
+          box-shadow: 0 0 0 1px rgba(30, 63, 255, 0.35) inset, 0 20px 48px rgba(0, 0, 0, 0.45);
           color: #ffffff;
           overflow: hidden;
           font-family: "Satoshi", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+          font-size: 13px;
+          line-height: 1.45;
         }
         #${ALERT_OVERLAY_ID} .senseiguard-header {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          padding: 22px 28px 16px;
+          padding: 14px 18px 12px;
           border-bottom: 1px solid rgba(255, 255, 255, 0.08);
         }
         #${ALERT_OVERLAY_ID} .senseiguard-brand {
           display: flex;
           align-items: center;
-          gap: 10px;
-          font-size: clamp(26px, 4vw, 54px);
+          gap: 8px;
+          font-size: 15px;
           font-weight: 700;
           letter-spacing: -0.02em;
         }
         #${ALERT_OVERLAY_ID} .senseiguard-logo {
-          width: clamp(38px, 4vw, 56px);
-          height: clamp(38px, 4vw, 56px);
+          width: 26px;
+          height: 26px;
           object-fit: contain;
         }
         #${ALERT_OVERLAY_ID} .senseiguard-close {
-          width: 42px;
-          height: 42px;
+          width: 32px;
+          height: 32px;
           border: none;
-          border-radius: 10px;
+          border-radius: 8px;
           cursor: pointer;
-          font-size: 24px;
+          font-size: 18px;
+          line-height: 1;
           color: rgba(255, 255, 255, 0.35);
           background: transparent;
         }
@@ -213,33 +239,37 @@
           background: rgba(255, 255, 255, 0.08);
         }
         #${ALERT_OVERLAY_ID} .senseiguard-body {
-          padding: clamp(18px, 3vw, 34px) clamp(22px, 4vw, 38px) clamp(22px, 4vw, 30px);
+          padding: 16px 18px 18px;
         }
         #${ALERT_OVERLAY_ID} .senseiguard-detected-title {
-          margin: 0 0 18px;
-          font-size: clamp(24px, 3.8vw, 54px);
-          line-height: 1.1;
+          margin: 0 0 10px;
+          font-size: 16px;
+          line-height: 1.25;
+          font-weight: 700;
           letter-spacing: -0.02em;
         }
         #${ALERT_OVERLAY_ID} .senseiguard-critical {
           color: #ff3131;
-          margin: 0 0 22px;
-          font-size: clamp(24px, 3.4vw, 44px);
+          margin: 0 0 14px;
+          font-size: 14px;
           font-weight: 700;
         }
         #${ALERT_OVERLAY_ID} .senseiguard-critical-warning {
           color: #ffcc66;
         }
+        #${ALERT_OVERLAY_ID} .senseiguard-critical-safe {
+          color: #32bb1d;
+        }
         #${ALERT_OVERLAY_ID} .senseiguard-row {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          padding: 22px 28px;
-          border-radius: 18px;
-          margin-bottom: 14px;
+          padding: 10px 12px;
+          border-radius: 10px;
+          margin-bottom: 8px;
           background: linear-gradient(180deg, rgba(19, 28, 66, 0.95) 0%, rgba(12, 19, 46, 0.95) 100%);
           box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
-          font-size: clamp(20px, 2.8vw, 44px);
+          font-size: 13px;
           font-weight: 600;
         }
         #${ALERT_OVERLAY_ID} .senseiguard-row-muted {
@@ -252,11 +282,11 @@
         #${ALERT_OVERLAY_ID} .senseiguard-btn {
           width: 100%;
           border: none;
-          border-radius: 18px;
-          margin-top: 10px;
-          padding: 24px;
+          border-radius: 12px;
+          margin-top: 8px;
+          padding: 12px 16px;
           cursor: pointer;
-          font-size: clamp(20px, 2.7vw, 42px);
+          font-size: 14px;
           font-weight: 700;
           letter-spacing: -0.01em;
         }
@@ -272,8 +302,8 @@
           font-weight: 600;
         }
         #${ALERT_OVERLAY_ID} .senseiguard-support {
-          margin: 18px 4px 0;
-          font-size: clamp(16px, 2.1vw, 33px);
+          margin: 12px 2px 0;
+          font-size: 12px;
           color: rgba(255, 255, 255, 0.96);
         }
       `;
@@ -418,17 +448,15 @@
       };
     }
 
-    const riskScore = Number(decision && decision.riskScore ? decision.riskScore : 96);
-    const riskLevel10 =
-      typeof decision?.riskLevel10 === 'number'
-        ? decision.riskLevel10
-        : Math.max(0, Math.min(10, riskScore <= 10 ? riskScore : riskScore / 10));
-    const normalizedRiskLevel10 = Math.max(0, Math.min(10, riskLevel10));
+    const malicious = isMaliciousDecision(decision);
+    const normalizedRiskLevel10 = getRiskLevel10(decision);
+    const isConnect = isConnectMethod(requestContext?.method);
+    const showSafeProceedOnly = isLowRiskDecision(decision) && !malicious;
+
     if (riskTextNode) {
       riskTextNode.textContent = `${normalizedRiskLevel10.toFixed(1)} / 10`;
     }
 
-    const malicious = isMaliciousDecision(decision);
     const websiteScanFindings = Array.isArray(decision?.websiteScanFindings)
       ? decision.websiteScanFindings
       : [];
@@ -440,35 +468,59 @@
           : '';
     const parsedTopFinding = parseFinding(preferredRawFinding);
     const hasLowTopFinding = parsedTopFinding.severity === 'low';
-    const useSafeProceedOnly = !malicious && hasLowTopFinding && normalizedRiskLevel10 >= 7;
 
     if (titleNode) {
-      titleNode.textContent = malicious ? 'Malicious Contract Detected' : 'Scan Issue Detected';
+      if (showSafeProceedOnly) {
+        titleNode.textContent = isConnect ? 'Connection Check Complete' : 'Scan Complete';
+      } else if (malicious) {
+        titleNode.textContent = 'Malicious Contract Detected';
+      } else if (isConnect) {
+        titleNode.textContent = 'Risky Connection Detected';
+      } else {
+        titleNode.textContent = 'Scan Issue Detected';
+      }
     }
     if (criticalNode) {
-      criticalNode.textContent = malicious
-        ? '🚨 Critical Warning'
-        : '⚠ Review required before proceeding';
-      criticalNode.classList.toggle('senseiguard-critical-warning', !malicious);
+      criticalNode.classList.remove('senseiguard-critical-warning', 'senseiguard-critical-safe');
+      if (showSafeProceedOnly) {
+        criticalNode.textContent = '✓ Safe to proceed';
+        criticalNode.classList.add('senseiguard-critical-safe');
+      } else if (malicious) {
+        criticalNode.textContent = '🚨 Critical Warning';
+      } else {
+        criticalNode.textContent = '⚠ Review required before proceeding';
+        criticalNode.classList.add('senseiguard-critical-warning');
+      }
     }
     if (incidentsLabelNode) {
-      incidentsLabelNode.textContent = malicious ? 'Detected incidents:' : 'Top finding:';
+      incidentsLabelNode.textContent = showSafeProceedOnly
+        ? 'Summary:'
+        : malicious
+          ? 'Detected incidents:'
+          : 'Top finding:';
     }
     if (incidentsNode) {
       incidentsNode.classList.remove('senseiguard-finding-low');
     }
 
     if (blockBtn) {
-      blockBtn.style.display = 'block';
-      blockBtn.textContent = 'Block Transaction (recommended)';
+      blockBtn.style.display = showSafeProceedOnly ? 'none' : 'block';
+      blockBtn.textContent = isConnect
+        ? 'Block Connection (recommended)'
+        : 'Block Transaction (recommended)';
     }
     if (proceedBtn) {
       proceedBtn.style.display = 'block';
-      proceedBtn.textContent = 'Proceed at your own risk';
+      proceedBtn.textContent = showSafeProceedOnly ? 'Safe to proceed' : 'Proceed at your own risk';
     }
 
     if (incidentsNode) {
-      if (malicious && (
+      if (showSafeProceedOnly) {
+        incidentsNode.textContent = isConnect
+          ? 'No significant risks detected for this connection.'
+          : 'No significant risks detected.';
+        incidentsNode.classList.add('senseiguard-finding-low');
+      } else if (malicious && (
         typeof decision?.walletsDrainedEstimate === 'number' &&
         Number.isFinite(decision.walletsDrainedEstimate)
       )) {
@@ -483,17 +535,11 @@
         const fallback =
           malicious ? 'Critical malicious contract activity' : 'Suspicious activity reported';
         const preferredFinding = parsedTopFinding.cleaned || fallback;
-        incidentsNode.textContent =
-          preferredFinding;
+        incidentsNode.textContent = preferredFinding;
         if (hasLowTopFinding) {
           incidentsNode.classList.add('senseiguard-finding-low');
         }
       }
-    }
-
-    if (useSafeProceedOnly) {
-      if (blockBtn) blockBtn.style.display = 'none';
-      if (proceedBtn) proceedBtn.textContent = 'Safe to proceed';
     }
 
     if (blockBtn) {
@@ -598,7 +644,12 @@
         reason: 'No decision returned',
       };
 
-      const requiresUserGate = decision.action === 'warn' || isMaliciousDecision(decision);
+      const isConnect = isConnectMethod(data.method);
+      const requiresUserGate =
+        isConnect ||
+        decision.action === 'warn' ||
+        isMaliciousDecision(decision);
+
       let finalDecision = decision;
 
       if (requiresUserGate) {
@@ -609,7 +660,9 @@
             action: 'block',
             reason:
               userChoice === 'dismiss'
-                ? 'Blocked: user dismissed SenseiGuard review'
+                ? isConnect
+                  ? 'Blocked: wallet connection dismissed in SenseiGuard review'
+                  : 'Blocked: user dismissed SenseiGuard review'
                 : decision.reason || 'Blocked by user via SenseiGuard review',
           };
         } else {
@@ -619,6 +672,9 @@
             reason: decision.reason || 'Allowed by user after SenseiGuard review',
           };
         }
+      } else if (decision.action === 'block') {
+        // Non-connect requests with a hard block still fail closed without a modal.
+        finalDecision = decision;
       }
 
       window.postMessage(

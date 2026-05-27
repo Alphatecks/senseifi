@@ -5,3 +5,5 @@
 window.SENSEIGUARD = window.SENSEIGUARD || {};
 window.SENSEIGUARD.WALLET_API_BASE_URL =
   window.SENSEIGUARD.WALLET_API_BASE_URL || 'https://senseifi-backend.onrender.com/api';
+window.SENSEIGUARD.DASHBOARD_URL =
+  window.SENSEIGUARD.DASHBOARD_URL || 'https://senseifi.io/guard';

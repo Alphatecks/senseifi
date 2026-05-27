@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
 import { useWallet } from "@/hooks/useWallet";
 import { useConnectNetworksModal } from "@/context/ConnectWalletsModalContext";
-import { getDashboardSummary, getDashboardMetrics, getDashboardApprovals, getWalletsForAddress, getTransactionMonitoring, runFullScan, getScanContractDetails, scanContract, getProtectionSettings, updateProtectionSettings, setEmergencyLock, protectionSettingsToControls, getSecurityAlerts, getAddressSafety, analyzeTransaction, getRiskyTokens, getHowToFixThreats } from "@/services/dashboardService";
-import type { DashboardSummaryData, DashboardMetricsData, DashboardApproval, WalletListItem, WalletsPagination, TransactionMonitoringItem, RunFullScanData, ScanContractResult, ScanContractDetailResponse, SecurityAlertItem, AddressSafetyItem, AnalyzeTransactionResponse, RiskyTokenItem, HowToFixThreatItem, HowToFixThreatMeta } from "@/services/dashboardService";
+import { getDashboardSummary, getDashboardMetrics, getDashboardApprovals, getWalletsForAddress, getTransactionMonitoring, runFullScan, getScanContractDetails, scanContract, getProtectionSettings, updateProtectionSettings, setEmergencyLock, protectionSettingsToControls, getSecurityAlerts, getAddressSafety, analyzeTransaction, getRiskyTokens, getActiveThreats, getThreatHistory, resolveThreat, dismissThreat, refreshWalletHealth, verifyThreat, verifyAllThreats, recordThreatRemediationAction, inferThreatRemediation } from "@/services/dashboardService";
+import type { DashboardSummaryData, DashboardMetricsData, DashboardApproval, WalletListItem, WalletsPagination, TransactionMonitoringItem, RunFullScanData, ScanContractResult, ScanContractDetailResponse, SecurityAlertItem, AddressSafetyItem, AnalyzeTransactionResponse, RiskyTokenItem, WalletThreatItem, ActiveThreatsMeta, ThreatHistoryMeta, ThreatCorrelation } from "@/services/dashboardService";
 import { walletService } from "@/services/walletService";
 import type { WalletModalData } from "@/services/walletService";
 
@@ -94,6 +94,29 @@ const CHAIN_TO_NETWORK: Record<string, string> = {
 
 const HOW_TO_FIX_PER_PAGE = 3;
 
+function howToFixTotalPages(meta: ActiveThreatsMeta | ThreatHistoryMeta | null, tab: "active" | "history"): number {
+  if (!meta) return 1;
+  if (tab === "history" && "total" in meta) {
+    return Math.max(1, Math.ceil(meta.total / HOW_TO_FIX_PER_PAGE));
+  }
+  if ("count" in meta) {
+    return Math.max(1, Math.ceil(meta.count / HOW_TO_FIX_PER_PAGE));
+  }
+  return 1;
+}
+
+function howToFixSubtitle(meta: ActiveThreatsMeta | ThreatHistoryMeta | null, tab: "active" | "history"): string {
+  if (!meta) return tab === "history" ? "Loading history..." : "Loading remediation plan...";
+  if (tab === "history" && "total" in meta) {
+    return `${meta.total} past incident(s)`;
+  }
+  if ("count" in meta) {
+    const high = meta.high_priority_count ?? 0;
+    return `${meta.count} active issue(s) • ${high} high priority`;
+  }
+  return tab === "history" ? "Past incidents" : "Active issues";
+}
+
 function formatMetricChange(changePercent: number): string {
   const sign = changePercent >= 0 ? "+" : "";
   return `${sign}${Number(changePercent).toFixed(1)}%`;
@@ -165,6 +188,47 @@ function getSeverityBadgeClass(severity: string): string {
   return "bg-emerald-500/20 text-emerald-300 border-emerald-500/40";
 }
 
+function formatCampaignType(value: string): string {
+  return String(value || "")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function CorrelationPanel({ correlation }: { correlation: ThreatCorrelation }) {
+  return (
+    <div className="rounded-lg border border-[#4066FF]/35 bg-[#4066FF]/10 p-3 space-y-2 text-sm">
+      <p className="text-xs uppercase tracking-wide text-[#a8bfff]">Correlated threat campaign</p>
+      <p className="text-slate-200 leading-relaxed">{correlation.narrative}</p>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400">
+        <span>Type: <span className="text-slate-200">{formatCampaignType(correlation.campaign_type)}</span></span>
+        <span>Confidence: <span className="text-slate-200">{correlation.confidence_score}%</span></span>
+        <span>Campaign risk: <span className="text-slate-200">{correlation.risk_score}</span></span>
+        <span>Evidence: <span className="text-slate-200">{correlation.evidence_count}</span></span>
+      </div>
+      <p className="text-[11px] text-slate-500 font-mono truncate" title={correlation.campaign_id}>
+        Campaign: {correlation.campaign_id}
+      </p>
+    </div>
+  );
+}
+
+function remediationActionLabel(item: WalletThreatItem): string | null {
+  const payload = inferThreatRemediation(item);
+  if (!payload) return null;
+  switch (payload.action) {
+    case "revoke_approval":
+      return "Log revoke";
+    case "block_contract":
+      return "Log block";
+    case "disconnect_dapp":
+      return "Log disconnect";
+    case "hide_token":
+      return "Log hide token";
+    default:
+      return "Log action";
+  }
+}
+
 export default function WalletSecurityPage() {
   const { activeAddress: address } = useWallet();
   const [txPage, setTxPage] = useState(1);
@@ -227,9 +291,157 @@ export default function WalletSecurityPage() {
   const [howToFixModalOpen, setHowToFixModalOpen] = useState(false);
   const [howToFixLoading, setHowToFixLoading] = useState(false);
   const [howToFixError, setHowToFixError] = useState<string | null>(null);
+  const [howToFixTab, setHowToFixTab] = useState<"active" | "history">("active");
   const [howToFixPage, setHowToFixPage] = useState(1);
-  const [howToFixItems, setHowToFixItems] = useState<HowToFixThreatItem[]>([]);
-  const [howToFixMeta, setHowToFixMeta] = useState<HowToFixThreatMeta | null>(null);
+  const [howToFixItems, setHowToFixItems] = useState<WalletThreatItem[]>([]);
+  const [howToFixMeta, setHowToFixMeta] = useState<ActiveThreatsMeta | ThreatHistoryMeta | null>(null);
+  const [threatActionId, setThreatActionId] = useState<string | null>(null);
+  const [verifyAllLoading, setVerifyAllLoading] = useState(false);
+  const [threatActionFeedback, setThreatActionFeedback] = useState<string | null>(null);
+  const [activeThreatsCount, setActiveThreatsCount] = useState(0);
+  const [threatListRefreshKey, setThreatListRefreshKey] = useState(0);
+
+  const refreshHealthAndSummary = useCallback(async () => {
+    if (!address?.trim()) return;
+    const [health, freshSummary, active] = await Promise.all([
+      refreshWalletHealth(address),
+      getDashboardSummary(address),
+      getActiveThreats(address, 50),
+    ]);
+    if (health?.security_status) {
+      setSummary((prev) =>
+        prev
+          ? { ...prev, security_status: health.security_status }
+          : freshSummary
+      );
+    } else if (freshSummary) {
+      setSummary(freshSummary);
+    }
+    if (active) {
+      setActiveThreatsCount(active.meta.count);
+    }
+  }, [address]);
+
+  const handleResolveThreat = async (threatId: string) => {
+    if (!address?.trim()) return;
+    setThreatActionId(threatId);
+    setThreatActionFeedback(null);
+    try {
+      const res = await resolveThreat(address, threatId, "Fixed via SenseiGuard dashboard");
+      if (res?.success !== false) {
+        await refreshHealthAndSummary();
+        setThreatListRefreshKey((k) => k + 1);
+        if (howToFixModalOpen) {
+          setHowToFixPage(1);
+          setHowToFixTab("active");
+        }
+      }
+    } finally {
+      setThreatActionId(null);
+    }
+  };
+
+  const handleDismissThreat = async (threatId: string) => {
+    if (!address?.trim()) return;
+    setThreatActionId(threatId);
+    setThreatActionFeedback(null);
+    try {
+      const res = await dismissThreat(address, threatId, "dismissed_by_user");
+      if (res?.success !== false) {
+        await refreshHealthAndSummary();
+        setThreatListRefreshKey((k) => k + 1);
+        if (howToFixModalOpen) {
+          setHowToFixPage(1);
+        }
+      }
+    } finally {
+      setThreatActionId(null);
+    }
+  };
+
+  const handleVerifyThreat = async (threatId: string) => {
+    if (!address?.trim()) return;
+    console.log('[Wallet Security] Verify fix clicked:', {
+      threatId,
+      walletAddress: address.trim(),
+    });
+    setThreatActionId(threatId);
+    setThreatActionFeedback(null);
+    try {
+      const res = await verifyThreat(address, threatId);
+      console.log('[Wallet Security] Verify fix result:', res);
+      if (!res) {
+        setThreatActionFeedback("No response from verify API. Check console for details.");
+        return;
+      }
+      if (res.success === false) {
+        setThreatActionFeedback(res.message || "Verification failed. Try again.");
+        return;
+      }
+      const resolved = res?.data?.resolved;
+      const verified = res?.data?.verified;
+      if (resolved) {
+        setThreatActionFeedback("Fix verified — threat resolved.");
+      } else if (verified === false) {
+        setThreatActionFeedback(res?.data?.message || "On-chain check did not confirm the fix yet.");
+      } else {
+        setThreatActionFeedback(res?.data?.message || res?.message || "Verification complete.");
+      }
+      await refreshHealthAndSummary();
+      setThreatListRefreshKey((k) => k + 1);
+    } finally {
+      setThreatActionId(null);
+    }
+  };
+
+  const handleVerifyAllThreats = async () => {
+    if (!address?.trim()) return;
+    setVerifyAllLoading(true);
+    setThreatActionFeedback(null);
+    try {
+      const res = await verifyAllThreats(address);
+      if (res?.success === false) {
+        setThreatActionFeedback(res.message || "Verify-all failed. Try again.");
+        return;
+      }
+      const resolved = res?.data?.resolved_count ?? 0;
+      const stillOpen = res?.data?.still_open_count;
+      if (resolved > 0) {
+        setThreatActionFeedback(`${resolved} issue(s) verified and resolved.${stillOpen != null ? ` ${stillOpen} still open.` : ""}`);
+      } else {
+        setThreatActionFeedback(res?.data?.still_open_count
+          ? "No issues auto-resolved yet. Complete the fix steps, then verify again."
+          : "All open issues verified.");
+      }
+      await refreshHealthAndSummary();
+      setThreatListRefreshKey((k) => k + 1);
+      setHowToFixPage(1);
+    } finally {
+      setVerifyAllLoading(false);
+    }
+  };
+
+  const handleRecordRemediation = async (item: WalletThreatItem) => {
+    if (!address?.trim()) return;
+    const payload = inferThreatRemediation(item);
+    if (!payload) {
+      setThreatActionFeedback("No automated action mapping for this threat type.");
+      return;
+    }
+    setThreatActionId(item.id);
+    setThreatActionFeedback(null);
+    try {
+      const res = await recordThreatRemediationAction(address, item.id, payload);
+      if (res?.success === false) {
+        setThreatActionFeedback(res.message || "Could not record action.");
+        return;
+      }
+      setThreatActionFeedback("Action recorded. Run verify to confirm on-chain.");
+      setThreatListRefreshKey((k) => k + 1);
+    } finally {
+      setThreatActionId(null);
+    }
+  };
 
   const openAnalyzeTxModal = () => {
     setAnalyzeTxResult(null);
@@ -311,12 +523,18 @@ export default function WalletSecurityPage() {
   useEffect(() => {
     if (!address) {
       setSummary(null);
+      setActiveThreatsCount(0);
       return;
     }
     setSummaryLoading(true);
     getDashboardSummary(address)
       .then(setSummary)
       .finally(() => setSummaryLoading(false));
+    getActiveThreats(address, 50).then((res) => {
+      if (res) {
+        setActiveThreatsCount(res.meta.count);
+      }
+    });
   }, [address]);
 
   useEffect(() => {
@@ -412,7 +630,7 @@ export default function WalletSecurityPage() {
       return;
     }
     setSecurityAlertsLoading(true);
-    getSecurityAlerts(address, 10)
+    getSecurityAlerts(address, 3)
       .then((data) => setSecurityAlerts(Array.isArray(data) ? data : null))
       .finally(() => setSecurityAlertsLoading(false));
   }, [address]);
@@ -439,6 +657,11 @@ export default function WalletSecurityPage() {
 
   useEffect(() => {
     if (!howToFixModalOpen) return;
+    setThreatActionFeedback(null);
+  }, [howToFixModalOpen, howToFixTab]);
+
+  useEffect(() => {
+    if (!howToFixModalOpen) return;
     if (!address?.trim()) {
       setHowToFixItems([]);
       setHowToFixMeta({ count: 0, high_priority_count: 0 });
@@ -448,12 +671,34 @@ export default function WalletSecurityPage() {
 
     setHowToFixLoading(true);
     setHowToFixError(null);
-    getHowToFixThreats(address, howToFixPage, HOW_TO_FIX_PER_PAGE)
+
+    if (howToFixTab === "history") {
+      getThreatHistory(address, howToFixPage, HOW_TO_FIX_PER_PAGE)
+        .then((res) => {
+          if (!res) {
+            setHowToFixItems([]);
+            setHowToFixMeta({ page: 1, per_page: HOW_TO_FIX_PER_PAGE, total: 0 });
+            setHowToFixError("Unable to load threat history right now.");
+            return;
+          }
+          setHowToFixItems(res.data);
+          setHowToFixMeta(res.meta);
+        })
+        .catch(() => {
+          setHowToFixItems([]);
+          setHowToFixMeta({ page: 1, per_page: HOW_TO_FIX_PER_PAGE, total: 0 });
+          setHowToFixError("Unable to load threat history right now.");
+        })
+        .finally(() => setHowToFixLoading(false));
+      return;
+    }
+
+    getActiveThreats(address, 50)
       .then((res) => {
         if (!res) {
           setHowToFixItems([]);
           setHowToFixMeta({ count: 0, high_priority_count: 0 });
-          setHowToFixError("Unable to load fix guidance right now.");
+          setHowToFixError("Unable to load active issues right now.");
           return;
         }
         const totalPages = Math.max(1, Math.ceil((res.meta.count || 0) / HOW_TO_FIX_PER_PAGE));
@@ -461,16 +706,17 @@ export default function WalletSecurityPage() {
           setHowToFixPage(totalPages);
           return;
         }
-        setHowToFixItems(Array.isArray(res.data) ? res.data.slice(0, HOW_TO_FIX_PER_PAGE) : []);
+        const pageData = res.data.slice((howToFixPage - 1) * HOW_TO_FIX_PER_PAGE, howToFixPage * HOW_TO_FIX_PER_PAGE);
+        setHowToFixItems(pageData);
         setHowToFixMeta(res.meta);
       })
       .catch(() => {
         setHowToFixItems([]);
         setHowToFixMeta({ count: 0, high_priority_count: 0 });
-        setHowToFixError("Unable to load fix guidance right now.");
+        setHowToFixError("Unable to load active issues right now.");
       })
       .finally(() => setHowToFixLoading(false));
-  }, [howToFixModalOpen, address, howToFixPage]);
+  }, [howToFixModalOpen, address, howToFixPage, howToFixTab, threatListRefreshKey]);
 
   useEffect(() => {
     if (!selectedWallet?.address) {
@@ -491,9 +737,10 @@ export default function WalletSecurityPage() {
     setScanTriggered(true);
     setScanInProgress(true);
     runFullScan(address)
-      .then((data) => {
+      .then(async (data) => {
         if (data) {
           setScanResult(data);
+          await refreshWalletHealth(address);
           setSummary((prev) =>
             prev
               ? {
@@ -508,6 +755,11 @@ export default function WalletSecurityPage() {
               : prev
           );
           getDashboardSummary(address).then((fresh) => fresh && setSummary(fresh));
+          getActiveThreats(address, 50).then((active) => {
+            if (active) {
+              setActiveThreatsCount(active.meta.count);
+            }
+          });
         }
       })
       .finally(() => setScanInProgress(false));
@@ -1275,7 +1527,7 @@ export default function WalletSecurityPage() {
               </div>
             ) : (
               <ul className="space-y-3">
-                {securityAlerts.map((alert) => (
+                {securityAlerts.slice(0, 3).map((alert) => (
                   <li key={alert.id} className="flex items-stretch rounded-xl overflow-hidden border" style={{ backgroundColor: "#25283D", borderColor: "rgba(51, 65, 85, 0.6)" }}>
                     <div className="flex-1 min-w-0 p-4 flex flex-col justify-between">
                       <div>
@@ -1328,7 +1580,7 @@ export default function WalletSecurityPage() {
               </div>
             ) : (
               <ul className="space-y-3 flex-1 overflow-y-auto hide-scrollbar">
-                {securityAlerts.map((alert) => (
+                {securityAlerts.slice(0, 3).map((alert) => (
                   <li key={alert.id} className="emboss-inset-3d-input p-4 rounded-lg border" style={{ backgroundColor: "#25283D", borderColor: "#25283D" }}>
                     <p className="text-sm font-medium text-white mb-1">{alert.title}</p>
                     {alert.type === "high_risk_approval" ? (
@@ -1471,20 +1723,41 @@ export default function WalletSecurityPage() {
               </span>
               <h2 className="text-sm font-semibold text-white">Emergency Actions</h2>
             </div>
-            <div className="relative rounded-xl border overflow-hidden min-h-[120px] flex flex-col items-center justify-center py-6 px-4" style={{ backgroundColor: "rgba(34, 197, 94, 0.06)", borderColor: "rgba(34, 197, 94, 0.2)", boxShadow: "inset 0 0 0 1px rgba(34, 197, 94, 0.08)" }}>
+            <div className="relative rounded-xl border overflow-hidden min-h-[120px] flex flex-col items-center justify-center py-6 px-4" style={activeThreatsCount > 0 ? { backgroundColor: "rgba(240, 5, 0, 0.06)", borderColor: "rgba(240, 5, 0, 0.25)", boxShadow: "inset 0 0 0 1px rgba(240, 5, 0, 0.08)" } : { backgroundColor: "rgba(34, 197, 94, 0.06)", borderColor: "rgba(34, 197, 94, 0.2)", boxShadow: "inset 0 0 0 1px rgba(34, 197, 94, 0.08)" }}>
               <div className="absolute top-3 right-3">
-                <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-[#22c55e] bg-[#22c55e]/15 border border-[#22c55e]/30">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] animate-pulse" />
-                  All clear
+                <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider border ${activeThreatsCount > 0 ? "text-[#F00500] bg-[#F00500]/15 border-[#F00500]/30" : "text-[#22c55e] bg-[#22c55e]/15 border-[#22c55e]/30"}`}>
+                  {activeThreatsCount > 0 && <span className="w-1.5 h-1.5 rounded-full bg-[#F00500] animate-pulse" />}
+                  {activeThreatsCount > 0 ? `${activeThreatsCount} active` : "All clear"}
                 </span>
               </div>
-              <div className="w-14 h-14 rounded-full flex items-center justify-center mb-3" style={{ backgroundColor: "rgba(34, 197, 94, 0.15)", border: "1px solid rgba(34, 197, 94, 0.35)" }}>
-                <svg className="w-7 h-7 text-[#22c55e]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                </svg>
-              </div>
-              <p className="text-sm font-medium text-white">No actions required</p>
-              <p className="text-xs text-slate-400 mt-0.5 text-center max-w-[200px]">Your wallet is secure. We&apos;ll alert you if anything needs attention.</p>
+              {activeThreatsCount > 0 ? (
+                <>
+                  <div className="w-14 h-14 rounded-full flex items-center justify-center mb-3" style={{ backgroundColor: "rgba(240, 5, 0, 0.12)", border: "1px solid rgba(240, 5, 0, 0.35)" }}>
+                    <svg className="w-7 h-7 text-[#F00500]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                  </div>
+                  <p className="text-sm font-medium text-white">{activeThreatsCount} issue{activeThreatsCount !== 1 ? "s" : ""} need attention</p>
+                  <button
+                    type="button"
+                    onClick={() => { setHowToFixTab("active"); setHowToFixPage(1); setHowToFixModalOpen(true); }}
+                    className="mt-3 rounded-lg px-4 py-2 text-xs font-semibold text-white"
+                    style={{ background: "linear-gradient(to bottom, #4066FF 0%, #0026FF 100%)" }}
+                  >
+                    Review & fix
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="w-14 h-14 rounded-full flex items-center justify-center mb-3" style={{ backgroundColor: "rgba(34, 197, 94, 0.15)", border: "1px solid rgba(34, 197, 94, 0.35)" }}>
+                    <svg className="w-7 h-7 text-[#22c55e]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                  </div>
+                  <p className="text-sm font-medium text-white">No actions required</p>
+                  <p className="text-xs text-slate-400 mt-0.5 text-center max-w-[200px]">Your wallet is secure. We&apos;ll alert you if anything needs attention.</p>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -1494,8 +1767,22 @@ export default function WalletSecurityPage() {
             {SECURITY_STATUS_ICON}
             <h2 className="text-lg font-normal text-white">Emergency Actions</h2>
           </div>
-          <div className="flex-1 flex items-center justify-center">
-            <p className="text-sm text-slate-500">No actions required</p>
+          <div className="flex-1 flex flex-col items-center justify-center py-4">
+            {activeThreatsCount > 0 ? (
+              <>
+                <p className="text-sm text-[#F00500] font-medium">{activeThreatsCount} active issue{activeThreatsCount !== 1 ? "s" : ""}</p>
+                <button
+                  type="button"
+                  onClick={() => { setHowToFixTab("active"); setHowToFixPage(1); setHowToFixModalOpen(true); }}
+                  className="mt-3 rounded-lg px-4 py-2 text-sm font-semibold text-white"
+                  style={{ background: "linear-gradient(to bottom, #4066FF 0%, #0026FF 100%)" }}
+                >
+                  Review & fix
+                </button>
+              </>
+            ) : (
+              <p className="text-sm text-slate-500">No actions required</p>
+            )}
           </div>
         </div>
       </div>
@@ -1565,6 +1852,7 @@ export default function WalletSecurityPage() {
                 type="button"
                 onClick={() => {
                   setWeakEmergencyModalOpen(false);
+                  setHowToFixTab("active");
                   setHowToFixPage(1);
                   setHowToFixModalOpen(true);
                 }}
@@ -1595,7 +1883,7 @@ export default function WalletSecurityPage() {
               <div>
                 <h2 className="text-lg font-semibold text-white">How to fix</h2>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  {howToFixMeta ? `${howToFixMeta.count} issue(s) found • ${howToFixMeta.high_priority_count} high priority` : "Loading remediation plan..."}
+                  {howToFixSubtitle(howToFixMeta, howToFixTab)}
                 </p>
               </div>
               <button
@@ -1610,7 +1898,29 @@ export default function WalletSecurityPage() {
               </button>
             </div>
 
+            <div className="px-5 pt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={() => { setHowToFixTab("active"); setHowToFixPage(1); }}
+                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${howToFixTab === "active" ? "bg-[#0026FF] text-white" : "bg-slate-800/60 text-slate-400 hover:text-white"}`}
+              >
+                Active issues
+              </button>
+              <button
+                type="button"
+                onClick={() => { setHowToFixTab("history"); setHowToFixPage(1); }}
+                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${howToFixTab === "history" ? "bg-[#0026FF] text-white" : "bg-slate-800/60 text-slate-400 hover:text-white"}`}
+              >
+                History
+              </button>
+            </div>
+
             <div className="p-5 flex-1 min-h-0 overflow-y-auto hide-scrollbar space-y-3">
+              {threatActionFeedback && howToFixTab === "active" && (
+                <div className="rounded-xl border border-[#4066FF]/35 bg-[#4066FF]/10 p-3 text-sm text-slate-200">
+                  {threatActionFeedback}
+                </div>
+              )}
               {howToFixLoading ? (
                 <div className="rounded-xl border border-slate-700/60 bg-[#15182A] p-4 text-sm text-slate-300">
                   Loading remediation guidance...
@@ -1621,50 +1931,118 @@ export default function WalletSecurityPage() {
                 </div>
               ) : howToFixItems.length === 0 ? (
                 <div className="rounded-xl border border-emerald-500/35 bg-emerald-500/10 p-4 text-sm text-emerald-200">
-                  No urgent issues right now. Your wallet posture looks stable.
+                  {howToFixTab === "history"
+                    ? "No resolved or dismissed incidents yet."
+                    : "No active issues right now. Your wallet posture looks stable."}
                 </div>
               ) : (
                 howToFixItems.map((item) => (
                   <div key={item.id} className="rounded-xl border border-slate-700/60 bg-[#15182A] p-4 space-y-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <h3 className="text-sm md:text-base font-semibold text-white">{item.title}</h3>
-                      <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] uppercase tracking-wide ${getSeverityBadgeClass(item.severity)}`}>
-                        {item.severity}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        {item.status && (
+                          <span className="inline-flex items-center rounded-full border border-slate-600/60 px-2.5 py-1 text-[11px] uppercase tracking-wide text-slate-300">
+                            {item.status}
+                          </span>
+                        )}
+                        <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] uppercase tracking-wide ${getSeverityBadgeClass(item.severity)}`}>
+                          {item.severity}
+                        </span>
+                      </div>
                     </div>
                     <p className="text-xs text-slate-400">
                       Detected: {formatThreatDetectedAt(item.detected_at)}
                     </p>
-                    <div className="space-y-1.5 text-sm">
-                      <p className="text-slate-300">
-                        <span className="text-slate-400">Where to fix:</span> {item.where_to_fix}
-                      </p>
-                      <p className="text-slate-300">
-                        <span className="text-slate-400">Recommended action:</span> {item.recommended_action}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs uppercase tracking-wide text-slate-400 mb-2">Fix steps</p>
-                      <ol className="space-y-2 list-decimal pl-5 text-sm text-slate-200">
-                        {(item.fix_steps || []).map((step, idx) => (
-                          <li key={`${item.id}-step-${idx}`}>{step}</li>
-                        ))}
-                      </ol>
-                    </div>
+                    {(item.where_to_fix || item.recommended_action) && (
+                      <div className="space-y-1.5 text-sm">
+                        {item.where_to_fix && (
+                          <p className="text-slate-300">
+                            <span className="text-slate-400">Where to fix:</span> {item.where_to_fix}
+                          </p>
+                        )}
+                        {item.recommended_action && (
+                          <p className="text-slate-300">
+                            <span className="text-slate-400">Recommended action:</span> {item.recommended_action}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    {item.fix_steps && item.fix_steps.length > 0 && (
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-slate-400 mb-2">Fix steps</p>
+                        <ol className="space-y-2 list-decimal pl-5 text-sm text-slate-200">
+                          {item.fix_steps.map((step, idx) => (
+                            <li key={`${item.id}-step-${idx}`}>{step}</li>
+                          ))}
+                        </ol>
+                      </div>
+                    )}
+                    {howToFixTab === "active" && (
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => handleVerifyThreat(item.id)}
+                          disabled={threatActionId === item.id || verifyAllLoading}
+                          className="rounded-lg px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                          style={{ background: "linear-gradient(to bottom, #4066FF 0%, #0026FF 100%)" }}
+                        >
+                          {threatActionId === item.id ? "Verifying…" : "Verify fix"}
+                        </button>
+                        {remediationActionLabel(item) && (
+                          <button
+                            type="button"
+                            onClick={() => handleRecordRemediation(item)}
+                            disabled={threatActionId === item.id || verifyAllLoading}
+                            className="rounded-lg border border-[#4066FF]/50 bg-[#4066FF]/15 px-3 py-2 text-xs font-medium text-[#a8bfff] disabled:opacity-50"
+                          >
+                            {remediationActionLabel(item)}
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleResolveThreat(item.id)}
+                          disabled={threatActionId === item.id || verifyAllLoading}
+                          className="rounded-lg border border-slate-600/60 bg-slate-700/40 px-3 py-2 text-xs font-medium text-slate-200 disabled:opacity-50"
+                        >
+                          Mark as fixed
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDismissThreat(item.id)}
+                          disabled={threatActionId === item.id || verifyAllLoading}
+                          className="rounded-lg border border-slate-600/60 bg-slate-700/40 px-3 py-2 text-xs font-medium text-slate-400 disabled:opacity-50"
+                        >
+                          Dismiss
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))
               )}
             </div>
 
-            <div className="p-5 pt-0 flex items-center justify-between gap-3">
+            <div className="p-5 pt-0 flex flex-col gap-3">
+              {howToFixTab === "active" && howToFixItems.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleVerifyAllThreats}
+                  disabled={verifyAllLoading || !!threatActionId}
+                  className="w-full rounded-xl py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                  style={{ background: "linear-gradient(to bottom, #3366ff 0%, #0026FF 50%, #001fcc 100%)" }}
+                >
+                  {verifyAllLoading ? "Verifying all open issues…" : "Verify all open issues"}
+                </button>
+              )}
+              <div className="flex items-center justify-between gap-3">
               <div className="text-xs text-slate-400">
-                Page {howToFixPage} of {Math.max(1, Math.ceil((howToFixMeta?.count ?? 0) / HOW_TO_FIX_PER_PAGE))}
+                Page {howToFixPage} of {howToFixTotalPages(howToFixMeta, howToFixTab)}
               </div>
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={() => setHowToFixPage((p) => Math.max(1, p - 1))}
-                  disabled={howToFixPage <= 1 || howToFixLoading}
+                  disabled={howToFixPage <= 1 || howToFixLoading || verifyAllLoading}
                   className="rounded-lg border border-slate-600/60 bg-slate-700/40 px-3 py-2 text-sm text-white disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Previous
@@ -1674,13 +2052,15 @@ export default function WalletSecurityPage() {
                   onClick={() => setHowToFixPage((p) => p + 1)}
                   disabled={
                     howToFixLoading ||
-                    howToFixPage >= Math.max(1, Math.ceil((howToFixMeta?.count ?? 0) / HOW_TO_FIX_PER_PAGE))
+                    verifyAllLoading ||
+                    howToFixPage >= howToFixTotalPages(howToFixMeta, howToFixTab)
                   }
                   className="rounded-lg border border-[#001a99] px-3 py-2 text-sm text-white disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{ background: "linear-gradient(to bottom, #3366ff 0%, #0026FF 50%, #001fcc 100%)" }}
                 >
                   Next
                 </button>
+              </div>
               </div>
             </div>
           </div>
@@ -2190,7 +2570,7 @@ export default function WalletSecurityPage() {
         document.body
       )}
 
-      {/* Analyze Transaction modal - uses POST /protection/transaction/analyze (env base URL) */}
+      {/* Analyze Transaction modal - uses POST /dashboard/{address}/analyze-tx */}
       {analyzeTxModalOpen && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" style={{ top: 0, left: 0, right: 0, bottom: 0, minHeight: "100vh" }} onClick={() => setAnalyzeTxModalOpen(false)}>
           <div className="w-full max-w-lg rounded-2xl border border-slate-700/60 shadow-2xl overflow-hidden bg-[#1A1E2E]" onClick={(e) => e.stopPropagation()}>
@@ -2231,11 +2611,20 @@ export default function WalletSecurityPage() {
                         {analyzeTxResult.skipped && <span className="text-amber-400">Skipped</span>}
                       </div>
                       {analyzeTxResult.threat_types?.length ? <p className="text-amber-400">Threats: {analyzeTxResult.threat_types.join(", ")}</p> : null}
-                      <p className="text-slate-400">{analyzeTxResult.explanation}</p>
-                      <p className="text-slate-300">{analyzeTxResult.recommendation}</p>
-                      {analyzeTxResult.risk_breakdown && (
-                        <p className="text-slate-500 text-xs">Approval risk: {analyzeTxResult.risk_breakdown.approval_risk} · Simulation drain: {analyzeTxResult.risk_breakdown.simulation_drain}</p>
+                      {(analyzeTxResult.warning || analyzeTxResult.explanation) && (
+                        <p className="text-slate-400">{analyzeTxResult.warning || analyzeTxResult.explanation}</p>
                       )}
+                      <p className="text-slate-300">{analyzeTxResult.recommended_action || analyzeTxResult.recommendation}</p>
+                      {analyzeTxResult.risk_breakdown && (
+                        <p className="text-slate-500 text-xs">
+                          Approval: {analyzeTxResult.risk_breakdown.approval_risk}
+                          {analyzeTxResult.risk_breakdown.destination_risk != null ? ` · Destination: ${analyzeTxResult.risk_breakdown.destination_risk}` : ""}
+                          {analyzeTxResult.risk_breakdown.value_exposure_risk != null ? ` · Value exposure: ${analyzeTxResult.risk_breakdown.value_exposure_risk}` : ""}
+                          {analyzeTxResult.risk_breakdown.delegatecall_risk != null ? ` · Delegatecall: ${analyzeTxResult.risk_breakdown.delegatecall_risk}` : ""}
+                          {" · Simulation drain: "}{analyzeTxResult.risk_breakdown.simulation_drain}
+                        </p>
+                      )}
+                      {analyzeTxResult.correlation && <CorrelationPanel correlation={analyzeTxResult.correlation} />}
                     </div>
                   )}
                 </>

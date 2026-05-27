@@ -1,4 +1,5 @@
 import Image from 'next/image';
+import Link from 'next/link';
 
 export default function Footer() {
   return (
@@ -12,8 +13,16 @@ export default function Footer() {
           <div>
             <h3 className="text-sm uppercase tracking-[0.18em] text-white/70 mb-4">Explore</h3>
             <ul className="space-y-3 text-white/80 text-sm">
-              <li><a href="#" className="hover:text-white transition">Home</a></li>
-              <li><a href="/about" className="hover:text-white transition">About Us</a></li>
+              <li>
+                <Link href="/" className="hover:text-white transition">
+                  Home
+                </Link>
+              </li>
+              <li>
+                <Link href="/about" prefetch className="hover:text-white transition">
+                  About Us
+                </Link>
+              </li>
               <li><a href="#" className="hover:text-white transition">Pricing</a></li>
               <li><a href="#" className="hover:text-white transition">Features</a></li>
               <li><a href="#" className="hover:text-white transition">Contact</a></li>
