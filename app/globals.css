@@ -33,6 +33,26 @@
       transform: scale(1);
     }
   }
+  @keyframes senseifi-logo-zoom {
+    0%,
+    100% {
+      transform: scale(0.88);
+      opacity: 0.75;
+    }
+    50% {
+      transform: scale(1.12);
+      opacity: 1;
+    }
+  }
+  .animate-senseifi-logo-zoom {
+    animation: senseifi-logo-zoom 1.4s ease-in-out infinite;
+    transform-origin: center;
+  }
+  .animate-senseifi-text-zoom {
+    animation: senseifi-logo-zoom 1.4s ease-in-out infinite;
+    animation-delay: 0.12s;
+    transform-origin: center;
+  }
   .animate-zoom-in-out {
     animation: zoom-in-out 1.2s cubic-bezier(0.4,0,0.2,1) both;
   }

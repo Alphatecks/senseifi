@@ -35,6 +35,16 @@
     return getRiskLevel10(decision) <= RISK_LEVEL10_REVIEW_THRESHOLD;
   }
 
+  function currentDomain() {
+    try {
+      return window.location && window.location.hostname
+        ? String(window.location.hostname).toLowerCase()
+        : '';
+    } catch (_error) {
+      return '';
+    }
+  }
+
   function isExtensionContextAlive() {
     return typeof chrome !== 'undefined' && !!(chrome.runtime && chrome.runtime.id);
   }
@@ -550,6 +560,8 @@
           context: {
             method: requestContext?.method || null,
             riskScore: decision?.riskScore || null,
+            domain: currentDomain(),
+            safeProceed: showSafeProceedOnly,
           },
         }).catch(function () {});
         overlay.classList.remove('senseiguard-visible');
@@ -565,6 +577,8 @@
           context: {
             method: requestContext?.method || null,
             riskScore: decision?.riskScore || null,
+            domain: currentDomain(),
+            safeProceed: showSafeProceedOnly,
           },
         }).catch(function () {});
         overlay.classList.remove('senseiguard-visible');
@@ -646,7 +660,7 @@
 
       const isConnect = isConnectMethod(data.method);
       const requiresUserGate =
-        isConnect ||
+        (isConnect && !decision.skipUserGate) ||
         decision.action === 'warn' ||
         isMaliciousDecision(decision);
 

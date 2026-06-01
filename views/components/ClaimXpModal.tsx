@@ -1,6 +1,9 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React from "react";
+import { useRouter } from "next/navigation";
+
+import { useWallet } from "@/hooks/useWallet";
 
 type ClaimXpModalProps = {
   open: boolean;
@@ -24,74 +27,15 @@ function NitroIcon({ className }: { className?: string }) {
   );
 }
 
-function getWaitlistBaseUrl() {
-  return process.env.NEXT_PUBLIC_WAITLIST_API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL || "https://waitlist-82co.onrender.com";
+function truncateAddress(addr: string) {
+  if (addr.length <= 12) return addr;
+  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 }
 
 export default function ClaimXpModal({ open, onClose }: ClaimXpModalProps) {
-  const [email, setEmail] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [xpValue, setXpValue] = useState<number | null>(null);
-  const [successfulReferrals, setSuccessfulReferrals] = useState(0);
-  const [xpProgressPercent, setXpProgressPercent] = useState(0);
-  const [xpProgressAnimated, setXpProgressAnimated] = useState(0);
-  const [claimed, setClaimed] = useState(false);
-
-  useEffect(() => {
-    if (open) return;
-    setEmail("");
-    setLoading(false);
-    setError("");
-    setXpValue(null);
-    setSuccessfulReferrals(0);
-    setXpProgressPercent(0);
-    setXpProgressAnimated(0);
-    setClaimed(false);
-  }, [open]);
-
-  useEffect(() => {
-    if (!open || !claimed) return;
-    const t = window.setTimeout(() => setXpProgressAnimated(xpProgressPercent), 80);
-    return () => window.clearTimeout(t);
-  }, [open, claimed, xpProgressPercent]);
-
-  const handleClaim = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmed = email.trim();
-    if (!trimmed) {
-      setError("Enter the email you used to join the waitlist.");
-      return;
-    }
-
-    setLoading(true);
-    setError("");
-    try {
-      const res = await fetch(`${getWaitlistBaseUrl()}/referrals/by-email?email=${encodeURIComponent(trimmed)}`);
-      const data = await res.json().catch(() => ({}));
-
-      if (!res.ok || !data) {
-        setError(data?.message || "We couldn't find XP for that email. Use the same email you joined the waitlist with.");
-        return;
-      }
-
-      setSuccessfulReferrals(typeof data.successfulCount === "number" ? data.successfulCount : 0);
-      if (typeof data.xp === "number") {
-        setXpValue(data.xp);
-        const xpFullBar = 100 * 20;
-        setXpProgressPercent(Math.min(100, Math.max(0, (data.xp / xpFullBar) * 100)));
-        setXpProgressAnimated(0);
-      } else {
-        setXpValue(0);
-        setXpProgressPercent(0);
-      }
-      setClaimed(true);
-    } catch {
-      setError("Network error. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const router = useRouter();
+  const { address, isConnected, chainId } = useWallet();
+  const walletReady = Boolean(isConnected && address?.trim() && chainId);
 
   if (!open) return null;
 
@@ -106,9 +50,9 @@ export default function ClaimXpModal({ open, onClose }: ClaimXpModalProps) {
             </div>
             <div>
               <h3 id="claim-xp-title" className="text-lg font-normal text-white">
-                Claim your XP
+                Buy XPs
               </h3>
-              <p className="text-xs text-slate-400 mt-0.5">Link your waitlist email to unlock rewards</p>
+              <p className="text-xs text-slate-400 mt-0.5">Top up XP to unlock guarded features</p>
             </div>
           </div>
           <button
@@ -124,117 +68,70 @@ export default function ClaimXpModal({ open, onClose }: ClaimXpModalProps) {
         </div>
 
         <div className="p-5 space-y-4" style={{ backgroundColor: "#191b28" }}>
-          {!claimed ? (
-            <>
-              <p className="text-sm text-slate-300 leading-relaxed">
-                Enter the email address you used when joining the SenseiFi waitlist. We&apos;ll match it to your account and surface any XP you&apos;ve earned from referrals and activity.
-              </p>
+          <p className="text-sm text-slate-300 leading-relaxed">
+            Buy additional XP credits to continue using Wallet Security, Threat Intelligence, Contract Scanner, and Activity Monitor without limits.
+          </p>
 
-              <form onSubmit={handleClaim} className="space-y-4">
-                <div>
-                  <label htmlFor="claim-xp-email" className="block text-xs text-slate-400 mb-1.5">
-                    Email address
-                  </label>
-                  <div className="emboss-inset-3d-input rounded-lg bg-[#1a1d24] border border-slate-800/50 overflow-hidden">
-                    <input
-                      id="claim-xp-email"
-                      type="email"
-                      value={email}
-                      onChange={(e) => {
-                        setEmail(e.target.value);
-                        if (error) setError("");
-                      }}
-                      placeholder="you@example.com"
-                      required
-                      autoComplete="email"
-                      className="w-full bg-transparent px-4 py-3.5 text-sm text-white placeholder:text-slate-500 outline-none border-none"
-                    />
-                  </div>
-                </div>
-
-                {error ? (
-                  <p className="text-sm text-red-300 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2.5">{error}</p>
-                ) : null}
-
-                <div className="rounded-lg border border-slate-700/60 bg-[#25283D] p-4">
-                  <p className="text-xs text-slate-400 mb-2">How XP works</p>
-                  <ul className="text-sm text-slate-300 space-y-1.5">
-                    <li className="flex items-start gap-2">
-                      <span className="text-[#4066FF] shrink-0">•</span>
-                      <span>Earn 100 XP for every successful referral</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-[#4066FF] shrink-0">•</span>
-                      <span>Use the same email you signed up with on the waitlist</span>
-                    </li>
-                  </ul>
-                </div>
-
+          <div
+            className={`rounded-lg border px-4 py-3 ${
+              walletReady
+                ? "border-[#32BB1D]/40 bg-[#32BB1D]/10"
+                : "border-amber-500/40 bg-amber-500/10"
+            }`}
+          >
+            <p className="text-xs text-slate-400 mb-1">Connected wallet</p>
+            {walletReady && address ? (
+              <p className="text-sm font-mono text-white">{truncateAddress(address)}</p>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-sm text-amber-200">No wallet connected</p>
                 <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full rounded-lg py-2.5 text-sm font-semibold text-white transition disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                  style={{
-                    background: "linear-gradient(to bottom, #5B7CFF 0%, #4066FF 50%, #0026FF 100%)",
-                    boxShadow: "0 4px 15px rgba(0,38,255,0.6)",
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    router.push("/connect-wallet");
                   }}
+                  className="inline-flex text-sm font-medium text-[#4066FF] hover:underline"
                 >
-                  {loading ? (
-                    <>
-                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/60 border-t-transparent" aria-hidden />
-                      Claiming…
-                    </>
-                  ) : (
-                    "Claim XP"
-                  )}
+                  Connect wallet →
                 </button>
-              </form>
-            </>
-          ) : (
-            <>
-              <div className="rounded-lg border border-[#4066FF]/30 bg-[#4066FF]/10 p-4 text-center">
-                <p className="text-sm text-slate-300 mb-1">XP linked to</p>
-                <p className="text-white font-medium truncate">{email.trim()}</p>
               </div>
+            )}
+          </div>
 
-              <div className="rounded-lg border border-slate-700/60 bg-[#25283D] p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-xs text-slate-400">Your XP balance</p>
-                  <span className="flex items-center gap-1.5 text-sm font-semibold text-[#4066FF]">
-                    <NitroIcon className="w-4 h-4" />
-                    {xpValue != null ? `${xpValue} XP` : "— XP"}
-                  </span>
-                </div>
-                <div className="relative h-2.5 rounded-full bg-white/10 overflow-visible xp-bar-track">
-                  <div
-                    className="xp-bar-fill absolute inset-y-0 left-0 rounded-full bg-[#0026FF]"
-                    style={{ width: `${Math.min(100, Math.max(0, xpProgressAnimated))}%` }}
-                  />
-                  <div
-                    className="xp-bar-spark absolute top-1/2 w-3 h-3 -translate-y-1/2 rounded-full bg-white border border-white/80 -translate-x-1/2"
-                    style={{ left: `${Math.min(100, Math.max(0, xpProgressAnimated))}%` }}
-                  />
-                </div>
-              </div>
+          <div className="rounded-lg border border-slate-700/60 bg-[#25283D] p-4">
+            <p className="text-xs text-slate-400 mb-2">Buy XP to unlock</p>
+            <ul className="text-sm text-slate-300 space-y-1.5">
+              <li className="flex items-start gap-2">
+                <span className="text-[#4066FF] shrink-0">•</span>
+                <span>Wallet Security analysis</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-[#4066FF] shrink-0">•</span>
+                <span>Threat Intelligence access</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-[#4066FF] shrink-0">•</span>
+                <span>Contract Scanner and Activity Monitor</span>
+              </li>
+            </ul>
+          </div>
 
-              <div className="flex items-center justify-between rounded-lg border border-slate-700/60 bg-[#25283D] px-4 py-3">
-                <span className="text-xs text-slate-400">Successful referrals</span>
-                <span className="text-sm font-medium text-white">{successfulReferrals}</span>
-              </div>
-
-              <button
-                type="button"
-                onClick={onClose}
-                className="w-full rounded-lg py-2.5 text-sm font-semibold text-white transition"
-                style={{
-                  background: "linear-gradient(to bottom, #5B7CFF 0%, #4066FF 50%, #0026FF 100%)",
-                  boxShadow: "0 4px 15px rgba(0,38,255,0.6)",
-                }}
-              >
-                Done
-              </button>
-            </>
-          )}
+          <button
+            type="button"
+            disabled={!walletReady}
+            onClick={() => {
+              onClose();
+              router.push("/guard/settings?section=subscription");
+            }}
+            className="w-full rounded-lg py-2.5 text-sm font-semibold text-white transition disabled:opacity-60 disabled:cursor-not-allowed"
+            style={{
+              background: "linear-gradient(to bottom, #5B7CFF 0%, #4066FF 50%, #0026FF 100%)",
+              boxShadow: "0 4px 15px rgba(0,38,255,0.6)",
+            }}
+          >
+            Buy XPs
+          </button>
         </div>
       </div>
     </div>

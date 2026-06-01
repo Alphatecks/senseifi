@@ -10,6 +10,7 @@ const STORAGE_KEYS = {
   riskCache: 'senseiguard_risk_cache',
   telemetryQueue: 'senseiguard_telemetry_queue',
   activeDomains: 'senseiguard_active_domains',
+  connectApprovals: 'senseiguard_connect_approvals',
 };
 
 const MESSAGE_TYPES = {
@@ -91,6 +92,7 @@ const RISK_LEVEL10_REVIEW_THRESHOLD = 3;
 
 const INJECTION_DEBOUNCE_MS = 1500;
 const BACKEND_RISK_TIMEOUT_MS = 1200;
+const CONNECT_APPROVAL_TTL_MS = 30 * 60 * 1000;
 const injectionAttempts = new Map();
 const runtimeDiagnostics = {
   hookInjected: 0,
@@ -570,6 +572,65 @@ function domainFromUrl(url) {
   }
 }
 
+function normalizeDomain(value) {
+  if (typeof value !== 'string') return '';
+  return value.trim().toLowerCase();
+}
+
+async function loadConnectApprovals() {
+  const stored = await storageGet([STORAGE_KEYS.connectApprovals]);
+  const raw =
+    stored && stored[STORAGE_KEYS.connectApprovals] && typeof stored[STORAGE_KEYS.connectApprovals] === 'object'
+      ? stored[STORAGE_KEYS.connectApprovals]
+      : {};
+  const now = Date.now();
+  const next = {};
+  let changed = false;
+  Object.keys(raw).forEach((key) => {
+    const entry = raw[key];
+    const expiresAt = Number(entry && entry.expiresAt);
+    if (Number.isFinite(expiresAt) && expiresAt > now) {
+      next[key] = entry;
+      return;
+    }
+    changed = true;
+  });
+  if (changed) {
+    await storageSet({ [STORAGE_KEYS.connectApprovals]: next });
+  }
+  return next;
+}
+
+async function setConnectApproval(domain, method) {
+  const normalizedDomain = normalizeDomain(domain);
+  if (!normalizedDomain) return;
+  const approvals = await loadConnectApprovals();
+  const now = Date.now();
+  approvals[normalizedDomain] = {
+    domain: normalizedDomain,
+    method: method || 'eth_requestAccounts',
+    approvedAt: now,
+    expiresAt: now + CONNECT_APPROVAL_TTL_MS,
+  };
+  await storageSet({ [STORAGE_KEYS.connectApprovals]: approvals });
+}
+
+async function clearConnectApproval(domain) {
+  const normalizedDomain = normalizeDomain(domain);
+  if (!normalizedDomain) return;
+  const approvals = await loadConnectApprovals();
+  if (!approvals[normalizedDomain]) return;
+  delete approvals[normalizedDomain];
+  await storageSet({ [STORAGE_KEYS.connectApprovals]: approvals });
+}
+
+async function hasActiveConnectApproval(domain) {
+  const normalizedDomain = normalizeDomain(domain);
+  if (!normalizedDomain) return false;
+  const approvals = await loadConnectApprovals();
+  return !!approvals[normalizedDomain];
+}
+
 function domainRisk(domain, riskCache) {
   if (!domain) return { score: 0, findings: [] };
   const findings = [];
@@ -619,6 +680,26 @@ async function evaluateTransaction(payload, sender) {
     }
   }
   const isConnectMethod = CONNECT_METHODS.has(payload.method);
+  if (isConnectMethod && (await hasActiveConnectApproval(domain))) {
+    const findings = ['Using previously approved Safe to proceed decision for this site'];
+    return {
+      ok: true,
+      decision: {
+        action: 'allow',
+        riskScore: 0,
+        reason: 'Previously approved wallet connection for this site',
+        findings,
+        riskLevel10: 0,
+        skipUserGate: true,
+        siteSafety: 'safe',
+        siteSafe: true,
+        connectionCheck: null,
+        backend: { ok: null, score: null, breakdown: null },
+        local: { score: 0, findings: [] },
+      },
+    };
+  }
+
   if (isConnectMethod) {
     console.info('[SenseiGuard][scan][connect]', {
       method: payload.method,
@@ -1046,10 +1127,25 @@ async function handleMessage(message, sender) {
     }
 
     case MESSAGE_TYPES.userDecision: {
+      const context = message.context || null;
+      const method = context && typeof context.method === 'string' ? context.method : '';
+      const isConnectMethod = CONNECT_METHODS.has(method);
+      const contextDomain = normalizeDomain(context && typeof context.domain === 'string' ? context.domain : '');
+      const senderDomain = domainFromUrl((sender && sender.tab && sender.tab.url) || '');
+      const domain = contextDomain || senderDomain;
+      const safeProceedOnly = !!(context && context.safeProceed === true);
+      const choseProceed = String(message.decision || '').toLowerCase() === 'proceed';
+      if (isConnectMethod) {
+        if (choseProceed && safeProceedOnly) {
+          await setConnectApproval(domain, method);
+        } else if (!choseProceed) {
+          await clearConnectApproval(domain);
+        }
+      }
       await queueTelemetry({
         type: TELEMETRY_EVENT_TYPES.userDecision,
         decision: message.decision || 'unknown',
-        context: message.context || null,
+        context: context,
       });
       return { ok: true };
     }

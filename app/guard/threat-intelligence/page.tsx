@@ -88,6 +88,52 @@ const CHART_W = 280;
 const CHART_H = 100;
 const COMMUNITY_ROWS_PER_PAGE = 10;
 const LIVE_SIGNALS_PER_PAGE = 4;
+const MOBILE_LIVE_SIGNALS_PREVIEW = 2;
+const MOBILE_COMMUNITY_PREVIEW = 5;
+
+function truncateAddress(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length <= 12) return trimmed;
+  if (trimmed.startsWith("0x") && trimmed.length > 10) {
+    return `${trimmed.slice(0, 5)}...${trimmed.slice(-3)}`;
+  }
+  return `${trimmed.slice(0, 8)}...${trimmed.slice(-4)}`;
+}
+
+function formatSignalTime(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
+}
+
+function formatRelativeTime(dateValue: string | null | undefined): string {
+  if (!dateValue) return "—";
+  const parsed = new Date(dateValue);
+  if (Number.isNaN(parsed.getTime())) return dateValue;
+  const diffMs = Date.now() - parsed.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  if (diffMins < 1) return "Just now";
+  if (diffMins < 60) return `${diffMins} min${diffMins === 1 ? "" : "s"} ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours} hr${diffHours === 1 ? "" : "s"} ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 7) return `${diffDays}day${diffDays === 1 ? "" : "s"}`;
+  return parsed.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function communityThreatTitle(domain: string): string {
+  const base = domain.replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0] || domain;
+  const name = base.split(".")[0] || base;
+  return name.replace(/-/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+const SHIELD_CHECK_ICON = (
+  <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-slate-700/80 border border-slate-600/60 shrink-0">
+    <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+    </svg>
+  </span>
+);
 
 function smoothCurvePath(points: Array<{ x: number; y: number }>, tension: number = 0.3): string {
   if (points.length < 2) return "";
@@ -126,6 +172,21 @@ type CommunityThreatRow = {
   sourceMetadata: string;
   updatedAt: string;
 };
+
+function communityThreatDescription(row: CommunityThreatRow): string {
+  if (row.siteSafety === "Dangerous") {
+    return `Reported ${row.listType.replace(/_/g, " ")} · ${row.domain}`;
+  }
+  return `Verified ${row.listType.replace(/_/g, " ")} · ${row.domain}`;
+}
+
+function communityRiskLabel(siteSafety: CommunityThreatRow["siteSafety"]): string {
+  return siteSafety === "Dangerous" ? "Medium" : "Safe";
+}
+
+function communityRiskClass(siteSafety: CommunityThreatRow["siteSafety"]): string {
+  return siteSafety === "Dangerous" ? "text-orange-400" : "text-[#32BB1D]";
+}
 
 function formatUpdatedAt(dateValue: string | null | undefined): string {
   if (!dateValue) return "—";
@@ -174,6 +235,427 @@ function liveSignalSummaryToDetails(signal: LiveScamSignalSummary): LiveScamSign
     description:
       "Summary from live scam signals list. Full detail requires a signal id on each summary row from the backend.",
   };
+}
+
+type ChartData = ReturnType<typeof chartPathFromDaily>;
+
+const MOBILE_BLEED = "-mx-4 sm:-mx-6 w-[calc(100%+2rem)] sm:w-[calc(100%+3rem)]";
+const MOBILE_CARD = "rounded-2xl flex flex-col p-5";
+const MOBILE_CARD_BG = { backgroundColor: "#191D35" };
+
+const AI_THREAT_FALLBACK_DESCRIPTION =
+  "SenseiGuard uses AI to analyze transaction patterns, contract behavior, and community reports to identify potential threats. Risk levels are updated in real time based on verified reports and on-chain activity.";
+
+const RISK_LEVEL_BADGE_STYLE = {
+  backgroundColor: "#25283D",
+  color: "#F00500",
+  boxShadow: "inset 1px 1px 0 rgba(255,255,255,0.06), 0 2px 4px rgba(0,0,0,0.2)",
+  border: "1px solid rgba(0,0,0,0.15)",
+} as const;
+
+const VIEW_SUMMARY_BUTTON_STYLE = {
+  background: "linear-gradient(to bottom, #5b7cff 0%, #4066FF 35%, #0026FF 70%, #001a99 100%)",
+  boxShadow: "0 2px 10px rgba(0,38,255,0.4)",
+} as const;
+
+type AiThreatExplanationPanelProps = {
+  loading: boolean;
+  description: string | undefined;
+  riskLevel: string | undefined;
+  onViewSummary: () => void;
+  compact?: boolean;
+};
+
+function AiThreatExplanationPanel({
+  loading,
+  description,
+  riskLevel,
+  onViewSummary,
+  compact = false,
+}: AiThreatExplanationPanelProps) {
+  const displayDescription = loading ? "—" : (description ?? AI_THREAT_FALLBACK_DESCRIPTION);
+  const displayRiskLevel = loading ? "—" : (riskLevel ?? "—");
+
+  return (
+    <>
+      <div className="flex items-center gap-2 mb-3">
+        {compact ? MOBILE_CARD_ICON : ENVELOPE_ICON}
+        <h2 className={compact ? "text-base font-medium text-white" : "text-lg font-medium text-slate-200"}>
+          AI Threat Explanation
+        </h2>
+      </div>
+      <p className={`${compact ? "text-sm" : "text-base"} text-slate-400 leading-relaxed flex-1`}>
+        {displayDescription}
+      </p>
+      <div className={`mt-4 flex gap-4 flex-wrap ${compact ? "items-stretch" : "items-center justify-between"}`}>
+        <div
+          className={`rounded-lg font-medium ${compact ? "px-3 py-2.5 flex-1 text-center text-sm" : "px-4 py-2.5 w-fit text-base"}`}
+          style={RISK_LEVEL_BADGE_STYLE}
+        >
+          Risk Level: {displayRiskLevel}
+        </div>
+        <button
+          type="button"
+          onClick={onViewSummary}
+          className={`rounded-lg font-medium text-white transition text-center shrink-0 ${
+            compact ? "py-2.5 px-4 flex-1" : "py-3 px-6"
+          }`}
+          style={VIEW_SUMMARY_BUTTON_STYLE}
+        >
+          View Summary
+        </button>
+      </div>
+    </>
+  );
+}
+
+type ScamFrequencyChartProps = {
+  periodLabel: string;
+  chartData: ChartData;
+  highlightDayIndex: number;
+  setHighlightDayIndex: (index: number) => void;
+  highlightX: number;
+  highlightY: number;
+  highlightValue: string;
+  compact?: boolean;
+};
+
+function ScamFrequencyChartPanel({
+  periodLabel,
+  chartData,
+  highlightDayIndex,
+  setHighlightDayIndex,
+  highlightX,
+  highlightY,
+  highlightValue,
+  compact = false,
+}: ScamFrequencyChartProps) {
+  const yMax = chartData.values.length ? Math.max(1, ...chartData.values) : 1;
+  const yTicks = compact
+    ? [yMax, Math.round((yMax * 2) / 3), Math.round(yMax / 3), 0]
+    : [yMax, 0];
+
+  return (
+    <>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          {compact ? MOBILE_CARD_ICON : SCAN_ICON}
+          <h2 className={compact ? "text-base font-medium text-white" : "text-lg font-medium text-slate-200"}>
+            Scam Pattern Insights
+          </h2>
+        </div>
+        <span className={compact ? "text-xs text-slate-500 capitalize" : "text-sm text-slate-500 capitalize"}>
+          {periodLabel}
+        </span>
+      </div>
+      <div className={`flex-1 flex flex-col ${compact ? "min-h-[220px]" : "min-h-[220px] xl:min-h-0"}`}>
+        <p className={`${compact ? "text-sm" : "text-base"} font-medium text-slate-400 mb-2`}>Scam Frequency</p>
+        <div
+          className="relative flex-1 min-h-[180px] flex gap-2 items-stretch mt-2 overflow-visible"
+          style={{ maxHeight: compact ? 220 : 260 }}
+        >
+          <div className="flex flex-col justify-between py-0.5 text-slate-400 text-xs font-medium shrink-0 w-8">
+            {yTicks.map((tick, i) => (
+              <span key={i}>{tick}</span>
+            ))}
+          </div>
+          <div className="flex-1 min-w-0 relative overflow-visible">
+            <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} className="w-full h-full" preserveAspectRatio="none">
+              {[0, 1, 2, 3].map((i) => (
+                <line
+                  key={i}
+                  x1={0}
+                  y1={CHART_H - (i / 3) * CHART_H}
+                  x2={CHART_W}
+                  y2={CHART_H - (i / 3) * CHART_H}
+                  stroke="rgba(148,163,184,0.25)"
+                  strokeWidth="0.8"
+                />
+              ))}
+              <path fill="rgba(64,102,255,0.2)" d={chartData.areaPath} />
+              <path fill="none" stroke="#4066FF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d={chartData.path} />
+              <line x1={highlightX} y1={highlightY} x2={highlightX} y2={CHART_H} stroke="#0026FF" strokeWidth="1" strokeDasharray="2 2" />
+            </svg>
+            <div
+              className="absolute z-10 w-4 h-4 rounded-full pointer-events-none bg-[#32BB1D]"
+              style={{
+                left: `${(highlightX / CHART_W) * 100}%`,
+                top: `${(highlightY / CHART_H) * 100}%`,
+                transform: "translate(-50%, -50%)",
+              }}
+            />
+            <div
+              className="absolute z-10 pointer-events-none text-sm font-semibold whitespace-nowrap text-white"
+              style={{
+                left: `${(highlightX / CHART_W) * 100}%`,
+                top: `${(highlightY / CHART_H) * 100}%`,
+                transform: "translate(-50%, -100%) translateY(-8px)",
+              }}
+            >
+              {highlightValue}
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-2 mt-2 items-center">
+          <div className="w-8 shrink-0" aria-hidden />
+          <div className={`flex justify-between text-slate-500 w-[92%] min-w-0 tracking-tight ${compact ? "text-xs" : "text-sm"}`}>
+            {chartData.dayLabels.length ? (
+              chartData.dayLabels.map((d, i) => (
+                <button
+                  key={`${d}-${i}`}
+                  type="button"
+                  onClick={() => setHighlightDayIndex(i)}
+                  className={`shrink-0 transition ${highlightDayIndex === i ? "text-[#0026FF] font-semibold" : "text-slate-500 hover:text-slate-300"}`}
+                >
+                  {d}
+                </button>
+              ))
+            ) : (
+              <span>—</span>
+            )}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+type LiveScamSignalsPanelProps = {
+  mounted: boolean;
+  loading: boolean;
+  signals: LiveScamSignalSummary[];
+  pagedSignals: LiveScamSignalSummary[];
+  page: number;
+  totalPages: number;
+  setPage: React.Dispatch<React.SetStateAction<number>>;
+  onViewDetails: (signal: LiveScamSignalSummary) => void;
+  compact?: boolean;
+  variant?: "default" | "mobile";
+};
+
+function LiveScamSignalsPanel({
+  mounted,
+  loading,
+  signals,
+  pagedSignals,
+  page,
+  totalPages,
+  setPage,
+  onViewDetails,
+  compact = false,
+  variant = "default",
+}: LiveScamSignalsPanelProps) {
+  const isMobile = variant === "mobile";
+  const visibleSignals = isMobile ? signals.slice(0, MOBILE_LIVE_SIGNALS_PREVIEW) : pagedSignals;
+
+  return (
+    <div className={compact && !isMobile ? "mt-5 pt-5 border-t border-slate-700/40" : isMobile ? "" : "mt-6 pt-4"}>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className={isMobile || compact ? "text-base font-medium text-white" : "text-base font-medium text-slate-200"}>
+          Live Scam Signals
+        </h3>
+        <button
+          type="button"
+          className={`font-medium hover:underline ${isMobile || compact ? "text-xs text-slate-500" : "text-sm text-white"}`}
+        >
+          View all
+        </button>
+      </div>
+      <ul className="space-y-3">
+        {!mounted ? (
+          <li className="rounded-xl p-4 bg-[#25283D] border border-slate-700/50 text-slate-500 text-sm">Loading…</li>
+        ) : loading ? (
+          <li className="rounded-xl p-4 bg-[#25283D] border border-slate-700/50 text-slate-500 text-sm">Loading live scam signals…</li>
+        ) : !signals.length ? (
+          <li className="rounded-xl p-4 bg-[#25283D] border border-slate-700/50 text-slate-500 text-sm">No live scam signals.</li>
+        ) : (
+          visibleSignals.map((signal, i) => (
+            <li key={extractLiveSignalId(signal) || `${signal.address}-${i}`}>
+              {isMobile ? (
+                <button
+                  type="button"
+                  onClick={() => onViewDetails(signal)}
+                  className="w-full rounded-xl p-4 bg-[#25283D] border border-slate-700/50 text-left transition hover:border-slate-600/80"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex flex-col gap-1 min-w-0">
+                      <p className="text-sm font-semibold text-white truncate" style={{ fontFamily: "'Satoshi', sans-serif" }}>
+                        {truncateAddress(signal.address)}
+                      </p>
+                      <p className="text-xs text-slate-400">{signal.threat_type}</p>
+                    </div>
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      <span className="text-xs text-slate-400" style={{ fontFamily: "'Satoshi', sans-serif" }}>
+                        {formatSignalTime(signal.detected_at)}
+                      </span>
+                      <span className="text-xs font-bold text-[#F00500]">{signal.risk_level}</span>
+                    </div>
+                  </div>
+                </button>
+              ) : (
+                <div className="rounded-xl p-4 bg-[#25283D] border border-slate-700/50">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex flex-col gap-0.5 min-w-0">
+                      <p className="text-base font-semibold text-white truncate" style={{ fontFamily: "'Satoshi', sans-serif" }}>
+                        {signal.address}
+                      </p>
+                      <p className="text-sm text-slate-400">{signal.threat_type}</p>
+                    </div>
+                    <div className="flex flex-col items-end gap-0.5 shrink-0">
+                      <span className="text-sm text-slate-400" style={{ fontFamily: "'Satoshi', sans-serif" }}>
+                        {signal.detected_at}
+                      </span>
+                      <span className="text-sm font-bold text-[#F00500]">{signal.risk_level}</span>
+                    </div>
+                  </div>
+                  <div className="mt-3">
+                    <button
+                      type="button"
+                      onClick={() => onViewDetails(signal)}
+                      className="rounded-lg px-3 py-2 text-xs font-medium text-white border border-slate-600/60 bg-[#1f243c] hover:bg-[#29314f] transition"
+                    >
+                      View details
+                    </button>
+                  </div>
+                </div>
+              )}
+            </li>
+          ))
+        )}
+      </ul>
+      {!isMobile && !loading && signals.length > LIVE_SIGNALS_PER_PAGE && (
+        <div className="flex items-center justify-between gap-3 mt-3">
+          <button
+            type="button"
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page <= 1}
+            className="rounded-lg px-3 py-2 text-xs font-medium text-slate-400 hover:text-white bg-[#25283D] border border-slate-600/50 hover:border-slate-500 transition disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Prev
+          </button>
+          <span className="text-xs text-slate-500">
+            Page {page} of {totalPages}
+          </span>
+          <button
+            type="button"
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page >= totalPages}
+            className="rounded-lg px-3 py-2 text-xs font-medium text-slate-400 hover:text-white bg-[#25283D] border border-slate-600/50 hover:border-slate-500 transition disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Next
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+type CommunityReportedThreatsPanelProps = {
+  mounted: boolean;
+  loading: boolean;
+  rows: CommunityThreatRow[];
+};
+
+function CommunityReportedThreatsPanel({ mounted, loading, rows }: CommunityReportedThreatsPanelProps) {
+  const [expanded, setExpanded] = useState(false);
+  const visibleRows = expanded ? rows : rows.slice(0, MOBILE_COMMUNITY_PREVIEW);
+  const canExpand = rows.length > MOBILE_COMMUNITY_PREVIEW;
+
+  return (
+    <>
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <div className="flex items-center gap-2 min-w-0">
+          {SHIELD_CHECK_ICON}
+          <h3 className="text-sm font-semibold text-white truncate">Community-Reported Threats</h3>
+        </div>
+        {canExpand && !expanded ? (
+          <button
+            type="button"
+            onClick={() => setExpanded(true)}
+            className="text-xs font-medium text-[#4066FF] hover:underline shrink-0"
+          >
+            See More
+          </button>
+        ) : null}
+      </div>
+      <ul>
+        {!mounted ? (
+          <li className="py-4 text-slate-500 text-sm">Loading…</li>
+        ) : loading ? (
+          <li className="py-4 text-slate-500 text-sm">Loading community reports…</li>
+        ) : !rows.length ? (
+          <li className="py-4 text-slate-500 text-sm">No community-reported threats.</li>
+        ) : (
+          visibleRows.map((row, i) => (
+            <li
+              key={`${row.domain}-${i}`}
+              className={`flex items-start justify-between gap-4 py-4 ${i < visibleRows.length - 1 ? "border-b border-slate-700/50" : ""}`}
+            >
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-white">{communityThreatTitle(row.domain)}</p>
+                <p className="text-xs text-slate-400 mt-1 leading-relaxed line-clamp-2">{communityThreatDescription(row)}</p>
+              </div>
+              <div className="flex flex-col items-end gap-1 shrink-0">
+                <span className={`text-xs font-semibold ${communityRiskClass(row.siteSafety)}`}>
+                  {communityRiskLabel(row.siteSafety)}
+                </span>
+                <span className="text-xs text-slate-400">{formatRelativeTime(row.updatedAt)}</span>
+              </div>
+            </li>
+          ))
+        )}
+      </ul>
+    </>
+  );
+}
+
+type ThreatCampaignsPanelProps = {
+  mounted: boolean;
+  loading: boolean;
+  campaigns: ThreatCampaign[];
+};
+
+function ThreatCampaignsPanel({ mounted, loading, campaigns }: ThreatCampaignsPanelProps) {
+  return (
+    <div className="mt-6 pt-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-base font-medium text-slate-200">Threat campaigns</h3>
+        <span className="text-xs text-slate-500">Correlated activity clusters</span>
+      </div>
+      <ul className="space-y-3">
+        {!mounted ? (
+          <li className="rounded-xl p-4 bg-[#25283D] border border-slate-700/50 text-slate-500 text-sm">Loading…</li>
+        ) : loading ? (
+          <li className="rounded-xl p-4 bg-[#25283D] border border-slate-700/50 text-slate-500 text-sm">Loading threat campaigns…</li>
+        ) : !campaigns.length ? (
+          <li className="rounded-xl p-4 bg-[#25283D] border border-slate-700/50 text-slate-500 text-sm">No correlated campaigns detected.</li>
+        ) : (
+          campaigns.slice(0, 5).map((campaign) => (
+            <li key={campaign.id} className="rounded-xl p-4 bg-[#25283D] border border-slate-700/50 space-y-2">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-white">{formatCampaignType(campaign.campaign_type)}</p>
+                  <p className="text-xs text-slate-500 mt-0.5 capitalize">{campaign.status}</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-sm font-bold text-[#F00500]">Risk {campaign.risk_score}</p>
+                  <p className="text-xs text-slate-400">{campaign.confidence_score}% confidence</p>
+                </div>
+              </div>
+              <p className="text-sm text-slate-300 leading-relaxed">{campaign.narrative}</p>
+              {campaign.signal_categories?.length ? (
+                <p className="text-xs text-slate-400">Signals: {campaign.signal_categories.join(", ")}</p>
+              ) : null}
+              <p className="text-xs text-slate-500">
+                {campaign.evidence_count} evidence item{campaign.evidence_count !== 1 ? "s" : ""} · Last seen{" "}
+                {formatUpdatedAt(campaign.last_seen_at)}
+              </p>
+            </li>
+          ))
+        )}
+      </ul>
+    </div>
+  );
 }
 
 function detailValueToText(value: unknown): string {
@@ -354,15 +836,42 @@ export default function ThreatIntelligencePage() {
     }
   };
 
+  const chartPeriodLabel = securityOverview?.scam_pattern_insights?.period?.replace(/_/g, " ") ?? "Last 7 days";
+  const aiThreatDescription = securityOverview?.ai_threat_explanation?.description;
+  const aiThreatRiskLevel =
+    securityOverview?.ai_threat_explanation?.risk_level ?? securityOverview?.overall_risk?.risk_level;
+  const aiThreatPanelProps = {
+    loading: securityOverviewLoading,
+    description: aiThreatDescription,
+    riskLevel: aiThreatRiskLevel,
+    onViewSummary: () => setSummaryModalOpen(true),
+  };
+  const chartPanelProps = {
+    periodLabel: chartPeriodLabel,
+    chartData,
+    highlightDayIndex,
+    setHighlightDayIndex,
+    highlightX,
+    highlightY,
+    highlightValue,
+  };
+  const liveSignalsPanelProps = {
+    mounted,
+    loading: liveScamSignalsLoading,
+    signals: liveScamSignals,
+    pagedSignals: pagedLiveScamSignals,
+    page: liveSignalsPage,
+    totalPages: liveSignalsTotalPages,
+    setPage: setLiveSignalsPage,
+    onViewDetails: openLiveSignalDetails,
+  };
+
   return (
-    <div className="rounded-2xl p-6 space-y-6 xl:bg-blue-950/25 xl:border xl:border-blue-900/40">
-      {/* Top: 2x2 stat grid + AI (left) | Scam Pattern Insights stretches (right) */}
-      <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_0.8fr] gap-4 items-stretch">
-        <div className="flex flex-col gap-4 min-w-0">
-        {/* Mobile: 2x2 metric cards + AI Threat Explanation (envelope icon on all cards) */}
-        <div className="xl:hidden flex flex-col gap-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-xl border p-4 flex flex-col min-h-[180px]" style={CARD_BG}>
+    <div className="rounded-2xl p-4 xl:p-6 space-y-4 xl:space-y-6 xl:bg-blue-950/25 xl:border xl:border-blue-900/40">
+      {/* Mobile: full vertical stack for redesign */}
+      <div className={`xl:hidden flex flex-col gap-4 ${MOBILE_BLEED}`}>
+        <div className="grid grid-cols-2 gap-3">
+          <div className={`${MOBILE_CARD} min-h-[160px]`} style={MOBILE_CARD_BG}>
               <div className="flex items-center gap-2 mb-2">
                 {MOBILE_CARD_ICON}
                 <h2 className="text-sm font-medium text-white whitespace-nowrap">Overall Risk</h2>
@@ -378,7 +887,7 @@ export default function ThreatIntelligencePage() {
                 </div>
               </div>
             </div>
-            <div className="rounded-xl border p-4 flex flex-col min-h-[180px]" style={CARD_BG}>
+          <div className={`${MOBILE_CARD} min-h-[160px]`} style={MOBILE_CARD_BG}>
               <div className="flex items-center gap-2 mb-2">
                 {MOBILE_CARD_ICON}
                 <h2 className="text-sm font-medium text-white whitespace-nowrap">Active Threats</h2>
@@ -387,14 +896,14 @@ export default function ThreatIntelligencePage() {
               <div className="flex items-end justify-between gap-2 mt-2">
                 <div className="flex items-baseline gap-1.5 flex-wrap min-w-0">
                   <span className="text-2xl font-normal text-white">{securityOverviewLoading ? "—" : (securityOverview?.active_threats?.count ?? "—")}</span>
-                  <p className="text-xs text-slate-500 self-end pb-0.5">Currently Detected:</p>
+                  <p className="text-xs text-slate-500 self-end pb-0.5">Currently Detected</p>
                 </div>
                 <div className="w-[26%] min-w-[56px] h-9 shrink-0 self-center">
                   {MINI_CHART}
                 </div>
               </div>
             </div>
-            <div className="rounded-xl border p-4 flex flex-col min-h-[180px]" style={CARD_BG}>
+            <div className={`${MOBILE_CARD} min-h-[160px]`} style={MOBILE_CARD_BG}>
               <div className="flex items-center gap-2 mb-2">
                 {MOBILE_CARD_ICON}
                 <h2 className="text-sm font-medium text-white whitespace-nowrap">Scam Patterns</h2>
@@ -410,57 +919,48 @@ export default function ThreatIntelligencePage() {
                 </div>
               </div>
             </div>
-            <div className="rounded-xl border p-4 flex flex-col min-h-[180px]" style={CARD_BG}>
+            <div className={`${MOBILE_CARD} min-h-[160px]`} style={MOBILE_CARD_BG}>
               <div className="flex items-center gap-2 mb-2">
                 {MOBILE_CARD_ICON}
-                <h2 className="text-sm font-medium text-white whitespace-nowrap">Reported Threats</h2>
+                <h2 className="text-xs font-medium text-white whitespace-nowrap">Reported Threats</h2>
               </div>
               <span className="text-xs text-slate-400 shrink-0 mb-auto">{securityOverviewLoading ? "—" : `${securityOverview?.reported_threats?.verified ?? "—"} Verified`}</span>
               <div className="flex items-end justify-between gap-2 mt-2">
                 <div className="flex items-baseline gap-1.5 flex-wrap min-w-0">
                   <span className="text-2xl font-normal text-white">{securityOverviewLoading ? "—" : ((securityOverview?.reported_threats?.verified ?? 0) + (securityOverview?.reported_threats?.detected ?? 0))}</span>
-                  <p className="text-xs text-slate-500 self-end pb-0.5">Currently Detected:</p>
+                  <p className="text-xs text-slate-500 self-end pb-0.5">Currently Detected</p>
                 </div>
                 <div className="w-[26%] min-w-[56px] h-9 shrink-0 self-center">
                   {MINI_CHART}
                 </div>
               </div>
             </div>
-          </div>
-          <div className="rounded-xl border p-4 flex flex-col" style={CARD_BG}>
-            <div className="flex items-center gap-2 mb-3">
-              {MOBILE_CARD_ICON}
-              <h2 className="text-base font-medium text-white">AI Threat Explanation</h2>
-            </div>
-            <p className="text-sm text-slate-400 leading-relaxed">
-              {securityOverviewLoading ? "—" : (securityOverview?.ai_threat_explanation?.description ?? "SenseiGuard's AI detected behavior patterns that closely match known scam activities. These signals are based on repeated transaction behavior and interactions with flagged wallets, not a single event.")}
-            </p>
-            <div className="mt-4 flex items-center gap-3 flex-wrap">
-              <div
-                className="rounded-lg px-4 py-2.5 w-fit font-medium text-sm"
-                style={{
-                  backgroundColor: "#25283D",
-                  color: "#F00500",
-                  boxShadow: "inset 1px 1px 0 rgba(255,255,255,0.06), 0 2px 4px rgba(0,0,0,0.2)",
-                  border: "1px solid rgba(0,0,0,0.15)",
-                }}
-              >
-                Risk Level: {securityOverviewLoading ? "—" : (securityOverview?.ai_threat_explanation?.risk_level ?? securityOverview?.overall_risk?.risk_level ?? "—")}
-              </div>
-              <button
-                type="button"
-                onClick={() => setSummaryModalOpen(true)}
-                className="rounded-lg font-medium text-white py-3 px-5 transition text-center shrink-0"
-                style={{ background: "linear-gradient(to bottom, #5b7cff 0%, #4066FF 35%, #0026FF 70%, #001a99 100%)", boxShadow: "0 2px 10px rgba(0,38,255,0.4)" }}
-              >
-                View Summary
-              </button>
-            </div>
-          </div>
         </div>
 
-        {/* Desktop: 2x2 stat grid + AI Threat Explanation */}
-        <div className="hidden xl:flex flex-col gap-4">
+        <div className={MOBILE_CARD} style={MOBILE_CARD_BG}>
+          <AiThreatExplanationPanel compact {...aiThreatPanelProps} />
+        </div>
+
+        <div className={MOBILE_CARD} style={MOBILE_CARD_BG}>
+          <ScamFrequencyChartPanel compact {...chartPanelProps} />
+        </div>
+
+        <div className={MOBILE_CARD} style={MOBILE_CARD_BG}>
+          <LiveScamSignalsPanel variant="mobile" {...liveSignalsPanelProps} />
+        </div>
+
+        <div className={MOBILE_CARD} style={MOBILE_CARD_BG}>
+          <CommunityReportedThreatsPanel
+            mounted={mounted}
+            loading={domainThreatFeedLoading}
+            rows={filteredCommunityRows.filter((row) => row.siteSafety === "Dangerous")}
+          />
+        </div>
+      </div>
+
+      {/* Desktop: metrics + AI | scam insights sidebar */}
+      <div className="hidden xl:grid xl:grid-cols-[1.2fr_0.8fr] gap-4 items-stretch">
+        <div className="flex flex-col gap-4 min-w-0">
           <div className="grid grid-cols-2 gap-4">
           <div className={`${CARD_STYLE} min-h-[200px] flex flex-col`} style={CARD_BG}>
             <div className="flex items-center justify-between gap-3 mb-3">
@@ -549,214 +1049,19 @@ export default function ThreatIntelligencePage() {
 
           {/* AI Threat Explanation */}
           <div className={`${CARD_STYLE} flex flex-col max-w-4xl w-full`} style={CARD_BG}>
-            <div className="flex items-center gap-2 mb-3">
-              {ENVELOPE_ICON}
-              <h2 className="text-lg font-medium text-slate-200">AI Threat Explanation</h2>
-            </div>
-            <p className="text-base text-slate-400 leading-relaxed flex-1">
-              {securityOverviewLoading ? "—" : (securityOverview?.ai_threat_explanation?.description ?? "SenseiGuard uses AI to analyze transaction patterns, contract behavior, and community reports to identify potential threats. Risk levels are updated in real time based on verified reports and on-chain activity.")}
-            </p>
-            <div className="mt-4 flex items-center justify-between gap-4 flex-wrap">
-              <div
-                className="rounded-lg px-4 py-2.5 w-fit font-medium text-base"
-                style={{
-                  backgroundColor: "#25283D",
-                  color: "#F00500",
-                  boxShadow: "inset 1px 1px 0 rgba(255,255,255,0.06), 0 2px 4px rgba(0,0,0,0.2)",
-                  border: "1px solid rgba(0,0,0,0.15)",
-                }}
-              >
-                Risk Level: {securityOverviewLoading ? "—" : (securityOverview?.ai_threat_explanation?.risk_level ?? securityOverview?.overall_risk?.risk_level ?? "—")}
-              </div>
-              <button
-                type="button"
-                onClick={() => setSummaryModalOpen(true)}
-                className="rounded-lg font-medium text-white py-3 px-6 transition text-center shrink-0"
-                style={{ background: "linear-gradient(to bottom, #5b7cff 0%, #4066FF 35%, #0026FF 70%, #001a99 100%)", boxShadow: "0 2px 10px rgba(0,38,255,0.4)" }}
-              >
-                View Summary
-              </button>
-            </div>
+            <AiThreatExplanationPanel {...aiThreatPanelProps} />
           </div>
-        </div>
-
         </div>
 
         <div className={`${CARD_STYLE} flex flex-col min-h-[320px] xl:h-full xl:min-h-0`} style={CARD_BG}>
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              {SCAN_ICON}
-              <h2 className="text-lg font-medium text-slate-200">Scam Pattern Insights</h2>
-            </div>
-            <span className="text-sm text-slate-500">{securityOverview?.scam_pattern_insights?.period?.replace(/_/g, " ") ?? "Last 7 days"}</span>
-          </div>
-          <div className="flex-1 min-h-[220px] flex flex-col xl:min-h-0">
-            <p className="text-base font-medium text-slate-400 mb-2">Scam Frequency</p>
-            <div className="relative flex-1 min-h-[180px] flex gap-2 items-stretch mt-6 overflow-visible" style={{ maxHeight: 260 }}>
-              {/* Y-axis labels */}
-              <div className="flex flex-col justify-between py-0.5 text-slate-400 text-xs font-medium shrink-0 w-8">
-                <span>{chartData.values.length ? Math.max(1, ...chartData.values) : 1}</span>
-                <span>0</span>
-              </div>
-              <div className="flex-1 min-w-0 relative overflow-visible">
-              <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} className="w-full h-full" preserveAspectRatio="none">
-                {/* Horizontal grid lines at 0, 100, 200, 300 */}
-                {[0, 1, 2, 3].map((i) => (
-                  <line
-                    key={i}
-                    x1={0}
-                    y1={CHART_H - (i / 3) * CHART_H}
-                    x2={CHART_W}
-                    y2={CHART_H - (i / 3) * CHART_H}
-                    stroke="rgba(148,163,184,0.25)"
-                    strokeWidth="0.8"
-                  />
-                ))}
-                <path fill="rgba(64,102,255,0.2)" d={chartData.areaPath} />
-                <path fill="none" stroke="#4066FF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d={chartData.path} />
-                {/* Dynamic highlight: vertical line + dot (tooltip is HTML overlay below) */}
-                <line x1={highlightX} y1={highlightY} x2={highlightX} y2={CHART_H} stroke="#0026FF" strokeWidth="1" strokeDasharray="2 2" />
-              </svg>
-              <div
-                className="absolute z-10 w-4 h-4 rounded-full pointer-events-none bg-[#32BB1D]"
-                style={{
-                  left: `${(highlightX / CHART_W) * 100}%`,
-                  top: `${(highlightY / CHART_H) * 100}%`,
-                  transform: "translate(-50%, -50%)",
-                }}
-              />
-              {/* Tooltip overlay: positioned above the point so it’s never clipped */}
-              <div
-                className="absolute z-10 pointer-events-none text-sm font-semibold whitespace-nowrap text-white"
-                style={{
-                  left: `${(highlightX / CHART_W) * 100}%`,
-                  top: `${(highlightY / CHART_H) * 100}%`,
-                  transform: "translate(-50%, -100%) translateY(-8px)",
-                }}
-              >
-                {highlightValue}
-              </div>
-              </div>
-            </div>
-            <div className="flex gap-2 mt-2 items-center">
-              <div className="w-8 shrink-0" aria-hidden />
-              <div className="flex justify-between text-sm text-slate-500 w-[92%] min-w-0 tracking-tight">
-                {chartData.dayLabels.length ? chartData.dayLabels.map((d, i) => (
-                  <button key={`${d}-${i}`} type="button" onClick={() => setHighlightDayIndex(i)} className={`shrink-0 transition ${highlightDayIndex === i ? "text-[#0026FF] font-semibold" : "text-slate-500 hover:text-slate-300"}`}>
-                    {d}
-                  </button>
-                )) : <span>—</span>}
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-6 pt-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-base font-medium text-slate-200">Live Scam Signals</h3>
-              <button type="button" className="text-sm font-medium text-white hover:underline">View all</button>
-            </div>
-            <ul className="space-y-3">
-              {!mounted ? (
-                <li className="rounded-xl p-4 bg-[#25283D] border border-slate-700/50 text-slate-500 text-sm">Loading…</li>
-              ) : liveScamSignalsLoading ? (
-                <li className="rounded-xl p-4 bg-[#25283D] border border-slate-700/50 text-slate-500 text-sm">Loading live scam signals…</li>
-              ) : !liveScamSignals.length ? (
-                <li className="rounded-xl p-4 bg-[#25283D] border border-slate-700/50 text-slate-500 text-sm">No live scam signals.</li>
-              ) : (
-                pagedLiveScamSignals.map((signal, i) => (
-                  <li key={extractLiveSignalId(signal) || `${signal.address}-${i}`} className="rounded-xl p-4 bg-[#25283D] border border-slate-700/50">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex flex-col gap-0.5 min-w-0">
-                        <p className="text-base font-semibold text-white" style={{ fontFamily: "'Satoshi', sans-serif" }}>{signal.address}</p>
-                        <p className="text-sm text-slate-400">{signal.threat_type}</p>
-                      </div>
-                      <div className="flex flex-col items-end gap-0.5 shrink-0">
-                        <span className="text-sm text-slate-400" style={{ fontFamily: "'Satoshi', sans-serif" }}>{signal.detected_at}</span>
-                        <span className="text-sm font-bold text-[#F00500]">{signal.risk_level}</span>
-                      </div>
-                    </div>
-                    <div className="mt-3">
-                      <button
-                        type="button"
-                        onClick={() => openLiveSignalDetails(signal)}
-                        className="rounded-lg px-3 py-2 text-xs font-medium text-white border border-slate-600/60 bg-[#1f243c] hover:bg-[#29314f] transition"
-                      >
-                        View details
-                      </button>
-                    </div>
-                  </li>
-                ))
-              )}
-            </ul>
-            {!liveScamSignalsLoading && liveScamSignals.length > LIVE_SIGNALS_PER_PAGE && (
-              <div className="flex items-center justify-between gap-3 mt-3">
-                <button
-                  type="button"
-                  onClick={() => setLiveSignalsPage((p) => Math.max(1, p - 1))}
-                  disabled={liveSignalsPage <= 1}
-                  className="rounded-lg px-3 py-2 text-xs font-medium text-slate-400 hover:text-white bg-[#25283D] border border-slate-600/50 hover:border-slate-500 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Prev
-                </button>
-                <span className="text-xs text-slate-500">
-                  Page {liveSignalsPage} of {liveSignalsTotalPages}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setLiveSignalsPage((p) => Math.min(liveSignalsTotalPages, p + 1))}
-                  disabled={liveSignalsPage >= liveSignalsTotalPages}
-                  className="rounded-lg px-3 py-2 text-xs font-medium text-slate-400 hover:text-white bg-[#25283D] border border-slate-600/50 hover:border-slate-500 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Next
-                </button>
-              </div>
-            )}
-          </div>
-
-          <div className="mt-6 pt-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-base font-medium text-slate-200">Threat campaigns</h3>
-              <span className="text-xs text-slate-500">Correlated activity clusters</span>
-            </div>
-            <ul className="space-y-3">
-              {!mounted ? (
-                <li className="rounded-xl p-4 bg-[#25283D] border border-slate-700/50 text-slate-500 text-sm">Loading…</li>
-              ) : threatCampaignsLoading ? (
-                <li className="rounded-xl p-4 bg-[#25283D] border border-slate-700/50 text-slate-500 text-sm">Loading threat campaigns…</li>
-              ) : !threatCampaigns.length ? (
-                <li className="rounded-xl p-4 bg-[#25283D] border border-slate-700/50 text-slate-500 text-sm">No correlated campaigns detected.</li>
-              ) : (
-                threatCampaigns.slice(0, 5).map((campaign) => (
-                  <li key={campaign.id} className="rounded-xl p-4 bg-[#25283D] border border-slate-700/50 space-y-2">
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-white">{formatCampaignType(campaign.campaign_type)}</p>
-                        <p className="text-xs text-slate-500 mt-0.5 capitalize">{campaign.status}</p>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className="text-sm font-bold text-[#F00500]">Risk {campaign.risk_score}</p>
-                        <p className="text-xs text-slate-400">{campaign.confidence_score}% confidence</p>
-                      </div>
-                    </div>
-                    <p className="text-sm text-slate-300 leading-relaxed">{campaign.narrative}</p>
-                    {campaign.signal_categories?.length ? (
-                      <p className="text-xs text-slate-400">
-                        Signals: {campaign.signal_categories.join(", ")}
-                      </p>
-                    ) : null}
-                    <p className="text-xs text-slate-500">
-                      {campaign.evidence_count} evidence item{campaign.evidence_count !== 1 ? "s" : ""} · Last seen {formatUpdatedAt(campaign.last_seen_at)}
-                    </p>
-                  </li>
-                ))
-              )}
-            </ul>
-          </div>
+          <ScamFrequencyChartPanel {...chartPanelProps} />
+          <LiveScamSignalsPanel {...liveSignalsPanelProps} />
+          <ThreatCampaignsPanel mounted={mounted} loading={threatCampaignsLoading} campaigns={threatCampaigns} />
         </div>
       </div>
 
-      {/* Community-Reported Threats table */}
-      <div className={`${CARD_STYLE} flex flex-col`} style={CARD_BG}>
+      {/* Domain threat feed — desktop only during mobile redesign */}
+      <div className={`hidden xl:flex ${CARD_STYLE} flex-col`} style={CARD_BG}>
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div className="flex items-center gap-2">
             {ENVELOPE_ICON}

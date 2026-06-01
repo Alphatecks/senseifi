@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -8,6 +8,17 @@ import { useRouter } from "next/navigation";
 import { useWallet } from "@/hooks/useWallet";
 import { useDashboardUser } from "@/context/DashboardUserContext";
 import { useRescanModal } from "@/context/RescanModalContext";
+import { isInsufficientXpError, useWaitlistXp } from "@/context/WaitlistXpContext";
+import { filterGuardSearchList, useGuardSearch } from "@/context/GuardSearchContext";
+import {
+  DashboardActivitySkeleton,
+  DashboardAssetSkeleton,
+  DashboardModalListSkeleton,
+  DashboardStatCardSkeleton,
+  SecurityStatusSkeleton,
+  SkeletonBar,
+  WalletHealthSkeleton,
+} from "@/app/guard/components/GuardSkeletons";
 import { getDashboardSummary, getWalletAssets, syncWalletAssets, getDashboardActivity, getWalletsForAddress, scanContract, getScanContractDetails, getUnreadAlerts, getThreatIntelligence, markAlertRead, markAllAlertsRead } from "@/services/dashboardService";
 import type { DashboardSummaryData, WalletAsset, DashboardActivity, WalletListItem, ScanContractResult, ScanContractDetailResponse, UnreadAlertsData, ThreatIntelligenceItem } from "@/services/dashboardService";
 
@@ -61,17 +72,29 @@ export default function GuardDashboardPage() {
   const { activeAddress: address, chainId, walletType } = useWallet();
   const { setDashboardUser } = useDashboardUser();
   const { openRescanModal, scanCompleteTimestamp } = useRescanModal();
+  const {
+    refreshWaitlistXp,
+    applyInsufficientXp,
+    canAffordContractScan,
+    contractScanCost,
+    insufficientXpMessage,
+    xpClaimed,
+  } = useWaitlistXp();
+  const contractScanXpBlocked = !canAffordContractScan(Boolean(address?.trim()));
+  const { query } = useGuardSearch();
   const [summary, setSummary] = useState<DashboardSummaryData | null>(null);
-  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryLoading, setSummaryLoading] = useState(true);
   const [walletAssets, setWalletAssets] = useState<WalletAsset[] | null>(null);
-  const [assetsLoading, setAssetsLoading] = useState(false);
+  const [assetsLoading, setAssetsLoading] = useState(true);
   const [activityList, setActivityList] = useState<DashboardActivity[] | null>(null);
+  const [activityLoading, setActivityLoading] = useState(true);
   const [threatModalOpen, setThreatModalOpen] = useState(false);
   const [threatIntelligenceList, setThreatIntelligenceList] = useState<ThreatIntelligenceItem[] | null>(null);
   const [threatIntelligenceLoading, setThreatIntelligenceLoading] = useState(false);
   const [contractScannerModalOpen, setContractScannerModalOpen] = useState(false);
   const [contractScannerAddress, setContractScannerAddress] = useState("");
   const [scannerLoading, setScannerLoading] = useState(false);
+  const [scannerError, setScannerError] = useState<string | null>(null);
   const [lastContractScanResult, setLastContractScanResult] = useState<ScanContractResult | null>(null);
   const [scanDetailsModalOpen, setScanDetailsModalOpen] = useState(false);
   const [scanDetails, setScanDetails] = useState<ScanContractDetailResponse | null>(null);
@@ -114,13 +137,33 @@ export default function GuardDashboardPage() {
       .finally(() => setAssetsSyncLoading(false));
   };
 
-  const runContractScan = () => {
+  const runContractScan = async () => {
     if (!contractScannerAddress.trim()) return;
+    if (contractScanXpBlocked) {
+      setScannerError(`Insufficient XP balance (need ${contractScanCost} XP to scan contracts).`);
+      return;
+    }
     setScannerLoading(true);
+    setScannerError(null);
     setLastContractScanResult(null);
-    scanContract(contractScannerAddress.trim(), address ?? undefined)
-      .then((res) => setLastContractScanResult(res ?? null))
-      .finally(() => setScannerLoading(false));
+    try {
+      const res = await scanContract(contractScannerAddress.trim(), address ?? undefined);
+      setLastContractScanResult(res ?? null);
+      if (!res) {
+        setScannerError("Contract scan failed. Please try again.");
+      } else {
+        await refreshWaitlistXp();
+      }
+    } catch (err) {
+      if (isInsufficientXpError(err)) {
+        applyInsufficientXp(err);
+        setScannerError(insufficientXpMessage(err));
+      } else {
+        setScannerError("Contract scan failed. Please try again.");
+      }
+    } finally {
+      setScannerLoading(false);
+    }
   };
 
   const openScanDetailsModal = () => {
@@ -211,6 +254,7 @@ export default function GuardDashboardPage() {
   useEffect(() => {
     if (!address) {
       setSummary(null);
+      setSummaryLoading(false);
       return;
     }
     setSummaryLoading(true);
@@ -236,6 +280,7 @@ export default function GuardDashboardPage() {
   useEffect(() => {
     if (!address) {
       setWalletAssets(null);
+      setAssetsLoading(false);
       return;
     }
     setAssetsLoading(true);
@@ -247,13 +292,19 @@ export default function GuardDashboardPage() {
   useEffect(() => {
     if (!address) {
       setActivityList(null);
+      setActivityLoading(false);
       return;
     }
-    const fetchActivity = () => {
-      getDashboardActivity(address).then((data) => data && setActivityList(data));
+    const fetchActivity = (showLoading: boolean) => {
+      if (showLoading) setActivityLoading(true);
+      getDashboardActivity(address)
+        .then((data) => setActivityList(data ?? null))
+        .finally(() => {
+          if (showLoading) setActivityLoading(false);
+        });
     };
-    fetchActivity();
-    const interval = setInterval(fetchActivity, 10000);
+    fetchActivity(true);
+    const interval = setInterval(() => fetchActivity(false), 10000);
     return () => clearInterval(interval);
   }, [address]);
 
@@ -282,8 +333,57 @@ export default function GuardDashboardPage() {
     return "check";
   }
 
-  const assetsList = walletAssets ?? [];
-  const activitiesList = activityList ?? [];
+  const assetsList = useMemo(
+    () =>
+      filterGuardSearchList(walletAssets, query, (asset) => [
+        asset.symbol,
+        asset.name,
+        asset.balance,
+        asset.usd_value,
+        asset.change_percent,
+      ]),
+    [walletAssets, query]
+  );
+
+  const activitiesList = useMemo(
+    () =>
+      filterGuardSearchList(activityList, query, (activity) => [
+        activity.title,
+        activity.description,
+        activity.activity_type,
+      ]),
+    [activityList, query]
+  );
+
+  const filteredThreatIntelligenceList = useMemo(
+    () =>
+      filterGuardSearchList(threatIntelligenceList, query, (item) => [
+        item.title,
+        item.description,
+        item.severity,
+      ]),
+    [threatIntelligenceList, query]
+  );
+
+  const filteredUnreadAlerts = useMemo(
+    () =>
+      filterGuardSearchList(unreadAlertsData?.alerts, query, (alert) => [
+        alert.title,
+        alert.body,
+        alert.severity,
+      ]),
+    [unreadAlertsData?.alerts, query]
+  );
+
+  const filteredConnectedWallets = useMemo(
+    () =>
+      filterGuardSearchList(connectedWalletsList, query, (wallet) => [
+        wallet.address,
+        wallet.provider,
+        wallet.currency,
+      ]),
+    [connectedWalletsList, query]
+  );
 
   return (
     <div className="p-4 space-y-6 lg:rounded-2xl lg:bg-blue-950/25 lg:border lg:border-blue-900/40 lg:p-6">
@@ -298,58 +398,70 @@ export default function GuardDashboardPage() {
             </div>
             <button type="button" className="text-sm text-slate-400 hover:text-white transition">View</button>
           </div>
-          <div className="flex gap-4">
-            <div className="relative w-32 h-32 shrink-0 rounded-full gauge-emboss-inset">
-              <svg className="w-full h-full -rotate-90 animate-arc-rotate absolute inset-0" viewBox="0 0 36 36">
-                <defs>
-                  <radialGradient id="mobileWalletProgressGradient" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
-                    <stop offset="0%" stopColor="#4066FF" />
-                    <stop offset="100%" stopColor="#0026FF" />
-                  </radialGradient>
-                  <filter id="mobileArcGlow" x="-50%" y="-50%" width="200%" height="200%">
-                    <feGaussianBlur in="SourceGraphic" stdDeviation="1.8" result="blur" />
-                    <feMerge>
-                      <feMergeNode in="blur" />
-                      <feMergeNode in="SourceGraphic" />
-                    </feMerge>
-                  </filter>
-                </defs>
-                <path
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="3.5"
-                  className="text-slate-700"
-                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                />
-                <path
-                  fill="none"
-                  stroke="url(#mobileWalletProgressGradient)"
-                  strokeWidth="3.5"
-                  strokeDasharray={`${summary?.security_status?.score ?? 0}, 100`}
-                  strokeLinecap="round"
-                  filter="url(#mobileArcGlow)"
-                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                />
-              </svg>
-              <span className="absolute inset-0 flex items-center justify-center text-2xl font-bold text-white">{summaryLoading || summary?.security_status?.score == null ? "—" : `${summary.security_status.score}%`}</span>
-            </div>
-            <div className="flex-1 min-w-0 flex flex-col justify-center">
-              <p className="text-sm text-slate-300">Status: <span className="inline-flex items-center px-3 py-1 rounded-lg bg-[#0026FF] text-white font-medium text-xs capitalize">{summary?.security_status?.status ?? "—"}</span></p>
-              <p className="text-xs text-slate-400 mt-2 leading-snug">{summary?.security_status?.message ?? ""}</p>
-            </div>
-          </div>
-          <div className="flex items-center justify-between mt-4 pt-4">
-            <p className="text-sm text-slate-400">Last Scan: {formatLastScan(summary?.security_status?.last_scan_at ?? null)}</p>
-            <button type="button" onClick={openRescanModal} className="rounded-lg bg-gradient-to-b from-[#4066FF] to-[#0026FF] text-white text-sm font-medium px-5 py-2.5 transition">Run Full Scan</button>
-          </div>
+          {summaryLoading ? (
+            <>
+              <SecurityStatusSkeleton mobile />
+              <div className="flex items-center justify-between mt-4 pt-4" aria-hidden>
+                <SkeletonBar className="h-4 w-36" />
+                <SkeletonBar className="h-9 w-28 rounded-lg" />
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex gap-4">
+                <div className="relative w-32 h-32 shrink-0 rounded-full gauge-emboss-inset">
+                  <svg className="w-full h-full -rotate-90 animate-arc-rotate absolute inset-0" viewBox="0 0 36 36">
+                    <defs>
+                      <radialGradient id="mobileWalletProgressGradient" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
+                        <stop offset="0%" stopColor="#4066FF" />
+                        <stop offset="100%" stopColor="#0026FF" />
+                      </radialGradient>
+                      <filter id="mobileArcGlow" x="-50%" y="-50%" width="200%" height="200%">
+                        <feGaussianBlur in="SourceGraphic" stdDeviation="1.8" result="blur" />
+                        <feMerge>
+                          <feMergeNode in="blur" />
+                          <feMergeNode in="SourceGraphic" />
+                        </feMerge>
+                      </filter>
+                    </defs>
+                    <path
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="3.5"
+                      className="text-slate-700"
+                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                    />
+                    <path
+                      fill="none"
+                      stroke="url(#mobileWalletProgressGradient)"
+                      strokeWidth="3.5"
+                      strokeDasharray={`${summary?.security_status?.score ?? 0}, 100`}
+                      strokeLinecap="round"
+                      filter="url(#mobileArcGlow)"
+                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                    />
+                  </svg>
+                  <span className="absolute inset-0 flex items-center justify-center text-2xl font-bold text-white">{summary?.security_status?.score == null ? "—" : `${summary.security_status.score}%`}</span>
+                </div>
+                <div className="flex-1 min-w-0 flex flex-col justify-center">
+                  <p className="text-sm text-slate-300">Status: <span className="inline-flex items-center px-3 py-1 rounded-lg bg-[#0026FF] text-white font-medium text-xs capitalize">{summary?.security_status?.status ?? "—"}</span></p>
+                  <p className="text-xs text-slate-400 mt-2 leading-snug">{summary?.security_status?.message ?? ""}</p>
+                </div>
+              </div>
+              <div className="flex items-center justify-between mt-4 pt-4">
+                <p className="text-sm text-slate-400">Last Scan: {formatLastScan(summary?.security_status?.last_scan_at ?? null)}</p>
+                <button type="button" onClick={openRescanModal} className="rounded-lg bg-gradient-to-b from-[#4066FF] to-[#0026FF] text-white text-sm font-medium px-5 py-2.5 transition">Run Full Scan</button>
+              </div>
+            </>
+          )}
         </div>
 
         {/* 4 cards grid - full width on mobile for wider cards */}
         <div className="grid grid-cols-2 gap-3 -mx-6 w-[calc(100%+3rem)]">
-          <ThreatIntelligenceCard mobile summary={summary} onViewThreats={() => setThreatModalOpen(true)} />
-          <RecentScansCard mobile summary={summary} onScanContracts={() => setContractScannerModalOpen(true)} />
-          <TotalAssetCard mobile summary={summary} onViewWallets={() => setConnectedWalletModalOpen(true)} />
-          <UnreadAlertsCard mobile summary={summary} onViewAlerts={() => setUnreadAlertModalOpen(true)} />
+          <ThreatIntelligenceCard mobile loading={summaryLoading} summary={summary} onViewThreats={() => setThreatModalOpen(true)} />
+          <RecentScansCard mobile loading={summaryLoading} summary={summary} onScanContracts={() => setContractScannerModalOpen(true)} />
+          <TotalAssetCard mobile loading={summaryLoading} summary={summary} onViewWallets={() => setConnectedWalletModalOpen(true)} />
+          <UnreadAlertsCard mobile loading={summaryLoading} summary={summary} onViewAlerts={() => setUnreadAlertModalOpen(true)} />
         </div>
 
         {/* Wallet Assets - full width, no container on mobile */}
@@ -373,7 +485,11 @@ export default function GuardDashboardPage() {
           ) : null}
           <div className="flex gap-3 overflow-x-auto hide-scrollbar pb-1 -mx-1">
             {assetsLoading ? (
-              <p className="text-slate-400 text-sm py-4">Loading assets…</p>
+              <>
+                <DashboardAssetSkeleton mobile />
+                <DashboardAssetSkeleton mobile />
+                <DashboardAssetSkeleton mobile />
+              </>
             ) : assetsList.length === 0 ? (
               <div className="flex w-full min-w-full justify-center items-center py-8">
                 <p className="text-slate-400 text-sm">No assets</p>
@@ -432,7 +548,9 @@ export default function GuardDashboardPage() {
             </div>
             <button type="button" onClick={() => setConnectedWalletModalOpen(true)} className="text-sm text-slate-400 hover:text-white transition">View wallets</button>
           </div>
-          {activitiesList.length === 0 ? (
+          {activityLoading ? (
+            <DashboardActivitySkeleton count={3} />
+          ) : activitiesList.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10">
               <p className="text-slate-400 text-sm text-center">Live activity has nothing here</p>
             </div>
@@ -493,6 +611,17 @@ export default function GuardDashboardPage() {
           <div className="grid grid-cols-1 lg:grid-cols-[auto_1fr] gap-4">
             {/* Wallet Security Overview */}
             <div className="rounded-2xl bg-gradient-to-br from-blue-950 to-slate-900 border border-slate-700/80 p-5 flex flex-col shadow-[inset_1px_1px_0_0_rgba(255,255,255,0.06)] lg:max-w-lg">
+              {summaryLoading ? (
+                <>
+                  <SecurityStatusSkeleton />
+                  <div className="flex items-center w-full mt-4 gap-4" aria-hidden>
+                    <SkeletonBar className="h-4 w-40 shrink-0" />
+                    <div className="flex-1 min-w-4" />
+                    <SkeletonBar className="h-11 w-36 rounded-lg shrink-0" />
+                  </div>
+                </>
+              ) : (
+                <>
               <div className="flex flex-col sm:flex-row sm:items-start gap-4 flex-1 pt-8">
                 <div className="flex flex-col items-center sm:items-start shrink-0">
                   <div className="relative w-44 h-44 sm:w-52 sm:h-52 rounded-full gauge-emboss-inset">
@@ -527,7 +656,7 @@ export default function GuardDashboardPage() {
                         d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                       />
                     </svg>
-                    <span className="absolute inset-0 flex items-center justify-center text-4xl sm:text-5xl font-bold text-white">{summaryLoading || summary?.security_status?.score == null ? "—" : `${summary.security_status.score}%`}</span>
+                    <span className="absolute inset-0 flex items-center justify-center text-4xl sm:text-5xl font-bold text-white">{summary?.security_status?.score == null ? "—" : `${summary.security_status.score}%`}</span>
                   </div>
                 </div>
                 <div className="flex-1 min-w-0 flex flex-col sm:mt-16">
@@ -548,14 +677,16 @@ export default function GuardDashboardPage() {
                   Run Full Scan
                 </button>
               </div>
+                </>
+              )}
             </div>
 
             {/* Four cards in 2x2 */}
             <div className="grid grid-cols-2 gap-4">
-              <ThreatIntelligenceCard summary={summary} onViewThreats={() => setThreatModalOpen(true)} />
-              <RecentScansCard summary={summary} onScanContracts={() => setContractScannerModalOpen(true)} />
-              <TotalAssetCard summary={summary} onViewWallets={() => setConnectedWalletModalOpen(true)} />
-              <UnreadAlertsCard summary={summary} onViewAlerts={() => setUnreadAlertModalOpen(true)} />
+              <ThreatIntelligenceCard loading={summaryLoading} summary={summary} onViewThreats={() => setThreatModalOpen(true)} />
+              <RecentScansCard loading={summaryLoading} summary={summary} onScanContracts={() => setContractScannerModalOpen(true)} />
+              <TotalAssetCard loading={summaryLoading} summary={summary} onViewWallets={() => setConnectedWalletModalOpen(true)} />
+              <UnreadAlertsCard loading={summaryLoading} summary={summary} onViewAlerts={() => setUnreadAlertModalOpen(true)} />
             </div>
           </div>
 
@@ -581,7 +712,12 @@ export default function GuardDashboardPage() {
             ) : null}
             <div className="flex gap-4 overflow-x-auto hide-scrollbar pb-2">
               {assetsLoading ? (
-                <p className="text-slate-400 text-sm py-4">Loading assets…</p>
+                <>
+                  <DashboardAssetSkeleton />
+                  <DashboardAssetSkeleton />
+                  <DashboardAssetSkeleton />
+                  <DashboardAssetSkeleton />
+                </>
               ) : assetsList.length === 0 ? (
                 <div className="flex w-full min-w-full justify-center items-center py-8">
                   <p className="text-slate-400 text-sm">No assets</p>
@@ -627,10 +763,10 @@ export default function GuardDashboardPage() {
 
           {/* Bottom row: Live Activity + Wallet health + Security Tip */}
           <div className="flex flex-col gap-6">
-            <div className="flex-1 min-w-0 lg:min-w-[600px] flex flex-col gap-6">
-              <div className="flex flex-col lg:flex-row gap-6 items-start">
+            <div className="flex-1 min-w-0 flex flex-col gap-6">
+              <div className="flex flex-col xl:flex-row gap-6 items-start">
             {/* Live Activity - constrained width and compact height */}
-            <div className="lg:w-[560px] lg:max-w-[560px] lg:shrink-0 rounded-2xl bg-slate-900/80 border border-slate-800/80 p-4 h-[320px] flex flex-col overflow-hidden">
+            <div className="w-full xl:w-[560px] xl:max-w-[560px] xl:shrink-0 rounded-2xl bg-slate-900/80 border border-slate-800/80 p-4 h-[320px] flex flex-col overflow-hidden">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2.5">
                   <Image src={liveActivityTitleIcon} alt="" width={28} height={28} className="w-7 h-7 shrink-0 object-contain opacity-90" />
@@ -644,7 +780,9 @@ export default function GuardDashboardPage() {
                   View wallets
                 </button>
               </div>
-              {activitiesList.length === 0 ? (
+              {activityLoading ? (
+                <DashboardActivitySkeleton count={3} compact />
+              ) : activitiesList.length === 0 ? (
                 <div className="flex-1 flex flex-col items-center justify-center min-h-0 py-10">
                   <p className="text-slate-400 text-sm text-center">Live activity has nothing here</p>
                 </div>
@@ -694,6 +832,10 @@ export default function GuardDashboardPage() {
                   <h2 className="text-base font-semibold text-white">Wallet health</h2>
                 </div>
                 <div className="flex-1 flex flex-col items-center min-h-0">
+                  {summaryLoading ? (
+                    <WalletHealthSkeleton />
+                  ) : (
+                    <>
                   <div className="relative w-56 h-36">
                     <svg className="w-full h-full" viewBox="0 0 100 58" fill="none">
                       <defs>
@@ -719,8 +861,10 @@ export default function GuardDashboardPage() {
                       <circle cx="50" cy="50" r="4" fill="#0f172a" stroke="#1e293b" strokeWidth="1" />
                     </svg>
                   </div>
-                  <p className="text-3xl font-bold text-white mt-1">{summaryLoading || summary?.security_status?.score == null ? "—" : `${summary.security_status.score}%`}</p>
+                  <p className="text-3xl font-bold text-white mt-1">{summary?.security_status?.score == null ? "—" : `${summary.security_status.score}%`}</p>
                   <p className="mt-auto pt-2 text-base text-slate-400 shrink-0">Issues This Month: <span className="text-white font-medium">{summary?.issues_this_month ?? "—"}</span></p>
+                    </>
+                  )}
                 </div>
               </div>
               </div>
@@ -763,11 +907,11 @@ export default function GuardDashboardPage() {
               </div>
               <div className="space-y-3 mb-6 max-h-[50vh] overflow-y-auto hide-scrollbar">
                 {threatIntelligenceLoading ? (
-                  <p className="text-slate-400 text-sm py-6 text-center">Loading threat intelligence…</p>
-                ) : !threatIntelligenceList?.length ? (
+                  <DashboardModalListSkeleton count={3} />
+                ) : !filteredThreatIntelligenceList.length ? (
                   <p className="text-slate-400 text-sm py-6 text-center">No threat intelligence data</p>
                 ) : (
-                  threatIntelligenceList.map((item, i) => {
+                  filteredThreatIntelligenceList.map((item, i) => {
                     const severityLower = (item.severity || "").toLowerCase();
                     const severityCritical = severityLower === "critical";
                     const severityHigh = severityLower === "high";
@@ -829,13 +973,17 @@ export default function GuardDashboardPage() {
                   />
                   <button
                     type="button"
-                    disabled={scannerLoading || !contractScannerAddress.trim()}
-                    onClick={runContractScan}
+                    disabled={scannerLoading || !contractScannerAddress.trim() || contractScanXpBlocked}
+                    onClick={() => void runContractScan()}
                     className="shrink-0 rounded-lg bg-gradient-to-b from-[#4066FF] to-[#0026FF] disabled:opacity-50 disabled:pointer-events-none text-white font-medium px-5 py-3 text-sm hover:opacity-95 transition"
                   >
-                    {scannerLoading ? "Scanning…" : "Scan"}
+                    {scannerLoading ? "Scanning…" : contractScanXpBlocked && xpClaimed ? "Insufficient XP" : "Scan"}
                   </button>
                 </div>
+                {contractScanXpBlocked && xpClaimed ? (
+                  <p className="mt-2 text-xs text-amber-300">Contract scan requires {contractScanCost} XP. Your balance is too low.</p>
+                ) : null}
+                {scannerError ? <p className="mt-2 text-xs text-red-300">{scannerError}</p> : null}
               </div>
               {!lastContractScanResult ? (
                 <p className="text-sm text-slate-500 py-2 mb-4">Enter a contract address and click Scan.</p>
@@ -990,11 +1138,11 @@ export default function GuardDashboardPage() {
             </div>
             <div className="p-4 max-h-[50vh] overflow-y-auto hide-scrollbar space-y-2">
               {unreadAlertsLoading ? (
-                <p className="text-slate-400 text-sm py-6 text-center">Loading alerts…</p>
-              ) : !unreadAlertsData?.alerts?.length ? (
+                <DashboardModalListSkeleton count={4} />
+              ) : !filteredUnreadAlerts.length ? (
                 <p className="text-slate-400 text-sm py-6 text-center">No unread alerts</p>
               ) : (
-                unreadAlertsData.alerts.map((alert) => (
+                filteredUnreadAlerts.map((alert) => (
                   <div key={alert.id} className="rounded-lg p-4 flex items-center justify-between gap-4 bg-[#262938] border border-slate-700/40">
                     <div className="min-w-0 flex-1">
                       <p className="text-white font-semibold truncate">{alert.title}</p>
@@ -1030,7 +1178,7 @@ export default function GuardDashboardPage() {
               <button
                 type="button"
                 onClick={handleMarkAllAlertsRead}
-                disabled={markingAlertsRead || !unreadAlertsData?.alerts?.length}
+                disabled={markingAlertsRead || !filteredUnreadAlerts.length}
                 className="flex-1 rounded-xl font-medium text-white py-3 px-4 transition hover:opacity-95 disabled:opacity-50"
                 style={{ background: "linear-gradient(to bottom, #3366ff 0%, #0026FF 50%, #001fcc 100%)" }}
               >
@@ -1059,11 +1207,11 @@ export default function GuardDashboardPage() {
             </div>
             <div className="p-4 max-h-[50vh] overflow-y-auto hide-scrollbar space-y-2">
               {connectedWalletsLoading ? (
-                <p className="text-slate-400 text-sm py-6 text-center">Loading connected wallets…</p>
-              ) : !connectedWalletsList?.length ? (
+                <DashboardModalListSkeleton count={3} />
+              ) : !filteredConnectedWallets.length ? (
                 <p className="text-slate-400 text-sm py-6 text-center">No connected wallets</p>
               ) : (
-                connectedWalletsList.map((w) => (
+                filteredConnectedWallets.map((w) => (
                   <div key={w.id} className="rounded-lg p-3 flex items-center gap-3 bg-[#262938]/90 border border-slate-700/40">
                     <span className="w-10 h-10 rounded-lg bg-white flex items-center justify-center p-1.5 shrink-0 overflow-hidden border border-slate-600/50">
                       <Image src={getConnectedWalletLogoUrl(w)} alt={w.provider || "Wallet"} width={28} height={28} className="w-7 h-7 object-contain" unoptimized />
@@ -1092,7 +1240,8 @@ export default function GuardDashboardPage() {
   );
 }
 
-function ThreatIntelligenceCard({ mobile, summary, onViewThreats }: { mobile?: boolean; summary?: DashboardSummaryData | null; onViewThreats?: () => void }) {
+function ThreatIntelligenceCard({ mobile, summary, loading, onViewThreats }: { mobile?: boolean; summary?: DashboardSummaryData | null; loading?: boolean; onViewThreats?: () => void }) {
+  if (loading) return <DashboardStatCardSkeleton mobile={mobile} />;
   const count = summary?.threats_this_month;
   const trend = summary?.threats_trend_percent;
   const positive = trend != null && trend >= 0;
@@ -1125,7 +1274,8 @@ function ThreatIntelligenceCard({ mobile, summary, onViewThreats }: { mobile?: b
   );
 }
 
-function TotalAssetCard({ mobile, summary, onViewWallets }: { mobile?: boolean; summary?: DashboardSummaryData | null; onViewWallets?: () => void }) {
+function TotalAssetCard({ mobile, summary, loading, onViewWallets }: { mobile?: boolean; summary?: DashboardSummaryData | null; loading?: boolean; onViewWallets?: () => void }) {
+  if (loading) return <DashboardStatCardSkeleton mobile={mobile} />;
   const raw = summary?.total_asset_usd;
   const value = raw != null ? (raw.startsWith("$") ? raw : `$${raw}`) : "—";
   const trend = summary?.total_asset_trend_percent;
@@ -1159,7 +1309,8 @@ function TotalAssetCard({ mobile, summary, onViewWallets }: { mobile?: boolean; 
   );
 }
 
-function UnreadAlertsCard({ mobile, summary, onViewAlerts }: { mobile?: boolean; summary?: DashboardSummaryData | null; onViewAlerts?: () => void }) {
+function UnreadAlertsCard({ mobile, summary, loading, onViewAlerts }: { mobile?: boolean; summary?: DashboardSummaryData | null; loading?: boolean; onViewAlerts?: () => void }) {
+  if (loading) return <DashboardStatCardSkeleton mobile={mobile} />;
   const count = summary?.unread_alerts;
   const highRisk = summary?.high_risk_alerts;
   const trend = summary?.alerts_trend_percent;
@@ -1196,7 +1347,8 @@ function UnreadAlertsCard({ mobile, summary, onViewAlerts }: { mobile?: boolean;
   );
 }
 
-function RecentScansCard({ mobile, summary, onScanContracts }: { mobile?: boolean; summary?: DashboardSummaryData | null; onScanContracts?: () => void }) {
+function RecentScansCard({ mobile, summary, loading, onScanContracts }: { mobile?: boolean; summary?: DashboardSummaryData | null; loading?: boolean; onScanContracts?: () => void }) {
+  if (loading) return <DashboardStatCardSkeleton mobile={mobile} />;
   const count = summary?.scans_this_month;
   const trend = summary?.scans_trend_percent;
   const positive = trend != null && trend >= 0;

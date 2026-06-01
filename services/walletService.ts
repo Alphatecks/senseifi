@@ -36,6 +36,35 @@ export interface ConnectWalletResponse {
   dashboard_user: DashboardUser;
 }
 
+export interface ClaimWaitlistXpResult {
+  xp: number;
+  successfulReferrals: number;
+  message?: string;
+}
+
+export interface WaitlistClaimData {
+  user_id: string;
+  wallet_address: string;
+  email: string;
+  waitlist_entry_id: number;
+  direct_referrals: number;
+  successfulCount: number;
+  level2_referrals: number;
+  level2Count: number;
+  xp: number;
+  claimed_at: string;
+}
+
+export interface WaitlistStatusResponse {
+  success: boolean;
+  claimed: boolean;
+  data: WaitlistClaimData | null;
+}
+
+function isAlreadyClaimedMessage(message: string): boolean {
+  return /already claimed/i.test(message);
+}
+
 export interface WalletModalDetails {
   provider: string;
   wallet_address: string;
@@ -110,6 +139,105 @@ export class WalletService {
     }
 
     return { data: response.data, dashboard_user: response.dashboard_user };
+  }
+
+  async claimWaitlistXp(email: string, walletAddress: string): Promise<ClaimWaitlistXpResult> {
+    const response = await fetch(`${WALLET_API_BASE_URL}/waitlist/claim`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        email: email.trim(),
+        wallet_address: walletAddress.trim(),
+      }),
+    });
+
+    const json = await response.json().catch(() => ({} as Record<string, unknown>));
+    console.log("[Claim XP] API response", {
+      status: response.status,
+      statusText: response.statusText,
+      data: json,
+    });
+    if (!response.ok) {
+      const message =
+        (typeof json.message === 'string' && json.message) ||
+        (typeof json.error === 'string' && json.error) ||
+        'Failed to claim XP. Check your waitlist email and try again.';
+      throw new Error(message);
+    }
+
+    const payload = (json.data ?? json) as Record<string, unknown>;
+    const message =
+      (typeof json.message === 'string' && json.message) ||
+      (typeof payload.message === 'string' && (payload.message as string)) ||
+      undefined;
+
+    if (message && isAlreadyClaimedMessage(message)) {
+      throw new Error(message);
+    }
+
+    const xp =
+      typeof payload.xp === 'number'
+        ? payload.xp
+        : typeof json.xp === 'number'
+          ? json.xp
+          : 0;
+    const successfulReferrals =
+      typeof payload.successfulCount === 'number'
+        ? payload.successfulCount
+        : typeof payload.successful_referrals === 'number'
+          ? payload.successful_referrals
+          : typeof payload.direct_referrals === 'number'
+            ? payload.direct_referrals
+            : typeof payload.successful_count === 'number'
+              ? payload.successful_count
+              : typeof json.successfulReferrals === 'number'
+                ? json.successfulReferrals
+                : 0;
+
+    return {
+      xp,
+      successfulReferrals,
+      message,
+    };
+  }
+
+  async getWaitlistStatus(
+    walletAddress?: string,
+    userId?: string
+  ): Promise<WaitlistStatusResponse> {
+    const params = new URLSearchParams();
+    if (walletAddress?.trim()) {
+      params.set('wallet_address', walletAddress.trim());
+    } else if (userId?.trim()) {
+      params.set('user_id', userId.trim());
+    } else {
+      throw new Error('wallet_address or user_id is required');
+    }
+
+    const response = await fetch(`${WALLET_API_BASE_URL}/waitlist/status?${params.toString()}`, {
+      headers: { Accept: 'application/json' },
+    });
+    const json = (await response.json().catch(() => ({}))) as WaitlistStatusResponse & {
+      message?: string;
+      error?: string;
+    };
+
+    if (!response.ok) {
+      const message =
+        (typeof json.message === 'string' && json.message) ||
+        (typeof json.error === 'string' && json.error) ||
+        'Failed to load waitlist status.';
+      throw new Error(message);
+    }
+
+    return {
+      success: Boolean(json.success),
+      claimed: Boolean(json.claimed),
+      data: json.data ?? null,
+    };
   }
 
   async getWalletStatus(address: string): Promise<WalletStatusResponse> {

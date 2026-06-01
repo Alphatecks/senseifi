@@ -119,18 +119,20 @@
 
     <!-- Step 3: Connect Wallet — wallet list + QR -->
     <div id="view-connect-wallet" class="connect-wallet-container view-hidden">
-      <header class="welcome-header">
+      <header class="welcome-header" id="cw-connect-header">
         <div class="welcome-brand">
           <span class="welcome-logo">
             <img src="assets/scaled_logo.png" alt="" width="32" height="32" class="welcome-logo-img" />
           </span>
-          <span class="welcome-brand-name">SenseiGuard</span>
+          <span class="welcome-brand-name" id="cw-header-brand">SenseiGuard</span>
         </div>
-        <button type="button" class="welcome-close" aria-label="Close">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M12 4L4 12M4 4l8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </button>
+        <div class="welcome-header-actions">
+          <button type="button" class="welcome-close" id="cw-header-close" aria-label="Close">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 4L4 12M4 4l8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
       </header>
 
       <div id="cw-connect-flow">
@@ -204,32 +206,42 @@
 
       <div id="cw-connected-dashboard" class="view-hidden">
         <p class="cw-section-title">SenseiGuard Actions</p>
-        <div class="cw-actions-grid">
+        <div class="cw-actions-grid" aria-label="SenseiGuard actions">
           <button type="button" class="cw-action-card cw-action-card--scan-contract" data-action="card-scan-contract">
             <span class="cw-action-icon-shell" aria-hidden="true">
-              <img src="assets/icons/scan_contract.png" alt="" class="cw-action-icon" width="72" height="72" />
+              <img class="cw-action-icon" src="assets/icons/scan_contract.png" alt="" width="110" height="110" />
             </span>
-            <span class="cw-action-text">Scan a smart contract</span>
+            <span class="cw-action-text">Scan Smart Contract</span>
           </button>
+
           <button type="button" class="cw-action-card cw-action-card--scan-wallet" data-action="card-scan-wallet">
             <span class="cw-action-icon-shell" aria-hidden="true">
-              <img src="assets/icons/scan_wallet.png" alt="" class="cw-action-icon" width="72" height="72" />
+              <img class="cw-action-icon" src="assets/icons/scan_wallet.png" alt="" width="110" height="110" />
             </span>
-            <span class="cw-action-text">Scan my wallet</span>
+            <span class="cw-action-text">Scan My Wallet</span>
           </button>
+
           <button type="button" class="cw-action-card cw-action-card--autoblock" data-action="card-autoblock">
             <span class="cw-action-icon-shell" aria-hidden="true">
-              <img src="assets/icons/auto_block.png" alt="" class="cw-action-icon" width="72" height="72" />
+              <img class="cw-action-icon" src="assets/icons/auto_block.png" alt="" width="110" height="110" />
             </span>
             <span class="cw-action-text">Enable Autoblock</span>
           </button>
-          <button type="button" class="cw-action-card cw-action-card--chart" data-action="card-analyze-chart">
+
+          <button type="button" class="cw-action-card cw-action-card--chart" data-action="card-chart">
             <span class="cw-action-icon-shell" aria-hidden="true">
-              <img src="assets/icons/analyse.png" alt="" class="cw-action-icon" width="72" height="72" />
+              <img class="cw-action-icon" src="assets/icons/analyse.png" alt="" width="110" height="110" />
             </span>
             <span class="cw-action-text">Analyse Chart</span>
           </button>
         </div>
+      </div>
+
+      <div id="cw-quick-menu" class="cw-quick-menu view-hidden" aria-label="Quick actions">
+        <button type="button" class="cw-quick-menu-item" data-action="card-scan-contract">Scan smart contract</button>
+        <button type="button" class="cw-quick-menu-item" data-action="card-scan-wallet">Scan my wallet</button>
+        <button type="button" class="cw-quick-menu-item" data-action="card-autoblock">Enable Autoblock</button>
+        <button type="button" class="cw-quick-menu-item" id="cw-open-dashboard">Open dashboard</button>
       </div>
 
       <div id="cw-wallet-scan-view" class="cw-wallet-scan-view view-hidden">

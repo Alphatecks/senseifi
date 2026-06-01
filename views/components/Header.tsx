@@ -91,8 +91,16 @@ export default function Header({ hideGetStarted }: HeaderProps) {
               About
             </Link>
           </li>
-          <li><a href="#" className="hover:text-white transition">Pricing</a></li>
-          <li><a href="#" className="hover:text-white transition">Features</a></li>
+          <li>
+            <Link href="/pricing" prefetch className="hover:text-white transition">
+              Pricing
+            </Link>
+          </li>
+          <li>
+            <Link href="/features" prefetch className="hover:text-white transition">
+              Features
+            </Link>
+          </li>
           <li><a href="#" className="hover:text-white transition">Contact</a></li>
         </ul>
         <div className="flex items-center gap-2 md:gap-3 lg:gap-4 ml-0 mr-6 md:ml-auto md:mr-0">
@@ -184,7 +192,8 @@ export default function Header({ hideGetStarted }: HeaderProps) {
           {[
             { label: 'Home', href: '/' },
             { label: 'About us', href: '/about' },
-            { label: 'Pricing', href: '#' },
+            { label: 'Pricing', href: '/pricing' },
+            { label: 'Features', href: '/features' },
             { label: 'Contact us', href: '#' },
           ].map((item) => (
             <li key={item.label} className="py-4">

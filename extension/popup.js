@@ -19,6 +19,25 @@ document.addEventListener('DOMContentLoaded', function () {
   const activateToggle = document.getElementById('activate-extension-toggle');
   const connectFlow = document.getElementById('cw-connect-flow');
   const connectedDashboard = document.getElementById('cw-connected-dashboard');
+  const connectHeader = document.getElementById('cw-connect-header');
+  const headerBrand = document.getElementById('cw-header-brand');
+  const dashboardHeaderTools = document.getElementById('cw-dashboard-header-tools');
+  const headerCloseBtn = document.getElementById('cw-header-close');
+  const menuBtn = document.getElementById('cw-menu-btn');
+  const quickMenu = document.getElementById('cw-quick-menu');
+  const openDashboardBtn = document.getElementById('cw-open-dashboard');
+  const tradeSeeMoreBtn = document.getElementById('ext-trade-see-more');
+  const tradeList = document.getElementById('ext-trade-list');
+  const statExtensions = document.getElementById('ext-stat-extensions');
+  const statExtensionsTrend = document.getElementById('ext-stat-extensions-trend');
+  const statScans = document.getElementById('ext-stat-scans');
+  const statScansTrend = document.getElementById('ext-stat-scans-trend');
+  const statWallets = document.getElementById('ext-stat-wallets');
+  const statAlerts = document.getElementById('ext-stat-alerts');
+  const statAlertsTrend = document.getElementById('ext-stat-alerts-trend');
+  const statHighRisk = document.getElementById('ext-stat-high-risk');
+  const statHighRiskText = document.getElementById('ext-stat-high-risk-text');
+  const connectWalletContainer = document.getElementById('view-connect-wallet');
   const walletScanView = document.getElementById('cw-wallet-scan-view');
   const walletScanResultView = document.getElementById('cw-wallet-scan-result-view');
   const riskPanelView = document.getElementById('cw-risk-panel-view');
@@ -86,9 +105,109 @@ document.addEventListener('DOMContentLoaded', function () {
   let lastAnalysisPayload = null;
   let lastRiskPanelPayload = null;
   let lastScamPayload = null;
+  let connectedWalletCount = 1;
+  let dashboardUserId = '';
+  const POPUP_STATE_STORAGE_KEY = 'senseiguard_popup_ui_state';
+  let popupUiState = null;
+  const extensionTradeInsightsFilters = {
+    page: 1,
+    per_page: 10,
+    period: '7d',
+    risk_level: 'high',
+    search: 'approval',
+  };
+  const configTradeFilters =
+    window.SENSEIGUARD &&
+    window.SENSEIGUARD.EXTENSION_TRADE_INSIGHTS_DEFAULTS &&
+    typeof window.SENSEIGUARD.EXTENSION_TRADE_INSIGHTS_DEFAULTS === 'object'
+      ? window.SENSEIGUARD.EXTENSION_TRADE_INSIGHTS_DEFAULTS
+      : null;
+  if (configTradeFilters) {
+    if (configTradeFilters.page != null) {
+      extensionTradeInsightsFilters.page = Number(configTradeFilters.page) || extensionTradeInsightsFilters.page;
+    }
+    if (configTradeFilters.per_page != null) {
+      extensionTradeInsightsFilters.per_page = Number(configTradeFilters.per_page) || extensionTradeInsightsFilters.per_page;
+    }
+    if (configTradeFilters.period != null) {
+      extensionTradeInsightsFilters.period = String(configTradeFilters.period);
+    }
+    if (configTradeFilters.risk_level != null) {
+      extensionTradeInsightsFilters.risk_level = String(configTradeFilters.risk_level);
+    }
+    if (configTradeFilters.search != null) {
+      extensionTradeInsightsFilters.search = String(configTradeFilters.search);
+    }
+  }
+
+  const FALLBACK_TRADE_ROWS = [
+    { title: 'Card payment', id: 'TX53426G253', status: 'Pending', time: '2mins ago' },
+    { title: 'Card payment', id: 'TX53426G253', status: 'Completed', time: '2mins ago' },
+    { title: 'Card payment', id: 'TX53426G253', status: 'Completed', time: '2mins ago' },
+    { title: 'Card payment', id: 'TX53426G253', status: 'Completed', time: '2mins ago' },
+    { title: 'Card payment', id: 'TX53426G253', status: 'Completed', time: '2mins ago' },
+  ];
 
   /** Main CTA uses last row chosen, else MetaMask */
   let lastWalletType = 'metamask';
+
+  function canUseChromeStorage() {
+    return typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local;
+  }
+
+  async function loadPopupUiState() {
+    if (!canUseChromeStorage()) {
+      return null;
+    }
+    try {
+      const stored = await chrome.storage.local.get([POPUP_STATE_STORAGE_KEY]);
+      const state = stored && stored[POPUP_STATE_STORAGE_KEY] ? stored[POPUP_STATE_STORAGE_KEY] : null;
+      popupUiState = state && typeof state === 'object' ? state : null;
+      return popupUiState;
+    } catch (_err) {
+      return null;
+    }
+  }
+
+  function savePopupUiStatePatch(patch) {
+    if (!canUseChromeStorage()) return;
+    const base = popupUiState && typeof popupUiState === 'object' ? popupUiState : {};
+    popupUiState = {
+      ...base,
+      ...(patch || {}),
+      updatedAt: Date.now(),
+    };
+    chrome.storage.local
+      .set({ [POPUP_STATE_STORAGE_KEY]: popupUiState })
+      .catch(function () {
+        // Ignore storage errors to avoid breaking popup flows.
+      });
+  }
+
+  function setActivePopupView(viewName, extra) {
+    savePopupUiStatePatch({
+      activeView: viewName,
+      ...(extra || {}),
+    });
+  }
+
+  function persistRuntimeState(extra) {
+    savePopupUiStatePatch({
+      currentWalletAddress: currentWalletAddress || '',
+      connectedWalletCount: connectedWalletCount || 1,
+      dashboardUserId: dashboardUserId || '',
+      selectedChainId: selectedChainId || 1,
+      walletHealthScoreSource: walletHealthScoreSource || 'wallet',
+      analysisEngineSource: analysisEngineSource || 'wallet',
+      lastWalletType: lastWalletType || 'metamask',
+      lastContractScanPayload: lastContractScanPayload || null,
+      lastAnalysisPayload: lastAnalysisPayload || null,
+      lastRiskPanelPayload: lastRiskPanelPayload || null,
+      lastScamPayload: lastScamPayload || null,
+      contractLinkValue: contractLinkInput ? contractLinkInput.value : '',
+      ...(extra || {}),
+    });
+  }
 
   function initSiteAccessBanner() {
     const banner = document.getElementById('site-access-banner');
@@ -117,6 +236,9 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   initSiteAccessBanner();
+  const popupUiStateReady = loadPopupUiState().then(function () {
+    restorePersistedRuntimeState();
+  });
 
   function setCwStatus(text, kind) {
     if (!cwStatus) return;
@@ -195,9 +317,88 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   function extractContractAddressFromLink(link) {
-    const input = String(link || '');
-    const m = input.match(/\/address\/(0x[a-fA-F0-9]{40})/);
-    return m ? m[1] : '';
+    const input = String(link || '').trim();
+    const pathMatch = input.match(/\/(?:address|token)\/(0x[a-fA-F0-9]{40})/i);
+    if (pathMatch) return pathMatch[1];
+    const hexMatch = input.match(/(0x[a-fA-F0-9]{40})/i);
+    return hexMatch ? hexMatch[1] : '';
+  }
+
+  function inferChainIdFromExplorerLink(link) {
+    const host = String(link || '').toLowerCase();
+    if (host.includes('bscscan')) return 56;
+    if (host.includes('polygonscan')) return 137;
+    if (host.includes('basescan')) return 8453;
+    if (host.includes('arbiscan')) return 42161;
+    if (host.includes('optimistic.etherscan') || host.includes('optimism')) return 10;
+    return 1;
+  }
+
+  function mapTrustScoreToRiskFields(trustScore) {
+    const trust = Number(trustScore);
+    if (!Number.isFinite(trust)) return { risk_score: null, risk_level_10: null, contract_risk_score: null };
+    const riskScore = Math.max(0, Math.min(100, Math.round(100 - trust)));
+    return {
+      risk_score: riskScore,
+      risk_level_10: riskScore / 10,
+      contract_risk_score: riskScore,
+    };
+  }
+
+  async function runDashboardContractScan(contractAddress, walletAddress, chainId) {
+    if (!contractAddress?.trim()) {
+      return { ok: false, message: 'Invalid contract address.' };
+    }
+    const body = {
+      contract_address: contractAddress.trim(),
+      chain_id: chainId,
+    };
+    if (walletAddress?.trim()) {
+      body.for_address = walletAddress.trim();
+    }
+    try {
+      const res = await fetch(getWalletApiBase() + '/scan-contract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json().catch(function () {
+        return null;
+      });
+      console.log('[SenseiGuard popup][scan-contract api]', {
+        request: body,
+        status: res.status,
+        ok: res.ok,
+        response: json,
+      });
+      if (!res.ok) {
+        const message =
+          (json && (json.message || json.error)) ||
+          'Scan request failed (' + res.status + ').';
+        return { ok: false, message: String(message) };
+      }
+      const data = extractApiData(json);
+      if (!data || !data.scan_id) {
+        return {
+          ok: false,
+          message: (json && json.message) || 'No scan data returned from server.',
+        };
+      }
+      const riskFields = mapTrustScoreToRiskFields(data.trust_score);
+      return {
+        ok: true,
+        data: {
+          ...data,
+          contract_address: data.contract_address || contractAddress.trim(),
+          ...riskFields,
+        },
+      };
+    } catch (err) {
+      return {
+        ok: false,
+        message: err && err.message ? err.message : String(err),
+      };
+    }
   }
 
   function isContractAddress(value) {
@@ -212,6 +413,25 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!show && chainSelectMenu) {
       chainSelectMenu.classList.add('view-hidden');
       if (chainSelectToggle) chainSelectToggle.setAttribute('aria-expanded', 'false');
+    }
+  }
+
+  function applySelectedChainUi(chainId) {
+    if (!chainOptionButtons || !chainOptionButtons.length) return;
+    let selectedBtn = null;
+    chainOptionButtons.forEach(function (btn) {
+      const btnChainId = Number(btn.getAttribute('data-chain-id'));
+      const isSelected = Number.isFinite(btnChainId) && btnChainId === chainId;
+      btn.classList.toggle('is-selected', isSelected);
+      if (isSelected) selectedBtn = btn;
+    });
+    if (!selectedBtn) return;
+    const chainName = selectedBtn.getAttribute('data-chain-name') || '';
+    const logo = selectedBtn.querySelector('img');
+    if (chainSelectCurrentName) chainSelectCurrentName.textContent = chainName || 'Select network';
+    if (chainSelectCurrentLogo && logo) {
+      const src = logo.getAttribute('src');
+      if (src) chainSelectCurrentLogo.setAttribute('src', src);
     }
   }
 
@@ -485,15 +705,284 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
+  function formatTrendBadge(el, trend, forceDown) {
+    if (!el) return;
+    if (trend == null || !Number.isFinite(Number(trend))) {
+      el.classList.add('view-hidden');
+      el.textContent = '';
+      return;
+    }
+    const value = Number(trend);
+    const positive = forceDown ? value <= 0 : value >= 0;
+    el.classList.remove('view-hidden', 'ext-stat-trend--up', 'ext-stat-trend--down');
+    el.classList.add(positive ? 'ext-stat-trend--up' : 'ext-stat-trend--down');
+    el.textContent = (positive ? '+' : '') + value + '%';
+  }
+
+  function formatRelativeTime(isoOrLabel) {
+    if (!isoOrLabel) return '—';
+    const raw = String(isoOrLabel);
+    if (/min|hr|day|ago/i.test(raw)) return raw;
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) return raw;
+    const diffMs = Date.now() - d.getTime();
+    const diffMins = Math.max(1, Math.floor(diffMs / 60000));
+    if (diffMins < 60) return diffMins + 'mins ago';
+    const diffHrs = Math.floor(diffMins / 60);
+    if (diffHrs < 24) return diffHrs + 'hr ago';
+    const diffDays = Math.floor(diffHrs / 24);
+    return diffDays + ' day' + (diffDays === 1 ? '' : 's') + ' ago';
+  }
+
+  function normalizeTradeStatus(status) {
+    const value = String(status || '').trim().toLowerCase();
+    if (!value) return { label: 'Pending', className: 'ext-trade-status--pending' };
+    if (value.includes('pending') || value.includes('warn') || value.includes('processing')) {
+      return { label: 'Pending', className: 'ext-trade-status--pending' };
+    }
+    return { label: 'Completed', className: 'ext-trade-status--completed' };
+  }
+
+  function renderTradeInsightRows(rows) {
+    if (!tradeList) return;
+    const items = Array.isArray(rows) && rows.length ? rows : FALLBACK_TRADE_ROWS;
+    tradeList.innerHTML = items
+      .slice(0, 5)
+      .map(function (row) {
+        const status = normalizeTradeStatus(row.status);
+        const title = row.title || row.type || 'Activity';
+        const id = row.id || row.tx_id || row.wallet || '—';
+        const time = formatRelativeTime(row.time);
+        return (
+          '<li class="ext-trade-row">' +
+          '<div class="ext-trade-row-main">' +
+          '<p class="ext-trade-title">' +
+          escapeHtml(title) +
+          '</p>' +
+          '<p class="ext-trade-id">' +
+          escapeHtml(id) +
+          '</p>' +
+          '</div>' +
+          '<div class="ext-trade-row-meta">' +
+          '<p class="ext-trade-status ' +
+          status.className +
+          '">' +
+          escapeHtml(status.label) +
+          '</p>' +
+          '<p class="ext-trade-time">' +
+          escapeHtml(time) +
+          '</p>' +
+          '</div>' +
+          '</li>'
+        );
+      })
+      .join('');
+  }
+
+  function escapeHtml(value) {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function renderExtensionDashboard(summary, tradeRows) {
+    const data = summary || {};
+    if (statExtensions) statExtensions.textContent = '3';
+    formatTrendBadge(statExtensionsTrend, 2.3);
+
+    if (statScans) {
+      statScans.textContent =
+        data.scans_this_month != null ? String(data.scans_this_month) : '—';
+    }
+    formatTrendBadge(statScansTrend, data.scans_trend_percent);
+
+    if (statWallets) {
+      statWallets.textContent = String(connectedWalletCount || 1);
+    }
+
+    if (statAlerts) {
+      statAlerts.textContent = data.unread_alerts != null ? String(data.unread_alerts) : '—';
+    }
+    formatTrendBadge(statAlertsTrend, data.alerts_trend_percent, true);
+
+    if (statHighRisk && statHighRiskText) {
+      const highRisk = data.high_risk_alerts;
+      if (highRisk != null && Number(highRisk) > 0) {
+        statHighRisk.classList.remove('view-hidden');
+        statHighRiskText.textContent = '⚠ ' + highRisk + ' high risk';
+      } else {
+        statHighRisk.classList.add('view-hidden');
+      }
+    }
+
+    renderTradeInsightRows(tradeRows);
+  }
+
+  function pickFirstNumberOrNull(values) {
+    for (let i = 0; i < values.length; i += 1) {
+      const n = Number(values[i]);
+      if (Number.isFinite(n)) return n;
+    }
+    return null;
+  }
+
+  function readApiPayload(json) {
+    if (!json || typeof json !== 'object') return null;
+    if (json.success && typeof json.data !== 'undefined') return json.data;
+    if (typeof json.data !== 'undefined') return json.data;
+    return json;
+  }
+
+  function buildTradeInsightParams(walletAddress) {
+    const params = new URLSearchParams({
+      wallet_address: walletAddress,
+      page: String(extensionTradeInsightsFilters.page || 1),
+      per_page: String(extensionTradeInsightsFilters.per_page || 10),
+    });
+    if (extensionTradeInsightsFilters.period) {
+      params.set('period', String(extensionTradeInsightsFilters.period));
+    }
+    if (extensionTradeInsightsFilters.risk_level) {
+      params.set('risk_level', String(extensionTradeInsightsFilters.risk_level));
+    }
+    if (extensionTradeInsightsFilters.search) {
+      params.set('search', String(extensionTradeInsightsFilters.search));
+    }
+    return params;
+  }
+
+  async function fetchExtensionOverview(walletAddress) {
+    if (!walletAddress) return null;
+    const path =
+      '/dashboard/extension/overview?wallet_address=' +
+      encodeURIComponent(walletAddress);
+    try {
+      const res = await fetch(getWalletApiBase() + path, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const json = await res.json().catch(function () {
+        return null;
+      });
+      console.log('[SenseiGuard popup][extension overview api]', {
+        path: path,
+        request: { wallet_address: walletAddress },
+        status: res.status,
+        ok: res.ok,
+        response: json,
+      });
+      if (!res.ok || !json) return null;
+      return readApiPayload(json);
+    } catch (_err) {
+      return null;
+    }
+  }
+
+  async function fetchExtensionTradeInsights(walletAddress) {
+    if (!walletAddress) return null;
+    const params = buildTradeInsightParams(walletAddress);
+    const path = '/dashboard/extension/trade-insights?' + params.toString();
+    try {
+      const res = await fetch(getWalletApiBase() + path, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const json = await res.json().catch(function () {
+        return null;
+      });
+      console.log('[SenseiGuard popup][extension trade insights api]', {
+        path: path,
+        request: Object.fromEntries(params.entries()),
+        status: res.status,
+        ok: res.ok,
+        response: json,
+      });
+      if (!res.ok || !json) return null;
+      const payload = readApiPayload(json);
+      const list = Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload && payload.items)
+          ? payload.items
+          : Array.isArray(payload && payload.rows)
+            ? payload.rows
+            : Array.isArray(payload && payload.results)
+              ? payload.results
+              : [];
+      return list.map(function (item) {
+        const txTitle = pickFirstText(
+          [item && item.title, item && item.type, item && item.action, item && item.event],
+          'Activity'
+        );
+        const txId = pickFirstText(
+          [
+            item && item.id,
+            item && item.tx_id,
+            item && item.tx_hash,
+            item && item.transaction_hash,
+            item && item.wallet,
+            item && item.wallet_address,
+          ],
+          '—'
+        );
+        const riskLevelValue = pickFirstText(
+          [item && item.risk_level, item && item.risk_band, item && item.severity],
+          ''
+        ).toLowerCase();
+        const riskScoreValue = pickFirstNumberOrNull([
+          item && item.risk_score,
+          item && item.riskScore,
+          item && item.score,
+        ]);
+        const normalizedStatus =
+          pickFirstText([item && item.status], '') ||
+          (riskLevelValue === 'high' ||
+          riskLevelValue === 'critical' ||
+          (riskScoreValue != null && riskScoreValue >= 70)
+            ? 'Pending'
+            : 'Completed');
+        return {
+          title: txTitle,
+          id: txId,
+          status: normalizedStatus,
+          time: item && (item.time || item.detected_at || item.created_at || item.updated_at),
+        };
+      });
+    } catch (_err) {
+      return null;
+    }
+  }
+
+  async function refreshExtensionDashboard() {
+    if (!currentWalletAddress) return;
+    const overview = await fetchExtensionOverview(currentWalletAddress);
+    const tradeRows = await fetchExtensionTradeInsights(currentWalletAddress);
+    renderExtensionDashboard(overview, tradeRows);
+  }
+
+  function setDashboardHeaderMode(isDashboard) {
+    if (headerBrand) headerBrand.textContent = isDashboard ? 'SenseiFi' : 'SenseiGuard';
+    if (dashboardHeaderTools) dashboardHeaderTools.classList.toggle('view-hidden', !isDashboard);
+    if (headerCloseBtn) headerCloseBtn.classList.toggle('view-hidden', !!isDashboard);
+    if (connectWalletContainer) {
+      connectWalletContainer.classList.toggle('welcome-scroll-shell--dashboard', !!isDashboard);
+    }
+    if (shell) shell.classList.toggle('welcome-scroll-shell--dashboard', !!isDashboard);
+    if (!isDashboard && quickMenu) quickMenu.classList.add('view-hidden');
+  }
+
   function showConnectOnlyView() {
     if (viewWelcome) viewWelcome.classList.add('view-hidden');
     if (viewActivate) viewActivate.classList.add('view-hidden');
     if (viewConnect) viewConnect.classList.remove('view-hidden');
     if (shell) shell.classList.add('welcome-scroll-shell--connect');
+    setActivePopupView('connect');
     scrollShellTop();
   }
 
   function setConnectedDashboardMode(isConnected) {
+    setDashboardHeaderMode(!!isConnected);
     if (connectFlow) connectFlow.classList.toggle('view-hidden', !!isConnected);
     if (connectedDashboard) connectedDashboard.classList.toggle('view-hidden', !isConnected);
     if (walletScanView) walletScanView.classList.add('view-hidden');
@@ -504,8 +993,19 @@ document.addEventListener('DOMContentLoaded', function () {
     if (scamTokenView) scamTokenView.classList.add('view-hidden');
     if (contractScanView) contractScanView.classList.add('view-hidden');
     if (autoBlockView) autoBlockView.classList.add('view-hidden');
-    if (cwStatus) cwStatus.classList.remove('view-hidden');
-    if (connectFooter) connectFooter.classList.remove('view-hidden');
+    if (quickMenu) quickMenu.classList.add('view-hidden');
+    if (cwStatus) {
+      cwStatus.classList.toggle('view-hidden', !!isConnected);
+      if (!isConnected) cwStatus.classList.remove('view-hidden');
+    }
+    if (connectFooter) connectFooter.classList.toggle('view-hidden', !!isConnected);
+    if (isConnected) {
+      refreshExtensionDashboard();
+      setActivePopupView('connected-dashboard');
+    } else {
+      setActivePopupView('connect');
+    }
+    persistRuntimeState();
     if (walletScanTimerId) {
       clearTimeout(walletScanTimerId);
       walletScanTimerId = null;
@@ -518,6 +1018,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   function showWalletScanResultView() {
     if (!walletScanResultView) return;
+    setDashboardHeaderMode(false);
     if (walletScanView) walletScanView.classList.add('view-hidden');
     if (connectedDashboard) connectedDashboard.classList.add('view-hidden');
     walletScanResultView.classList.remove('view-hidden');
@@ -527,6 +1028,7 @@ document.addEventListener('DOMContentLoaded', function () {
       clearTimeout(walletScanTimerId);
       walletScanTimerId = null;
     }
+    setActivePopupView('wallet-scan-result');
   }
 
   function setWalletResultTogglesVisible(visible) {
@@ -537,6 +1039,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   function showRiskPanelView() {
     if (!riskPanelView) return;
+    setDashboardHeaderMode(false);
     if (walletScanView) walletScanView.classList.add('view-hidden');
     if (walletScanResultView) walletScanResultView.classList.add('view-hidden');
     if (analysisEngineView) analysisEngineView.classList.add('view-hidden');
@@ -556,10 +1059,12 @@ document.addEventListener('DOMContentLoaded', function () {
       clearTimeout(contractScanTimerId);
       contractScanTimerId = null;
     }
+    setActivePopupView('risk-panel');
   }
 
   function showAnalysisEngineView(source) {
     if (!analysisEngineView) return;
+    setDashboardHeaderMode(false);
     analysisEngineSource = source === 'contract' ? 'contract' : 'wallet';
     if (walletScanView) walletScanView.classList.add('view-hidden');
     if (walletScanResultView) walletScanResultView.classList.add('view-hidden');
@@ -577,10 +1082,14 @@ document.addEventListener('DOMContentLoaded', function () {
       clearTimeout(contractScanTimerId);
       contractScanTimerId = null;
     }
+    setActivePopupView('analysis-engine', {
+      analysisEngineSource: analysisEngineSource,
+    });
   }
 
   function showMaliciousContractView() {
     if (!maliciousContractView) return;
+    setDashboardHeaderMode(false);
     if (walletScanView) walletScanView.classList.add('view-hidden');
     if (walletScanResultView) walletScanResultView.classList.add('view-hidden');
     if (riskPanelView) riskPanelView.classList.add('view-hidden');
@@ -598,10 +1107,12 @@ document.addEventListener('DOMContentLoaded', function () {
       clearTimeout(contractScanTimerId);
       contractScanTimerId = null;
     }
+    setActivePopupView('malicious-contract');
   }
 
   function showScamTokenView() {
     if (!scamTokenView) return;
+    setDashboardHeaderMode(false);
     if (walletScanView) walletScanView.classList.add('view-hidden');
     if (walletScanResultView) walletScanResultView.classList.add('view-hidden');
     if (riskPanelView) riskPanelView.classList.add('view-hidden');
@@ -620,6 +1131,7 @@ document.addEventListener('DOMContentLoaded', function () {
       clearTimeout(contractScanTimerId);
       contractScanTimerId = null;
     }
+    setActivePopupView('scam-token');
   }
 
   function setContractScanFeedback(text, kind) {
@@ -632,6 +1144,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   function showContractScanView() {
     if (!contractScanView) return;
+    setDashboardHeaderMode(false);
     walletHealthScoreSource = 'contract';
     if (walletScanView) walletScanView.classList.add('view-hidden');
     if (walletScanResultView) walletScanResultView.classList.add('view-hidden');
@@ -659,10 +1172,12 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     setContractScanFeedback('', '');
     syncChainDropdownVisibility();
+    setActivePopupView('contract-scan');
   }
 
   function showAutoBlockView() {
     if (!autoBlockView) return;
+    setDashboardHeaderMode(false);
     if (walletScanView) walletScanView.classList.add('view-hidden');
     if (walletScanResultView) walletScanResultView.classList.add('view-hidden');
     if (riskPanelView) riskPanelView.classList.add('view-hidden');
@@ -682,10 +1197,12 @@ document.addEventListener('DOMContentLoaded', function () {
       clearTimeout(contractScanTimerId);
       contractScanTimerId = null;
     }
+    setActivePopupView('autoblock');
   }
 
   function showWalletScanView() {
     if (!walletScanView) return;
+    setDashboardHeaderMode(false);
     if (walletScanTimerId) clearTimeout(walletScanTimerId);
     if (walletScanResultView) walletScanResultView.classList.add('view-hidden');
     if (connectedDashboard) connectedDashboard.classList.add('view-hidden');
@@ -698,6 +1215,7 @@ document.addEventListener('DOMContentLoaded', function () {
         walletScanProgressFill.style.width = '79%';
       });
     }
+    setActivePopupView('wallet-scan-loading');
   }
 
   function renderWalletScanResult(resultData) {
@@ -841,6 +1359,9 @@ document.addEventListener('DOMContentLoaded', function () {
       return;
     }
     walletHealthScoreSource = 'wallet';
+    persistRuntimeState({
+      walletHealthScoreSource: 'wallet',
+    });
     showWalletScanView();
     const startedAt = Date.now();
     const scanData = await runWalletScan(currentWalletAddress);
@@ -868,6 +1389,7 @@ document.addEventListener('DOMContentLoaded', function () {
       observations: scanData && Array.isArray(scanData.observations) ? scanData.observations : [],
     });
     setWalletResultTogglesVisible(walletHealthScoreSource === 'contract');
+    persistRuntimeState();
     showWalletScanResultView();
   }
 
@@ -887,6 +1409,116 @@ document.addEventListener('DOMContentLoaded', function () {
       }
     });
     connectAssetsHydrated = true;
+  }
+
+  function restorePersistedRuntimeState() {
+    if (!popupUiState || typeof popupUiState !== 'object') return;
+    if (popupUiState.currentWalletAddress) {
+      currentWalletAddress = String(popupUiState.currentWalletAddress);
+    }
+    if (popupUiState.dashboardUserId) {
+      dashboardUserId = String(popupUiState.dashboardUserId);
+    }
+    if (popupUiState.lastWalletType) {
+      lastWalletType = String(popupUiState.lastWalletType);
+    }
+    if (Number.isFinite(Number(popupUiState.connectedWalletCount))) {
+      connectedWalletCount = Math.max(1, Number(popupUiState.connectedWalletCount));
+    }
+    if (Number.isFinite(Number(popupUiState.selectedChainId))) {
+      selectedChainId = Number(popupUiState.selectedChainId);
+    }
+    if (popupUiState.walletHealthScoreSource === 'contract') {
+      walletHealthScoreSource = 'contract';
+    }
+    if (popupUiState.analysisEngineSource === 'contract') {
+      analysisEngineSource = 'contract';
+    }
+    if (popupUiState.lastContractScanPayload && typeof popupUiState.lastContractScanPayload === 'object') {
+      lastContractScanPayload = popupUiState.lastContractScanPayload;
+    }
+    if (popupUiState.lastAnalysisPayload && typeof popupUiState.lastAnalysisPayload === 'object') {
+      lastAnalysisPayload = popupUiState.lastAnalysisPayload;
+    }
+    if (popupUiState.lastRiskPanelPayload && typeof popupUiState.lastRiskPanelPayload === 'object') {
+      lastRiskPanelPayload = popupUiState.lastRiskPanelPayload;
+    }
+    if (popupUiState.lastScamPayload && typeof popupUiState.lastScamPayload === 'object') {
+      lastScamPayload = popupUiState.lastScamPayload;
+    }
+    if (contractLinkInput && typeof popupUiState.contractLinkValue === 'string') {
+      contractLinkInput.value = popupUiState.contractLinkValue;
+    }
+    applySelectedChainUi(selectedChainId);
+    syncChainDropdownVisibility();
+  }
+
+  function restoreDisconnectedView() {
+    const view = popupUiState && popupUiState.activeView ? String(popupUiState.activeView) : '';
+    if (view === 'activate') {
+      if (viewWelcome) viewWelcome.classList.add('view-hidden');
+      if (viewActivate) viewActivate.classList.remove('view-hidden');
+      if (viewConnect) viewConnect.classList.add('view-hidden');
+      if (shell) shell.classList.remove('welcome-scroll-shell--connect');
+      setActivePopupView('activate');
+      return;
+    }
+    if (view === 'connect') {
+      hydrateConnectAssets();
+      showConnectOnlyView();
+      setConnectedDashboardMode(false);
+      return;
+    }
+    if (viewWelcome) viewWelcome.classList.remove('view-hidden');
+    if (viewActivate) viewActivate.classList.add('view-hidden');
+    if (viewConnect) viewConnect.classList.add('view-hidden');
+    if (shell) shell.classList.remove('welcome-scroll-shell--connect');
+    setActivePopupView('welcome');
+  }
+
+  function restoreConnectedView() {
+    const view = popupUiState && popupUiState.activeView ? String(popupUiState.activeView) : '';
+    hydrateConnectAssets();
+    showConnectOnlyView();
+    if (lastAnalysisPayload) renderAnalysisEngine(lastAnalysisPayload);
+    if (lastRiskPanelPayload) renderRiskPanel(lastRiskPanelPayload);
+    if (lastContractScanPayload) renderMaliciousContract(lastContractScanPayload);
+    if (lastScamPayload) renderScamToken(lastScamPayload);
+    if (view === 'wallet-scan-loading') {
+      showWalletScanView();
+      return;
+    }
+    if (view === 'wallet-scan-result') {
+      showWalletScanResultView();
+      return;
+    }
+    if (view === 'risk-panel') {
+      showRiskPanelView();
+      return;
+    }
+    if (view === 'analysis-engine') {
+      showAnalysisEngineView(
+        popupUiState && popupUiState.analysisEngineSource === 'contract' ? 'contract' : 'wallet'
+      );
+      return;
+    }
+    if (view === 'malicious-contract') {
+      showMaliciousContractView();
+      return;
+    }
+    if (view === 'scam-token') {
+      showScamTokenView();
+      return;
+    }
+    if (view === 'contract-scan') {
+      showContractScanView();
+      return;
+    }
+    if (view === 'autoblock') {
+      showAutoBlockView();
+      return;
+    }
+    setConnectedDashboardMode(true);
   }
 
   async function getSecurityState() {
@@ -970,6 +1602,11 @@ document.addEventListener('DOMContentLoaded', function () {
       return;
     }
     setCwStatus('Connecting… Approve the request in your wallet if prompted.', '');
+    persistRuntimeState({
+      activeView: 'connect',
+      lastWalletType: walletType || lastWalletType,
+      connectInProgress: true,
+    });
     setConnectBusy(true);
     try {
       const json = await api.connectAndRegister(walletType);
@@ -980,12 +1617,23 @@ document.addEventListener('DOMContentLoaded', function () {
             ? json.data.address.slice(0, 6) + '…' + json.data.address.slice(-4)
             : 'Wallet';
       currentWalletAddress = json && json.data && json.data.address ? String(json.data.address) : currentWalletAddress;
+      dashboardUserId =
+        json && json.dashboard_user && json.dashboard_user.user_id
+          ? String(json.dashboard_user.user_id)
+          : dashboardUserId;
+      connectedWalletCount = 1;
+      persistRuntimeState({
+        connectInProgress: false,
+      });
       setCwStatus('Connected: ' + label, 'success');
       showConnectOnlyView();
       setConnectedDashboardMode(true);
     } catch (err) {
       const msg = err && err.message ? err.message : String(err);
       setCwStatus(msg, 'error');
+      persistRuntimeState({
+        connectInProgress: false,
+      });
     } finally {
       setConnectBusy(false);
     }
@@ -1002,6 +1650,7 @@ document.addEventListener('DOMContentLoaded', function () {
       viewWelcome.classList.add('view-hidden');
       viewActivate.classList.remove('view-hidden');
       if (shell) shell.classList.remove('welcome-scroll-shell--connect');
+      setActivePopupView('activate');
       scrollShellTop();
     });
   }
@@ -1012,6 +1661,7 @@ document.addEventListener('DOMContentLoaded', function () {
       viewActivate.classList.add('view-hidden');
       viewConnect.classList.remove('view-hidden');
       if (shell) shell.classList.add('welcome-scroll-shell--connect');
+      setActivePopupView('connect');
       scrollShellTop();
     });
   }
@@ -1039,6 +1689,9 @@ document.addEventListener('DOMContentLoaded', function () {
   document.querySelectorAll('[data-action="connect-metamask"]').forEach(function (btn) {
     btn.addEventListener('click', function () {
       lastWalletType = 'metamask';
+      persistRuntimeState({
+        lastWalletType: 'metamask',
+      });
       runBackendConnect('metamask');
     });
   });
@@ -1046,12 +1699,16 @@ document.addEventListener('DOMContentLoaded', function () {
   document.querySelectorAll('[data-action="connect-coinbase"]').forEach(function (btn) {
     btn.addEventListener('click', function () {
       lastWalletType = 'coinbase';
+      persistRuntimeState({
+        lastWalletType: 'coinbase',
+      });
       runBackendConnect('coinbase');
     });
   });
 
   document.querySelectorAll('[data-action^="card-"]').forEach(function (btn) {
     btn.addEventListener('click', function () {
+      if (quickMenu) quickMenu.classList.add('view-hidden');
       const action = btn.getAttribute('data-action') || '';
       if (action === 'card-scan-wallet') {
         startWalletScanFlow();
@@ -1065,11 +1722,28 @@ document.addEventListener('DOMContentLoaded', function () {
         showAutoBlockView();
         return;
       }
-      const copy =
-        'Analyse Chart coming soon.';
-      setCwStatus(copy, '');
+      setCwStatus('Analyse Chart coming soon.', '');
     });
   });
+
+  if (menuBtn && quickMenu) {
+    menuBtn.addEventListener('click', function () {
+      quickMenu.classList.toggle('view-hidden');
+    });
+  }
+
+  if (openDashboardBtn) {
+    openDashboardBtn.addEventListener('click', function () {
+      if (quickMenu) quickMenu.classList.add('view-hidden');
+      openDashboardPage();
+    });
+  }
+
+  if (tradeSeeMoreBtn) {
+    tradeSeeMoreBtn.addEventListener('click', function () {
+      openDashboardPage();
+    });
+  }
 
   walletScanToggleBtns.forEach(function (btn) {
     btn.addEventListener('click', function () {
@@ -1169,6 +1843,9 @@ document.addEventListener('DOMContentLoaded', function () {
         const riskData = await callExtensionApi('/protection/extension/risk-panel', riskPayload);
         if (riskData) {
           lastRiskPanelPayload = riskData;
+          persistRuntimeState({
+            lastRiskPanelPayload: lastRiskPanelPayload,
+          });
           renderRiskPanel(riskData);
         }
         showRiskPanelView();
@@ -1210,6 +1887,9 @@ document.addEventListener('DOMContentLoaded', function () {
       const scamData = await callExtensionApi('/protection/extension/scam-token-detected', scamPayload);
       if (scamData) {
         lastScamPayload = scamData;
+        persistRuntimeState({
+          lastScamPayload: lastScamPayload,
+        });
         renderScamToken(scamData);
       }
       showScamTokenView();
@@ -1236,6 +1916,9 @@ document.addEventListener('DOMContentLoaded', function () {
   if (contractLinkInput) {
     contractLinkInput.addEventListener('input', function () {
       syncChainDropdownVisibility();
+      persistRuntimeState({
+        contractLinkValue: contractLinkInput.value,
+      });
     });
   }
 
@@ -1251,20 +1934,13 @@ document.addEventListener('DOMContentLoaded', function () {
   chainOptionButtons.forEach(function (btn) {
     btn.addEventListener('click', function () {
       const chainId = Number(btn.getAttribute('data-chain-id'));
-      const chainName = btn.getAttribute('data-chain-name') || '';
-      const logo = btn.querySelector('img');
       if (Number.isFinite(chainId)) selectedChainId = chainId;
-      chainOptionButtons.forEach(function (b) {
-        b.classList.remove('is-selected');
-      });
-      btn.classList.add('is-selected');
-      if (chainSelectCurrentName) chainSelectCurrentName.textContent = chainName || 'Select network';
-      if (chainSelectCurrentLogo && logo) {
-        const src = logo.getAttribute('src');
-        if (src) chainSelectCurrentLogo.setAttribute('src', src);
-      }
+      applySelectedChainUi(selectedChainId);
       if (chainSelectMenu) chainSelectMenu.classList.add('view-hidden');
       if (chainSelectToggle) chainSelectToggle.setAttribute('aria-expanded', 'false');
+      persistRuntimeState({
+        selectedChainId: selectedChainId,
+      });
     });
   });
 
@@ -1273,6 +1949,10 @@ document.addEventListener('DOMContentLoaded', function () {
       const raw = contractLinkInput ? contractLinkInput.value.trim() : '';
       if (!raw) {
         setContractScanFeedback('Please enter a smart contract link.', 'error');
+        return;
+      }
+      if (!currentWalletAddress) {
+        setContractScanFeedback('Connect wallet first to scan contracts.', 'error');
         return;
       }
 
@@ -1290,6 +1970,19 @@ document.addEventListener('DOMContentLoaded', function () {
         return;
       }
 
+      const contractAddress = isAddressInput ? raw : extractContractAddressFromLink(raw);
+      if (!contractAddress) {
+        setContractScanFeedback(
+          'Could not find a contract address in that link. Paste a 0x address or an explorer /address/… URL.',
+          'error'
+        );
+        return;
+      }
+
+      const chainId = isAddressInput ? selectedChainId : inferChainIdFromExplorerLink(parsed.hostname);
+      selectedChainId = chainId;
+      applySelectedChainUi(selectedChainId);
+
       setContractScanFeedback(
         isAddressInput
           ? 'Analysis started for contract address'
@@ -1299,15 +1992,33 @@ document.addEventListener('DOMContentLoaded', function () {
       contractScanStartBtn.disabled = true;
       contractScanStartBtn.textContent = 'Analyzing...';
       contractScanStartBtn.style.opacity = '0.78';
-      const contractAddress = isAddressInput ? raw : extractContractAddressFromLink(raw);
-      const scanContractPayload = {
-        wallet_address: currentWalletAddress,
-        contract_link: raw,
-        chain_id: selectedChainId,
-      };
-      const scanResult = await callExtensionApi('/protection/extension/scan-smart-contract', scanContractPayload);
+
+      let scanResult = null;
+      const dashboardScan = await runDashboardContractScan(
+        contractAddress,
+        currentWalletAddress,
+        chainId
+      );
+      if (dashboardScan.ok) {
+        scanResult = dashboardScan.data;
+      } else {
+        const scanContractPayload = {
+          wallet_address: currentWalletAddress,
+          contract_link: raw,
+          contract_address: contractAddress,
+          chain_id: chainId,
+        };
+        scanResult = await callExtensionApi(
+          '/protection/extension/scan-smart-contract',
+          scanContractPayload
+        );
+      }
       if (!scanResult) {
-        setContractScanFeedback('Contract scan failed. Please try again.', 'error');
+        setContractScanFeedback(
+          (dashboardScan && dashboardScan.message) ||
+            'Contract scan failed. Check the link, network, and that your wallet is connected.',
+          'error'
+        );
         contractScanStartBtn.disabled = false;
         contractScanStartBtn.textContent = 'Analyze Contract';
         contractScanStartBtn.style.opacity = '';
@@ -1319,6 +2030,11 @@ document.addEventListener('DOMContentLoaded', function () {
         domain: parsed ? parsed.hostname : '',
         contract_link: raw,
       };
+      persistRuntimeState({
+        lastContractScanPayload: lastContractScanPayload,
+        selectedChainId: chainId,
+        contractLinkValue: raw,
+      });
       await sendScreenAction('analyze_contract', {
         contract_address: lastContractScanPayload.contract_address || undefined,
       });
@@ -1328,7 +2044,7 @@ document.addEventListener('DOMContentLoaded', function () {
         to: lastContractScanPayload.contract_address || contractAddress,
         value: '0x0',
         data: '0x',
-        chain_id: selectedChainId,
+        chain_id: chainId,
       };
       const analyzeResult = await callExtensionApi(
         '/protection/extension/analyze-transaction-screen',
@@ -1336,6 +2052,9 @@ document.addEventListener('DOMContentLoaded', function () {
       );
       if (analyzeResult) {
         lastAnalysisPayload = analyzeResult;
+        persistRuntimeState({
+          lastAnalysisPayload: lastAnalysisPayload,
+        });
         renderAnalysisEngine(analyzeResult);
       } else {
         renderAnalysisEngine(lastContractScanPayload);
@@ -1410,12 +2129,23 @@ document.addEventListener('DOMContentLoaded', function () {
       if (isConnected) {
         const firstWallet = state.session.connectedWallets[0];
         currentWalletAddress = firstWallet && firstWallet.address ? String(firstWallet.address) : '';
-        hydrateConnectAssets();
-        showConnectOnlyView();
-        setConnectedDashboardMode(true);
+        dashboardUserId =
+          state.session.dashboardUser && state.session.dashboardUser.user_id
+            ? String(state.session.dashboardUser.user_id)
+            : '';
+        connectedWalletCount =
+          state.session.connectedWallets && state.session.connectedWallets.length
+            ? state.session.connectedWallets.length
+            : 1;
+        popupUiStateReady.then(function () {
+          persistRuntimeState();
+          restoreConnectedView();
+        });
         setCwStatus('Connected: ' + getConnectedWalletLabel(state.session), 'success');
       } else {
-        setConnectedDashboardMode(false);
+        popupUiStateReady.then(function () {
+          restoreDisconnectedView();
+        });
       }
       if (state.alerts) {
         renderLatestAlert(state.alerts);
@@ -1424,13 +2154,25 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     getLegacyConnectedSession().then(function (legacySession) {
-      if (!legacySession) return;
-      const firstWallet = legacySession.connectedWallets && legacySession.connectedWallets[0];
-      currentWalletAddress = firstWallet && firstWallet.address ? String(firstWallet.address) : '';
-      hydrateConnectAssets();
-      showConnectOnlyView();
-      setConnectedDashboardMode(true);
-      setCwStatus('Connected: ' + getConnectedWalletLabel(legacySession), 'success');
+      popupUiStateReady.then(function () {
+        if (!legacySession) {
+          restoreDisconnectedView();
+          return;
+        }
+        const firstWallet = legacySession.connectedWallets && legacySession.connectedWallets[0];
+        currentWalletAddress = firstWallet && firstWallet.address ? String(firstWallet.address) : '';
+        dashboardUserId =
+          legacySession.dashboardUser && legacySession.dashboardUser.user_id
+            ? String(legacySession.dashboardUser.user_id)
+            : '';
+        connectedWalletCount =
+          legacySession.connectedWallets && legacySession.connectedWallets.length
+            ? legacySession.connectedWallets.length
+            : 1;
+        persistRuntimeState();
+        restoreConnectedView();
+        setCwStatus('Connected: ' + getConnectedWalletLabel(legacySession), 'success');
+      });
     });
   });
 

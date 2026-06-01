@@ -10,7 +10,7 @@ const LAST_CONNECTED_CONNECTOR_KEY = 'senseifi:last-connected-connector';
 
 export function useWallet() {
   const { setDashboardUser } = useDashboardUser();
-  const { address, isConnected, connector } = useAccount();
+  const { address, isConnected, connector, status } = useAccount();
   const { connectAsync, connectors, isPending } = useConnect();
   const { disconnect } = useDisconnect();
   const chainId = useChainId();
@@ -26,11 +26,12 @@ export function useWallet() {
   const [isRegistering, setIsRegistering] = useState(false);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
   const [registrationError, setRegistrationError] = useState<string | null>(null);
+  const [hasHydratedWallet, setHasHydratedWallet] = useState(false);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
     const stored = window.localStorage.getItem(LAST_CONNECTED_WALLET_KEY);
     if (stored?.trim()) setPersistedAddress(stored.trim());
+    setHasHydratedWallet(true);
   }, []);
 
   useEffect(() => {
@@ -44,9 +45,13 @@ export function useWallet() {
     }
   }, [isConnected, address, connector]);
 
+  const isWalletRestoring = status === 'connecting' || status === 'reconnecting';
+  const isWalletSessionPending = isWalletRestoring || isPending;
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (isConnected || isPending || autoReconnectAttemptedRef.current) return;
+    if (isWalletRestoring) return;
     autoReconnectAttemptedRef.current = true;
 
     const savedConnectorId = window.localStorage.getItem(LAST_CONNECTED_CONNECTOR_KEY)?.trim();
@@ -58,7 +63,7 @@ export function useWallet() {
     void connectAsync({ connector: savedConnector }).catch(() => {
       // Silently ignore auto-reconnect failures; user can reconnect manually.
     });
-  }, [isConnected, isPending, connectors, connectAsync]);
+  }, [isConnected, isPending, isWalletRestoring, connectors, connectAsync]);
 
   const connectedAddress = useMemo(() => {
     if (address?.trim()) return address.trim();
@@ -154,5 +159,9 @@ export function useWallet() {
     isDisconnecting,
     registrationError,
     isPending,
+    isWalletRestoring,
+    isWalletSessionPending,
+    hasHydratedWallet,
+    walletStatus: status,
   };
 }

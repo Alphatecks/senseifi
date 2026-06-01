@@ -217,7 +217,11 @@ function isAddress(value: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(value.trim());
 }
 
-export default function WhyTrustSection() {
+type WhyTrustSectionProps = {
+  showPricing?: boolean;
+};
+
+export default function WhyTrustSection({ showPricing = true }: WhyTrustSectionProps) {
   const {
     activeAddress,
     connectedAddress,
@@ -466,7 +470,7 @@ export default function WhyTrustSection() {
           </>
         )}
       </div>
-      {/* Pricing Section */}
+      {showPricing ? (
       <div className="w-full py-24 bg-black text-white flex flex-col items-center">
         <h2 className="text-4xl md:text-5xl font-normal mb-16 text-center">Pick your perfect plan</h2>
         {billingError && (
@@ -476,11 +480,11 @@ export default function WhyTrustSection() {
           <p className="w-full max-w-6xl px-4 mb-6 text-sm text-green-300">{billingSuccess}</p>
         )}
         <div className="flex flex-row gap-6 w-full max-w-6xl overflow-x-auto hide-scrollbar px-4 xl:px-0 xl:overflow-visible xl:justify-center">
-          {/* PRO PLAN */}
+          {/* BASIC PLAN */}
           <div ref={proRef} className={`bg-[#181C23] rounded-xl flex flex-col flex-shrink-0 w-[85vw] max-w-sm md:w-[380px] md:max-w-[400px] min-h-[600px] shadow-lg ${proInView ? "animate-zoom-in-out" : "opacity-0"}`}>
                   <div className="flex items-center justify-between mb-0 p-8 pb-0">
-                <span className="text-lg font-semibold">PRO PLAN</span>
-                <img src="/images/icons/pro.png" alt="Pro" className="w-16 h-16" />
+                <span className="text-lg font-semibold">BASIC Plan</span>
+                <img src="/images/icons/pro.png" alt="BASIC Plan" className="w-16 h-16" />
               </div>
                   <hr className="border-t border-white/10 w-full mb-0 mt-4" />
               <ul className="mb-8 space-y-4 text-white/80 text-base px-8 mt-8">
@@ -494,7 +498,7 @@ export default function WhyTrustSection() {
               </ul>
               <div className="mt-auto">
                     <div className="bg-[#11131A] rounded-t-xl w-full flex flex-col items-start pl-8">
-                      {renderBillingToggle(isProAnnual, () => setIsProAnnual((prev) => !prev), "pro plan")}
+                      {renderBillingToggle(isProAnnual, () => setIsProAnnual((prev) => !prev), "BASIC Plan")}
                       <span className="text-3xl font-normal text-white mt-4 flex items-center gap-2">
                         <Image src="/images/icons/usdc.svg" alt="USDC" width={26} height={26} />
                         ${isProAnnual ? planPricing.pro.annual : planPricing.pro.monthly} USDC
@@ -518,16 +522,15 @@ export default function WhyTrustSection() {
                 </div>
               </div>
             </div>
-            {/* PRO+ PLAN */}
-          {/* PRO+ PLAN */}
+            {/* PRO PLAN */}
           <div ref={proPlusRef} className={`bg-[#181C23] rounded-xl flex flex-col flex-shrink-0 w-[85vw] max-w-sm md:w-[380px] md:max-w-[400px] min-h-[600px] shadow-lg border-2 border-blue-600 ${proPlusInView ? "animate-zoom-in-out delay-200" : "opacity-0"}`}>
                   <div className="flex items-center justify-between mb-0 p-8 pb-0">
-                <span className="text-lg font-semibold">PRO+ PLAN <span className="text-xs text-blue-400 ml-2">(Recommended)</span></span>
-                <img src="/images/icons/proplus.png" alt="Pro+" className="w-16 h-16" />
+                <span className="text-lg font-semibold">PRO Plan <span className="text-xs text-blue-400 ml-2">(Recommended)</span></span>
+                <img src="/images/icons/proplus.png" alt="PRO Plan" className="w-16 h-16" />
               </div>
                   <hr className="border-t border-white/10 w-full mb-0 mt-4" />
               <ul className="mb-8 space-y-4 text-white/80 text-base px-8 mt-8">
-                <li className="flex items-center gap-3"><img src="/images/icons/check-circle.png" alt="check" className="w-5 h-5" />Everything in Pro</li>
+                <li className="flex items-center gap-3"><img src="/images/icons/check-circle.png" alt="check" className="w-5 h-5" />Everything in BASIC Plan</li>
                 <li className="flex items-center gap-3"><img src="/images/icons/check-circle.png" alt="check" className="w-5 h-5" />Advanced AI trading predictions</li>
                 <li className="flex items-center gap-3"><img src="/images/icons/check-circle.png" alt="check" className="w-5 h-5" />Trend, momentum & sentiment analysis</li>
                 <li className="flex items-center gap-3"><img src="/images/icons/check-circle.png" alt="check" className="w-5 h-5" />Portfolio optimization engine</li>
@@ -542,7 +545,7 @@ export default function WhyTrustSection() {
                         background: 'linear-gradient(135deg, #11131A 60%, #425EFF 100%)',
                       }}
                     >
-                      {renderBillingToggle(isProPlusAnnual, () => setIsProPlusAnnual((prev) => !prev), "pro plus plan")}
+                      {renderBillingToggle(isProPlusAnnual, () => setIsProPlusAnnual((prev) => !prev), "PRO Plan")}
                       <span className="text-3xl font-normal text-white mt-4 flex items-center gap-2">
                         <Image src="/images/icons/usdc.svg" alt="USDC" width={26} height={26} />
                         ${isProPlusAnnual ? planPricing.pro_plus.annual : planPricing.pro_plus.monthly} USDC
@@ -572,12 +575,12 @@ export default function WhyTrustSection() {
           {/* PREMIUM PLAN */}
           <div ref={premiumRef} className={`bg-[#181C23] rounded-xl flex flex-col flex-shrink-0 w-[85vw] max-w-sm md:w-[380px] md:max-w-[400px] min-h-[600px] shadow-lg ${premiumInView ? "animate-zoom-in-out delay-[400ms]" : "opacity-0"}`}>
                   <div className="flex items-center justify-between mb-0 p-8 pb-0">
-                <span className="text-lg font-semibold">PREMIUM PLAN</span>
-                <img src="/images/icons/premium.png" alt="Premium" className="w-16 h-16" />
+                <span className="text-lg font-semibold">PREMIUM Plan</span>
+                <img src="/images/icons/premium.png" alt="PREMIUM Plan" className="w-16 h-16" />
               </div>
                   <hr className="border-t border-white/10 w-full mb-0 mt-4" />
               <ul className="mb-8 space-y-4 text-white/80 text-base px-8 mt-8">
-                <li className="flex items-center gap-3"><img src="/images/icons/check-circle.png" alt="check" className="w-5 h-5" />Everything in Pro+</li>
+                <li className="flex items-center gap-3"><img src="/images/icons/check-circle.png" alt="check" className="w-5 h-5" />Everything in PRO Plan</li>
                 <li className="flex items-center gap-3"><img src="/images/icons/check-circle.png" alt="check" className="w-5 h-5" />Unlimited spending with SenseiCard</li>
                 <li className="flex items-center gap-3"><img src="/images/icons/check-circle.png" alt="check" className="w-5 h-5" />Smart budgeting & auto-analytics</li>
                 <li className="flex items-center gap-3"><img src="/images/icons/check-circle.png" alt="check" className="w-5 h-5" />High-frequency AI alerts</li>
@@ -587,7 +590,7 @@ export default function WhyTrustSection() {
               </ul>
               <div className="mt-auto">
                     <div className="bg-[#11131A] rounded-t-xl w-full flex flex-col items-start pl-8">
-                      {renderBillingToggle(isPremiumAnnual, () => setIsPremiumAnnual((prev) => !prev), "premium plan")}
+                      {renderBillingToggle(isPremiumAnnual, () => setIsPremiumAnnual((prev) => !prev), "PREMIUM Plan")}
                       <span className="text-3xl font-normal text-white mt-4 flex items-center gap-2">
                         <Image src="/images/icons/usdc.svg" alt="USDC" width={26} height={26} />
                         ${isPremiumAnnual ? planPricing.premium.annual : planPricing.premium.monthly} USDC
@@ -613,6 +616,7 @@ export default function WhyTrustSection() {
             </div>
         </div>
       </div>
+      ) : null}
     </section>
   );
 }

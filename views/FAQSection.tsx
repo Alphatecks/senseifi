@@ -1,4 +1,7 @@
+"use client";
+
 import React, { useState } from "react";
+import Link from "next/link";
 import { useInView } from "../utils/useInView";
 
 const faqs = [
@@ -6,25 +9,54 @@ const faqs = [
     question: "Is SenseiFi safe to use?",
     answer: (
       <>
-        Absolutely. <a href="#" className="text-blue-400">SenseiFi uses multi-layered security, real-time threat detection, and smart contract analysis</a> to protect your assets across multiple chains.
+        Yes. SenseiFi uses a zero-access security model. We never collect or store your private keys, seed phrases, or wallet secrets.{" "}
+        <Link href="/guard/wallet-security" className="text-blue-400 hover:underline">
+          SenseiGuard
+        </Link>{" "}
+        analyzes transactions and smart contracts before you sign, monitors wallet activity in real time, and flags phishing sites, malicious approvals, and suspicious contracts across supported chains. Your keys stay in your wallet; SenseiFi provides the intelligence layer that helps you avoid costly mistakes.
       </>
     ),
   },
   {
     question: "Can I trade using SenseiFi?",
-    answer: null,
+    answer: (
+      <>
+        Yes, through{" "}
+        <strong className="text-white/90">SenseiTrade</strong>, SenseiFi&apos;s AI-powered trading workspace. It delivers market signals, trend alerts, and portfolio insights tailored to your strategy so you can trade with more context and less guesswork. Connect your wallet via the{" "}
+        <Link href="/connect-wallet" className="text-blue-400 hover:underline">
+          web app
+        </Link>{" "}
+        to get started. SenseiGuard is available today; SenseiTrade is rolling out progressively. Check Connect Wallet for the latest availability.
+      </>
+    ),
   },
   {
     question: "How does SenseiCard work?",
-    answer: null,
+    answer: (
+      <>
+        <strong className="text-white/90">SenseiCard</strong> lets you spend crypto in everyday life. Link your wallet, convert digital assets to fiat at competitive rates, and pay online or track subscriptions from your SenseiFi dashboard. Card issuance and payment processing are handled by regulated third-party providers. SenseiFi does not store sensitive card credentials directly. Subscription plans unlock higher transaction limits and priority conversion rates as you upgrade.
+      </>
+    ),
   },
   {
     question: "Do I need to install anything?",
-    answer: null,
+    answer: (
+      <>
+        No installation is required for the SenseiFi web app. You can connect your wallet, scan addresses, and use the security dashboard directly in your browser. For full protection on dApps, install the free{" "}
+        <Link href="/guard/chrome-extension" className="text-blue-400 hover:underline">
+          SenseiGuard Chrome extension
+        </Link>{" "}
+        (SenseiFi Trade Insight). It intercepts transaction and signing requests on the sites you visit, runs AI-powered risk analysis via the SenseiFi backend, and warns you before you approve dangerous actions.
+      </>
+    ),
   },
   {
     question: "Which cryptocurrencies are supported?",
-    answer: null,
+    answer: (
+      <>
+        SenseiFi supports major EVM networks including Ethereum, BNB Smart Chain, Polygon, Base, Arbitrum, and Optimism, with coverage expanding across additional chains. You can connect popular wallets such as MetaMask, Coinbase Wallet, WalletConnect, Phantom, Rabby, and Trust Wallet. Tokens and contracts on your active chain are scanned by SenseiGuard. Supported assets depend on the network you connect to.
+      </>
+    ),
   },
 ];
 
@@ -43,8 +75,8 @@ export default function FAQSection() {
       {/* Left Side */}
       <div ref={headerRef} className={`md:w-1/2 w-full px-8 md:px-24 flex flex-col items-start ${headerInView ? 'animate-slide-in-left' : 'opacity-0'}`}>
         <span className="px-5 py-1 mb-6 rounded-full border border-blue-400 text-blue-400 font-medium text-base">FAQ</span>
-        <h2 className="text-4xl md:text-5xl font-medium text-white mb-6 leading-tight">Frequently Asked<br />Question</h2>
-        <p className="text-white/70 text-lg max-w-md mb-2">Find quick answers to common questions about our services, pricing, booking, etc</p>
+        <h2 className="text-4xl md:text-5xl font-medium text-white mb-6 leading-tight">Frequently Asked<br />Questions</h2>
+        <p className="text-white/70 text-lg max-w-md mb-2">Quick answers about wallet security, SenseiGuard, SenseiTrade, SenseiCard, and getting started.</p>
       </div>
       {/* Right Side */}
       <div className="md:w-1/2 w-full flex flex-col gap-6 px-8 mt-12 md:mt-0">

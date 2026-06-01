@@ -25,17 +25,26 @@ export default function GuardHeaderSearch() {
 
   const navigateTo = (href: string) => {
     setOpen(false);
-    if (pathname !== href) router.push(href);
+    if (pathname !== href) {
+      router.push(href);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const trimmed = query.trim();
+    if (!trimmed) return;
+
     if (results.length > 0) {
       navigateTo(results[0].href);
       return;
     }
+
     setOpen(false);
   };
+
+  const currentPageMatch = results.find((item) => item.href === pathname);
+  const otherResults = results.filter((item) => item.href !== pathname);
 
   return (
     <div ref={containerRef} className="relative w-full">
@@ -89,27 +98,36 @@ export default function GuardHeaderSearch() {
         >
           {results.length > 0 ? (
             <ul className="py-1 max-h-64 overflow-y-auto">
-              {results.map((item) => (
+              {currentPageMatch ? (
+                <li key={`${currentPageMatch.href}-current`}>
+                  <button
+                    type="button"
+                    role="option"
+                    onClick={() => setOpen(false)}
+                    className="w-full text-left px-4 py-3 text-sm transition hover:bg-slate-800/60 text-[#4066FF] bg-[#4066FF]/10"
+                  >
+                    <span className="font-medium">{currentPageMatch.label}</span>
+                    <span className="block text-xs text-slate-400 mt-0.5">Filtering content on this page</span>
+                  </button>
+                </li>
+              ) : null}
+              {otherResults.map((item) => (
                 <li key={item.href}>
                   <button
                     type="button"
                     role="option"
                     onClick={() => navigateTo(item.href)}
-                    className={`w-full text-left px-4 py-3 text-sm transition hover:bg-slate-800/60 ${
-                      pathname === item.href ? "text-[#4066FF] bg-[#4066FF]/10" : "text-white"
-                    }`}
+                    className="w-full text-left px-4 py-3 text-sm transition hover:bg-slate-800/60 text-white"
                   >
                     <span className="font-medium">{item.label}</span>
-                    {pathname === item.href && query.trim() ? (
-                      <span className="block text-xs text-slate-400 mt-0.5">Filtering content on this page</span>
-                    ) : null}
+                    <span className="block text-xs text-slate-400 mt-0.5">Open page and filter content</span>
                   </button>
                 </li>
               ))}
             </ul>
           ) : (
             <p className="px-4 py-3 text-sm text-slate-400">
-              No pages matched. Your search still filters content on the current page.
+              No pages matched. Filtering content on the current page.
             </p>
           )}
         </div>

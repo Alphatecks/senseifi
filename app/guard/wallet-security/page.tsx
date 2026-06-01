@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import Image from "next/image";
 import { useWallet } from "@/hooks/useWallet";
 import { useConnectNetworksModal } from "@/context/ConnectWalletsModalContext";
+import { isInsufficientXpError, useWaitlistXp } from "@/context/WaitlistXpContext";
 import { getDashboardSummary, getDashboardMetrics, getDashboardApprovals, getWalletsForAddress, getTransactionMonitoring, runFullScan, getScanContractDetails, scanContract, getProtectionSettings, updateProtectionSettings, setEmergencyLock, protectionSettingsToControls, getSecurityAlerts, getAddressSafety, analyzeTransaction, getRiskyTokens, getActiveThreats, getThreatHistory, resolveThreat, dismissThreat, refreshWalletHealth, verifyThreat, verifyAllThreats, recordThreatRemediationAction, inferThreatRemediation } from "@/services/dashboardService";
 import type { DashboardSummaryData, DashboardMetricsData, DashboardApproval, WalletListItem, WalletsPagination, TransactionMonitoringItem, RunFullScanData, ScanContractResult, ScanContractDetailResponse, SecurityAlertItem, AddressSafetyItem, AnalyzeTransactionResponse, RiskyTokenItem, WalletThreatItem, ActiveThreatsMeta, ThreatHistoryMeta, ThreatCorrelation } from "@/services/dashboardService";
 import { walletService } from "@/services/walletService";
@@ -231,6 +232,16 @@ function remediationActionLabel(item: WalletThreatItem): string | null {
 
 export default function WalletSecurityPage() {
   const { activeAddress: address } = useWallet();
+  const {
+    refreshWaitlistXp,
+    applyInsufficientXp,
+    canAffordTxAnalysis,
+    canAffordContractScan,
+    txAnalysisCost,
+    contractScanCost,
+    insufficientXpMessage,
+    xpClaimed,
+  } = useWaitlistXp();
   const [txPage, setTxPage] = useState(1);
   const [txList, setTxList] = useState<TransactionMonitoringItem[]>([]);
   const [txLoading, setTxLoading] = useState(false);
@@ -268,6 +279,7 @@ export default function WalletSecurityPage() {
   const [approvalPeriod, setApprovalPeriod] = useState("this_month");
   const [contractScannerAddress, setContractScannerAddress] = useState("");
   const [scannerLoading, setScannerLoading] = useState(false);
+  const [scannerError, setScannerError] = useState<string | null>(null);
   const [lastContractScanResult, setLastContractScanResult] = useState<ScanContractResult | null>(null);
   const [scanDetailsModalOpen, setScanDetailsModalOpen] = useState(false);
   const [scanDetails, setScanDetails] = useState<ScanContractDetailResponse | null>(null);
@@ -300,6 +312,10 @@ export default function WalletSecurityPage() {
   const [threatActionFeedback, setThreatActionFeedback] = useState<string | null>(null);
   const [activeThreatsCount, setActiveThreatsCount] = useState(0);
   const [threatListRefreshKey, setThreatListRefreshKey] = useState(0);
+
+  const highRiskWarningsOn = controls.find((c) => c.id === "high-risk")?.on ?? true;
+  const analyzeTxXpBlocked = !canAffordTxAnalysis(highRiskWarningsOn);
+  const contractScanXpBlocked = !canAffordContractScan(Boolean(address?.trim()));
 
   const refreshHealthAndSummary = useCallback(async () => {
     if (!address?.trim()) return;
@@ -445,7 +461,11 @@ export default function WalletSecurityPage() {
 
   const openAnalyzeTxModal = () => {
     setAnalyzeTxResult(null);
-    setAnalyzeTxError(null);
+    setAnalyzeTxError(
+      analyzeTxXpBlocked
+        ? `Insufficient XP balance (need ${txAnalysisCost} XP to analyze transactions).`
+        : null
+    );
     setAnalyzeTxTo("");
     setAnalyzeTxValue("");
     setAnalyzeTxData("");
@@ -458,10 +478,14 @@ export default function WalletSecurityPage() {
     setRiskyTokensModalOpen(true);
   };
 
-  const runAnalyzeTransaction = () => {
+  const runAnalyzeTransaction = async () => {
     const walletAddress = address?.trim();
     if (!walletAddress) {
       setAnalyzeTxError("Connect your wallet first.");
+      return;
+    }
+    if (analyzeTxXpBlocked) {
+      setAnalyzeTxError(`Insufficient XP balance (need ${txAnalysisCost} XP to analyze transactions).`);
       return;
     }
     const to = analyzeTxTo.trim();
@@ -477,28 +501,59 @@ export default function WalletSecurityPage() {
     setAnalyzeTxError(null);
     setAnalyzeTxLoading(true);
     setAnalyzeTxResult(null);
-    analyzeTransaction({
-      wallet_address: walletAddress,
-      to,
-      value: analyzeTxValue.trim() || "0",
-      data: analyzeTxData.trim() || "0x",
-      chain_id: chainId,
-    })
-      .then((data) => {
-        setAnalyzeTxResult(data ?? null);
-        if (!data) setAnalyzeTxError("Analysis failed. Please try again.");
-      })
-      .catch(() => setAnalyzeTxError("Request failed. Please try again."))
-      .finally(() => setAnalyzeTxLoading(false));
+    try {
+      const data = await analyzeTransaction({
+        wallet_address: walletAddress,
+        to,
+        value: analyzeTxValue.trim() || "0",
+        data: analyzeTxData.trim() || "0x",
+        chain_id: chainId,
+      });
+      setAnalyzeTxResult(data ?? null);
+      if (!data) {
+        setAnalyzeTxError("Analysis failed. Please try again.");
+      } else {
+        await refreshWaitlistXp();
+      }
+    } catch (err) {
+      if (isInsufficientXpError(err)) {
+        applyInsufficientXp(err);
+        setAnalyzeTxError(insufficientXpMessage(err));
+      } else {
+        setAnalyzeTxError("Request failed. Please try again.");
+      }
+    } finally {
+      setAnalyzeTxLoading(false);
+    }
   };
 
-  const runContractScan = () => {
+  const runContractScan = async () => {
     if (!contractScannerAddress.trim()) return;
+    if (contractScanXpBlocked) {
+      setScannerError(`Insufficient XP balance (need ${contractScanCost} XP to scan contracts).`);
+      return;
+    }
     setScannerLoading(true);
+    setScannerError(null);
     setLastContractScanResult(null);
-    scanContract(contractScannerAddress.trim(), address ?? undefined)
-      .then((res) => setLastContractScanResult(res ?? null))
-      .finally(() => setScannerLoading(false));
+    try {
+      const res = await scanContract(contractScannerAddress.trim(), address ?? undefined);
+      setLastContractScanResult(res ?? null);
+      if (!res) {
+        setScannerError("Contract scan failed. Please try again.");
+      } else {
+        await refreshWaitlistXp();
+      }
+    } catch (err) {
+      if (isInsufficientXpError(err)) {
+        applyInsufficientXp(err);
+        setScannerError(insufficientXpMessage(err));
+      } else {
+        setScannerError("Contract scan failed. Please try again.");
+      }
+    } finally {
+      setScannerLoading(false);
+    }
   };
 
   const openScanDetailsModal = () => {
@@ -943,9 +998,9 @@ export default function WalletSecurityPage() {
 
         {/* Four metric cards - mobile: same alignment as dashboard 4-card grid */}
         <div className="lg:hidden grid grid-cols-2 gap-3 -mx-6 w-[calc(100%+3rem)]">
-          <MetricCard mobile icon={<Image src={alertIcon} alt="" width={28} height={28} className="w-7 h-7 shrink-0 object-contain" />} title="Malicious Transaction" value={metricsLoading ? "—" : (metrics ? String(metrics.malicious_transaction.value) : "0")} change={metrics ? formatMetricChange(metrics.malicious_transaction.change_percent) : "—"} titleClassName="text-lg font-semibold" action={<button type="button" onClick={openAnalyzeTxModal} className="rounded bg-gradient-to-b from-[#4066FF] to-[#0026FF] text-white font-medium transition">Analyze transaction</button>} />
+          <MetricCard mobile icon={<Image src={alertIcon} alt="" width={28} height={28} className="w-7 h-7 shrink-0 object-contain" />} title="Malicious Transaction" value={metricsLoading ? "—" : (metrics ? String(metrics.malicious_transaction.value) : "0")} change={metrics ? formatMetricChange(metrics.malicious_transaction.change_percent) : "—"} titleClassName="text-lg font-semibold" action={<button type="button" onClick={openAnalyzeTxModal} className="rounded bg-gradient-to-b from-[#4066FF] to-[#0026FF] text-white font-medium transition text-[10px] px-2 py-1 leading-tight max-w-[4.75rem]">Analyze</button>} />
           <MetricCard mobile icon={<Image src={scanIcon} alt="" width={28} height={28} className="w-7 h-7 shrink-0 object-contain" />} title="Phishing Indicators" value={metricsLoading ? "—" : (metrics ? String(metrics.phishing_indicators.value) : "0")} change={metrics ? formatMetricChange(metrics.phishing_indicators.change_percent) : "—"} titleClassName="text-lg font-semibold" />
-          <MetricCard mobile icon={WARN_ICON} title="Risky Tokens" value={metricsLoading ? "—" : (metrics ? String(metrics.risky_tokens.value) : "0")} change={metrics ? formatMetricChange(metrics.risky_tokens.change_percent) : "—"} titleClassName="text-lg font-semibold" action={<button type="button" onClick={openRiskyTokensModal} className="rounded bg-gradient-to-b from-[#4066FF] to-[#0026FF] text-white font-medium transition">View risky tokens</button>} />
+          <MetricCard mobile icon={WARN_ICON} title="Risky Tokens" value={metricsLoading ? "—" : (metrics ? String(metrics.risky_tokens.value) : "0")} change={metrics ? formatMetricChange(metrics.risky_tokens.change_percent) : "—"} titleClassName="text-lg font-semibold" action={<button type="button" onClick={openRiskyTokensModal} className="rounded bg-gradient-to-b from-[#4066FF] to-[#0026FF] text-white font-medium transition text-[10px] px-2 py-1 leading-tight max-w-[4.75rem]">View</button>} />
           <MetricCard mobile icon={SHIELD_ICON} title="Active Threat level" value={metricsLoading ? "—" : (metrics ? String(metrics.active_threat_level.value) : "Low")} change={metrics ? formatMetricChange(metrics.active_threat_level.change_percent) : "—"} titleClassName="text-lg font-semibold" />
         </div>
         {/* Four metric cards - desktop */}
@@ -1309,13 +1364,19 @@ export default function WalletSecurityPage() {
             />
             <button
               type="button"
-              disabled={scannerLoading || !contractScannerAddress.trim()}
-              onClick={runContractScan}
+              disabled={scannerLoading || !contractScannerAddress.trim() || contractScanXpBlocked}
+              onClick={() => void runContractScan()}
               className="rounded-lg bg-[#4066FF] hover:bg-[#3355FF] disabled:opacity-50 disabled:pointer-events-none text-white text-sm font-medium px-5 py-3 transition shrink-0 my-1 mr-1"
             >
               {scannerLoading ? "Scanning…" : "Scan"}
             </button>
           </div>
+          {contractScanXpBlocked && xpClaimed ? (
+            <p className="text-xs text-amber-300 mb-3">Contract scan requires {contractScanCost} XP. Your balance is too low.</p>
+          ) : null}
+          {scannerError ? (
+            <p className="text-xs text-red-300 mb-3">{scannerError}</p>
+          ) : null}
           {!lastContractScanResult ? (
             <p className="text-sm text-slate-500 py-3">Enter a contract address and click Scan.</p>
           ) : (
@@ -1371,13 +1432,19 @@ export default function WalletSecurityPage() {
             />
             <button
               type="button"
-              disabled={scannerLoading || !contractScannerAddress.trim()}
-              onClick={runContractScan}
+              disabled={scannerLoading || !contractScannerAddress.trim() || contractScanXpBlocked}
+              onClick={() => void runContractScan()}
               className="rounded-lg bg-gradient-to-b from-[#4066FF] to-[#0026FF] hover:from-[#3355FF] hover:to-[#001fcc] disabled:opacity-50 disabled:pointer-events-none text-white text-sm font-medium px-5 py-3 transition shrink-0"
             >
               {scannerLoading ? "Scanning…" : "Scan"}
             </button>
           </div>
+          {contractScanXpBlocked && xpClaimed ? (
+            <p className="text-xs text-amber-300 mb-3">Contract scan requires {contractScanCost} XP. Your balance is too low.</p>
+          ) : null}
+          {scannerError ? (
+            <p className="text-xs text-red-300 mb-3">{scannerError}</p>
+          ) : null}
           <ul className="space-y-3 flex-1">
             {!lastContractScanResult ? (
               <li className="text-sm text-slate-500 py-2">Enter a contract address and click Scan.</li>
@@ -2603,6 +2670,9 @@ export default function WalletSecurityPage() {
                     <input type="text" value={analyzeTxChainId} onChange={(e) => setAnalyzeTxChainId(e.target.value)} placeholder="e.g. 1" className="w-full rounded-lg border bg-[#25283D] border-slate-600/60 text-white text-sm px-3 py-2.5 font-mono placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-[#4066FF]" />
                   </div>
                   {analyzeTxError && <p className="text-sm text-red-400">{analyzeTxError}</p>}
+                  {analyzeTxXpBlocked && xpClaimed && highRiskWarningsOn && !analyzeTxError ? (
+                    <p className="text-sm text-amber-300">Transaction analysis costs {txAnalysisCost} XP while High-Risk Tx Warnings is enabled.</p>
+                  ) : null}
                   {analyzeTxResult && (
                     <div className="rounded-lg bg-slate-800/60 border border-slate-600/50 p-4 space-y-2 text-sm">
                       <div className="flex flex-wrap gap-x-4 gap-y-1 text-slate-300">
@@ -2635,8 +2705,14 @@ export default function WalletSecurityPage() {
                 Cancel
               </button>
               {address && (
-                <button type="button" onClick={runAnalyzeTransaction} disabled={analyzeTxLoading} className="flex-1 rounded-xl font-medium text-white py-3 px-4 transition border border-[#001a99] disabled:opacity-60 hover:opacity-95" style={{ background: "linear-gradient(to bottom, #3366ff 0%, #0026FF 50%, #001fcc 100%)" }}>
-                  {analyzeTxLoading ? "Analyzing…" : "Analyze"}
+                <button
+                  type="button"
+                  onClick={() => void runAnalyzeTransaction()}
+                  disabled={analyzeTxLoading || analyzeTxXpBlocked}
+                  className="flex-1 rounded-xl font-medium text-white py-3 px-4 transition border border-[#001a99] disabled:opacity-60 hover:opacity-95"
+                  style={{ background: "linear-gradient(to bottom, #3366ff 0%, #0026FF 50%, #001fcc 100%)" }}
+                >
+                  {analyzeTxLoading ? "Analyzing…" : analyzeTxXpBlocked && xpClaimed ? "Insufficient XP" : "Analyze"}
                 </button>
               )}
             </div>

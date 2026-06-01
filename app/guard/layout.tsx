@@ -1,21 +1,30 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
+import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useDashboardUser } from "@/context/DashboardUserContext";
+import { useWaitlistXp } from "@/context/WaitlistXpContext";
 import { RescanModalProvider } from "@/context/RescanModalContext";
 import { ConnectNetworksModalProvider } from "@/context/ConnectWalletsModalContext";
 import { GuardSearchProvider } from "@/context/GuardSearchContext";
 import { useWallet } from "@/hooks/useWallet";
 import { getDashboardSummary } from "@/services/dashboardService";
+import { walletService } from "@/services/walletService";
 import GuardHeaderSearch from "@/app/guard/components/GuardHeaderSearch";
+import GuardChatbotFab from "@/app/guard/components/GuardChatbotFab";
+import GuardSettingsSubmenu, { parseSettingsSection, type SettingsSectionId } from "@/app/guard/components/GuardSettingsSubmenu";
 import ClaimXpModal from "@/views/components/ClaimXpModal";
-
+import ClaimXpSuccessModal, { type ClaimXpSuccessData } from "@/views/components/ClaimXpSuccessModal";
 import chromeIcon from "@/assets/icons/chrome.png";
 import needHelpBackground from "@/assets/icons/Background.png";
-import senseiCardLogo from "@/assets/icons/Mono.png";
+
+const GuardNotificationsPanel = dynamic(() => import("@/app/guard/components/GuardNotificationsPanel"), {
+  ssr: false,
+  loading: () => null,
+});
 
 const navItems = [
   { label: "Dashboard", href: "/guard", icon: "grid" },
@@ -23,18 +32,16 @@ const navItems = [
   { label: "Activity Monitor", href: "/guard/activity-monitor", icon: "chart" },
   { label: "Threat Intelligence", href: "/guard/threat-intelligence", icon: "shield-check" },
   { label: "Contract Scanner", href: "/guard/contract-scanner", icon: "document" },
-  { label: "SenseiCard", href: "#", icon: "card" },
   { label: "Chrome extension", href: "/guard/chrome-extension", icon: "ext" },
   { label: "Settings", href: "/guard/settings", icon: "settings" },
 ];
 
-const NOTIFICATIONS = [
-  { id: "1", type: "charity", unread: false, icon: "logo", title: "We've just reached out 30k goal raised for charity! We're so proud of the team!", desc: "", time: "8 min ago", button: null },
-  { id: "2", type: "suspicious", unread: true, icon: "dot", title: "Suspicious Transaction Detected", desc: "A transfer of 0.75 ETH to an unknown wallet was flagged. Review and approve within 15 minutes to avoid potential loss.", time: "17 min ago", button: "Review Transaction" },
-  { id: "3", type: "security", unread: true, icon: "dot", title: "Strengthen Your Wallet Security 🔒", desc: "We noticed you haven't enabled 2FA on your Ethereum wallet. Protect your funds by activating it now.", time: "45 min ago", button: null, titleIcon: "lock" },
-  { id: "4", type: "token", unread: true, icon: "dot", title: "Token Risk Alert ⚠", desc: "$XYZ token has been flagged for high volatility and low liquidity. Consider reviewing your holdings.", time: "1 day ago", button: null, titleIcon: "warning" },
-  { id: "5", type: "scam", unread: true, icon: "dot", title: "Potential Scam Contract Detected ⚡", desc: "A smart contract you interacted with shows suspicious activity patterns. Exercise caution before further interaction.", time: "2 day ago", button: "Review Analysis", titleIcon: "lightning" },
-];
+const XP_LOCKED_ROUTES = new Set([
+  "/guard/wallet-security",
+  "/guard/threat-intelligence",
+  "/guard/contract-scanner",
+  "/guard/activity-monitor",
+]);
 
 function NavIcon({ name, active }: { name: string; active?: boolean }) {
   const cls = "w-7 h-7 shrink-0";
@@ -120,11 +127,11 @@ function NitroIcon({ className }: { className?: string }) {
   );
 }
 
-function XpLabel({ iconClassName = "w-4 h-4 shrink-0" }: { iconClassName?: string }) {
+function XpLabel({ xp, iconClassName = "w-4 h-4 shrink-0" }: { xp?: number | null; iconClassName?: string }) {
   return (
     <span className="flex items-center gap-1.5">
       <NitroIcon className={iconClassName} />
-      XP
+      {xp != null && xp > 0 ? `${xp} XP` : "XP"}
     </span>
   );
 }
@@ -132,33 +139,87 @@ function XpLabel({ iconClassName = "w-4 h-4 shrink-0" }: { iconClassName?: strin
 export default function GuardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { activeAddress: address, isConnected, isPending } = useWallet();
+  const { activeAddress: address, isConnectedOrRemembered, isWalletSessionPending, hasHydratedWallet, disconnectWallet } = useWallet();
   const { dashboardUser } = useDashboardUser();
+  const { xpBalance: waitlistXp } = useWaitlistXp();
   const [totalAssetUsd, setTotalAssetUsd] = useState<string | null>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [mobileNavView, setMobileNavView] = useState<"main" | "settings">("main");
+  const [activeSettingsSection, setActiveSettingsSection] = useState<SettingsSectionId>("profile");
   const [isNavigating, setIsNavigating] = useState(false);
   const [xpModalOpen, setXpModalOpen] = useState(false);
-  const [walletGateReady, setWalletGateReady] = useState(false);
+  const [xpSuccessOpen, setXpSuccessOpen] = useState(false);
+  const [xpSuccessData, setXpSuccessData] = useState<ClaimXpSuccessData | null>(null);
+  const [walletRestoreTimedOut, setWalletRestoreTimedOut] = useState(false);
+  const isXpRouteLocked = waitlistXp != null && waitlistXp <= 1;
 
   useEffect(() => {
-    setWalletGateReady(true);
+    const timer = window.setTimeout(() => setWalletRestoreTimedOut(true), 3000);
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
-    if (!walletGateReady || isPending) return;
-    if (!isConnected || !address?.trim()) {
+    if (!hasHydratedWallet) return;
+    if (isWalletSessionPending && !walletRestoreTimedOut) return;
+    if (!isConnectedOrRemembered) {
       router.replace("/");
     }
-  }, [walletGateReady, isPending, isConnected, address, router]);
+  }, [hasHydratedWallet, isWalletSessionPending, walletRestoreTimedOut, isConnectedOrRemembered, router]);
+
+  useEffect(() => {
+    if (!isXpRouteLocked) return;
+    if (XP_LOCKED_ROUTES.has(pathname)) {
+      router.replace("/guard");
+    }
+  }, [isXpRouteLocked, pathname, router]);
 
   useEffect(() => {
     if (!address) {
       setTotalAssetUsd(null);
+      setUnreadCount(0);
       return;
     }
-    getDashboardSummary(address).then((s) => setTotalAssetUsd(s?.total_asset_usd ?? null));
+    getDashboardSummary(address).then((s) => {
+      setTotalAssetUsd(s?.total_asset_usd ?? null);
+      setUnreadCount(s?.unread_alerts ?? 0);
+    });
   }, [address]);
+
+  const handleUnreadCountChange = useCallback((count: number) => {
+    setUnreadCount(count);
+  }, []);
+
+  const openXpFlow = useCallback(async () => {
+    const walletAddress = address?.trim();
+    const userId = dashboardUser?.user_id?.trim();
+    if (walletAddress || userId) {
+      try {
+        const status = await walletService.getWaitlistStatus(walletAddress || undefined, userId || undefined);
+        if (status.claimed && status.data) {
+          setXpSuccessData({
+            xp: status.data.xp,
+            email: status.data.email,
+            successfulReferrals: status.data.successfulCount ?? status.data.direct_referrals ?? 0,
+            walletAddress: status.data.wallet_address,
+            justClaimed: false,
+          });
+          setXpSuccessOpen(true);
+          return;
+        }
+      } catch {
+        // Fall through to claim form if status lookup fails.
+      }
+    }
+    setXpModalOpen(true);
+  }, [address, dashboardUser?.user_id]);
+
+  const openBuyXpFlow = useCallback(() => {
+    setXpModalOpen(false);
+    setXpSuccessOpen(false);
+    router.push("/guard/settings?section=subscription");
+  }, [router]);
   const notificationRef = useRef<HTMLDivElement>(null);
   const mobileNotificationRef = useRef<HTMLDivElement>(null);
   const mobileNotificationsPanelRef = useRef<HTMLDivElement>(null);
@@ -167,12 +228,43 @@ export default function GuardLayout({ children }: { children: React.ReactNode })
     setIsNavigating(false);
   }, [pathname]);
 
+  useEffect(() => {
+    if (pathname === "/guard/settings") {
+      setActiveSettingsSection(parseSettingsSection(new URLSearchParams(window.location.search).get("section")));
+    }
+  }, [pathname, isNavigating, mobileNavOpen]);
+
+  useEffect(() => {
+    if (mobileNavOpen && pathname === "/guard/settings") {
+      setMobileNavView("settings");
+    }
+  }, [mobileNavOpen, pathname]);
+
+  useEffect(() => {
+    if (!mobileNavOpen) {
+      setMobileNavView("main");
+    }
+  }, [mobileNavOpen]);
+
   const handleNavClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
     if (href.startsWith("#")) return;
     e.preventDefault();
     setMobileNavOpen(false);
+    setMobileNavView("main");
     setIsNavigating(true);
     router.push(href);
+  };
+
+  const handleSettingsNavClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setMobileNavView("settings");
+  };
+
+  const handleSettingsSectionSelect = (section: SettingsSectionId) => {
+    setMobileNavOpen(false);
+    setMobileNavView("main");
+    setIsNavigating(true);
+    router.push(`/guard/settings?section=${section}`);
   };
 
   useEffect(() => {
@@ -190,11 +282,24 @@ export default function GuardLayout({ children }: { children: React.ReactNode })
 
   const title = pathname === "/guard/wallet-security" ? "Wallet Security" : pathname === "/guard/contract-scanner" ? "Contract Scanner" : pathname === "/guard/chrome-extension" ? "Chrome extension" : pathname === "/guard/activity-monitor" ? "Activity Monitor" : pathname === "/guard/threat-intelligence" ? "Threat Intelligence" : pathname === "/guard/settings" ? "Settings" : "Dashboard";
 
-  const hasSignedInWallet = Boolean(isConnected && address?.trim());
-  if (!walletGateReady || isPending || !hasSignedInWallet) {
+  const hasSignedInWallet = isConnectedOrRemembered;
+  if (!hasHydratedWallet || !hasSignedInWallet) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0a0a1a] text-slate-400 text-sm">
-        {!walletGateReady || isPending ? "Loading…" : "Redirecting…"}
+      <div className="min-h-screen flex items-center justify-center bg-[#0a0a1a]" role="status" aria-label="Loading SenseiFi">
+        <div className="flex items-center gap-3">
+          <Image
+            src="/images/scaled_logo.png"
+            alt=""
+            width={56}
+            height={56}
+            className="h-12 w-auto animate-senseifi-logo-zoom"
+            priority
+            aria-hidden
+          />
+          <span className="font-semibold text-white text-3xl tracking-tight animate-senseifi-text-zoom">
+            SenseiFi
+          </span>
+        </div>
       </div>
     );
   }
@@ -253,16 +358,24 @@ export default function GuardLayout({ children }: { children: React.ReactNode })
           {navItems.map((item) => {
             const active = pathname === item.href;
             const isHash = item.href.startsWith("#");
+            const isLockedItem = isXpRouteLocked && XP_LOCKED_ROUTES.has(item.href);
             return (
               <Link
                 key={item.label}
                 href={item.href}
-                onClick={(e) => !isHash && handleNavClick(e, item.href)}
+                onClick={(e) => {
+                  if (isLockedItem) {
+                    e.preventDefault();
+                    return;
+                  }
+                  if (!isHash) handleNavClick(e, item.href);
+                }}
                 className={`flex items-center gap-4 px-4 py-4 text-lg font-medium transition ${
                   active
                     ? "bg-slate-800/90 text-white border border-blue-500/40 shadow-[0_0_20px_rgba(37,99,235,0.18),inset_0_-4px_12px_rgba(67,56,202,0.4)] rounded-lg"
                     : "text-slate-400 hover:text-slate-300 hover:bg-slate-800/40 rounded-lg"
-                }`}
+                } ${isLockedItem ? "pointer-events-none opacity-45 grayscale cursor-not-allowed" : ""}`}
+                aria-disabled={isLockedItem}
               >
                 <NavIcon name={item.icon} active={active} />
                 {item.label}
@@ -290,33 +403,71 @@ export default function GuardLayout({ children }: { children: React.ReactNode })
         </div>
       </aside>
       {/* Mobile nav drawer - visible only below lg */}
-      <div className={`lg:hidden fixed inset-y-0 left-0 z-50 w-[280px] bg-[#080a12] border-r border-slate-800/60 flex flex-col transform transition-transform duration-150 ease-out will-change-transform ${mobileNavOpen ? "translate-x-0" : "-translate-x-full"}`}>
-        <div className="pt-10 pb-4 px-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Image src="/images/scaled_logo.png" alt="SenseiFi" width={32} height={32} className="h-8 w-auto" />
-            <span className="font-semibold text-white text-xl">SenseiFi</span>
+      <div className={`lg:hidden fixed inset-y-0 left-0 z-50 ${mobileNavView === "settings" ? "w-full" : "w-[280px]"} bg-[#080a12] border-r border-slate-800/60 flex flex-col transform transition-transform duration-150 ease-out will-change-transform ${mobileNavOpen ? "translate-x-0" : "-translate-x-full"}`}>
+        {mobileNavView === "settings" ? (
+          <div className="pt-10 pb-4 flex flex-col flex-1 min-h-0">
+            <GuardSettingsSubmenu
+              variant="drawer"
+              activeSection={activeSettingsSection}
+              onSelectSection={handleSettingsSectionSelect}
+              onSignOut={() => void disconnectWallet()}
+              onBack={() => setMobileNavView("main")}
+              onClose={() => setMobileNavOpen(false)}
+              showCloseButton
+            />
           </div>
-          <button type="button" onClick={() => setMobileNavOpen(false)} className="p-2 text-slate-400 hover:text-white" aria-label="Close menu">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-          </button>
-        </div>
-        <nav className="px-3 space-y-1 overflow-y-auto">
-          {navItems.map((item) => {
-            const active = pathname === item.href;
-            const isHash = item.href.startsWith("#");
-            return (
-              <Link
-                key={item.label}
-                href={item.href}
-                onClick={(e) => !isHash && handleNavClick(e, item.href)}
-                className={`flex items-center gap-4 px-4 py-3 text-base font-medium transition rounded-lg ${active ? "bg-slate-800/90 text-white border border-blue-500/40" : "text-slate-400 hover:text-slate-300 hover:bg-slate-800/40"}`}
-              >
-                <NavIcon name={item.icon} active={active} />
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
+        ) : (
+          <>
+            <div className="pt-10 pb-4 px-4 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2">
+                <Image src="/images/scaled_logo.png" alt="SenseiFi" width={32} height={32} className="h-8 w-auto" />
+                <span className="font-semibold text-white text-xl">SenseiFi</span>
+              </div>
+              <button type="button" onClick={() => setMobileNavOpen(false)} className="p-2 text-slate-400 hover:text-white" aria-label="Close menu">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <nav className="px-3 space-y-1 overflow-y-auto flex-1 min-h-0">
+              {navItems.map((item) => {
+                const active = pathname === item.href;
+                const isSettings = item.href === "/guard/settings";
+                const isHash = item.href.startsWith("#");
+                const isLockedItem = isXpRouteLocked && XP_LOCKED_ROUTES.has(item.href);
+                if (isSettings) {
+                  return (
+                    <button
+                      key={item.label}
+                      type="button"
+                      onClick={handleSettingsNavClick}
+                      className={`w-full flex items-center gap-4 px-4 py-3 text-base font-medium transition rounded-lg ${active ? "bg-slate-800/90 text-white border border-blue-500/40" : "text-slate-400 hover:text-slate-300 hover:bg-slate-800/40"}`}
+                    >
+                      <NavIcon name={item.icon} active={active} />
+                      {item.label}
+                    </button>
+                  );
+                }
+                return (
+                  <Link
+                    key={item.label}
+                    href={item.href}
+                    onClick={(e) => {
+                      if (isLockedItem) {
+                        e.preventDefault();
+                        return;
+                      }
+                      if (!isHash) handleNavClick(e, item.href);
+                    }}
+                    className={`flex items-center gap-4 px-4 py-3 text-base font-medium transition rounded-lg ${active ? "bg-slate-800/90 text-white border border-blue-500/40" : "text-slate-400 hover:text-slate-300 hover:bg-slate-800/40"} ${isLockedItem ? "pointer-events-none opacity-45 grayscale cursor-not-allowed" : ""}`}
+                    aria-disabled={isLockedItem}
+                  >
+                    <NavIcon name={item.icon} active={active} />
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </nav>
+          </>
+        )}
       </div>
       <div className={`lg:hidden fixed inset-0 z-40 bg-black/60 transition-opacity duration-150 ${mobileNavOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`} onClick={() => setMobileNavOpen(false)} aria-hidden={!mobileNavOpen} />
       {/* Route change loading bar - instant feedback so one tap feels responsive */}
@@ -333,11 +484,11 @@ export default function GuardLayout({ children }: { children: React.ReactNode })
             <span className="font-semibold text-white text-xl">SenseiFi</span>
           </div>
           <div className="flex items-center gap-2">
-            <button type="button" onClick={() => setXpModalOpen(true)} className="flex items-center justify-center h-10 px-3 rounded-xl border-2 border-white/25 bg-[#0f1220] text-sm font-semibold text-[#4066FF] hover:bg-white/10 transition shrink-0" aria-label="Experience points">
-              <XpLabel />
+            <button type="button" onClick={() => void openXpFlow()} className="flex items-center justify-center h-10 px-3 rounded-xl border-2 border-white/25 bg-[#0f1220] text-sm font-semibold text-[#4066FF] hover:bg-white/10 transition shrink-0" aria-label="Experience points">
+              <XpLabel xp={waitlistXp} />
             </button>
             <div className="relative" ref={mobileNotificationRef}>
-              <button type="button" onClick={() => setNotificationsOpen((v) => !v)} className="relative flex items-center justify-center w-10 h-10 rounded-xl border-2 border-white/25 bg-[#0f1220] text-slate-400 hover:text-white transition" aria-label="Notifications">
+              <button type="button" onClick={() => setNotificationsOpen((v) => !v)} className="relative flex items-center justify-center w-10 h-10 rounded-xl border-2 border-white/25 bg-[#0f1220] text-slate-400 hover:text-white transition" aria-label="Notifications" aria-expanded={notificationsOpen}>
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
                 <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#2563EB]" aria-hidden />
               </button>
@@ -357,68 +508,33 @@ export default function GuardLayout({ children }: { children: React.ReactNode })
           aria-label="Notifications"
           aria-hidden={!notificationsOpen}
         >
-            <div className="h-16 shrink-0 flex items-center justify-between px-4 border-b border-white/10 bg-[#0a0a1a]">
-              <div className="flex items-center gap-2">
-                <Image src="/images/scaled_logo.png" alt="SenseiFi" width={28} height={28} className="h-7 w-auto" />
-                <span className="font-semibold text-white text-xl">SenseiFi</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <button type="button" onClick={() => setNotificationsOpen(false)} className="flex items-center justify-center w-10 h-10 rounded-xl border-2 border-white/25 bg-[#0f1220] text-white hover:bg-white/10 transition" aria-label="Close notifications">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                </button>
-                <button type="button" onClick={() => setMobileNavOpen(true)} className="flex items-center justify-center w-10 h-10 rounded-xl border-2 border-white/25 bg-[#0f1220] text-slate-400 hover:text-white transition" aria-label="Menu">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
-                </button>
-              </div>
+          <div className="h-16 shrink-0 flex items-center justify-between px-4 border-b border-white/10 bg-[#0a0a1a]">
+            <div className="flex items-center gap-2">
+              <Image src="/images/scaled_logo.png" alt="SenseiFi" width={28} height={28} className="h-7 w-auto" />
+              <span className="font-semibold text-white text-xl">SenseiFi</span>
             </div>
-            <div className="flex-1 overflow-y-auto px-4 py-4">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-xl font-bold text-white">Notifications</h2>
-                  <span className="flex items-center justify-center min-w-[22px] h-[22px] rounded-full bg-[#0026FF] text-white text-xs font-semibold">2</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <button type="button" className="text-[#0026FF] text-sm font-medium">Mark all as read</button>
-                  <button type="button" className="p-1 text-white/70 hover:text-white" aria-label="More options">
-                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="19" r="1.5" /></svg>
-                  </button>
-                </div>
-              </div>
-              <ul className="space-y-4">
-                {NOTIFICATIONS.map((n) => (
-                  <li key={n.id} className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
-                    <div className="flex gap-3">
-                      <div className="shrink-0 w-10 h-10 rounded-lg bg-[#0026FF]/20 flex items-center justify-center overflow-hidden">
-                        {n.icon === "logo" ? (
-                          <Image src={senseiCardLogo} alt="" width={24} height={24} className="object-contain" />
-                        ) : (
-                          <span className="w-6 h-6 rounded-full bg-white/20" />
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-white font-medium text-sm leading-snug flex items-center gap-1.5 flex-wrap">
-                          {n.titleIcon === "lock" && <span aria-hidden>🔒</span>}
-                          {n.titleIcon === "warning" && <span aria-hidden>⚠</span>}
-                          {n.titleIcon === "lightning" && <span aria-hidden>⚡</span>}
-                          {n.title}
-                        </p>
-                        {n.desc && <p className="text-white/70 text-xs mt-1 leading-relaxed">{n.desc}</p>}
-                        <p className="text-white/50 text-xs mt-2">{n.time}</p>
-                        {n.button && (
-                          <button type="button" className="mt-3 px-4 py-2 rounded-lg bg-[#0026FF] text-white text-sm font-medium hover:opacity-90 transition">
-                            {n.button}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={() => setNotificationsOpen(false)} className="flex items-center justify-center w-10 h-10 rounded-xl border-2 border-white/25 bg-[#0f1220] text-white hover:bg-white/10 transition" aria-label="Close notifications">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+              <button type="button" onClick={() => setMobileNavOpen(true)} className="flex items-center justify-center w-10 h-10 rounded-xl border-2 border-white/25 bg-[#0f1220] text-slate-400 hover:text-white transition" aria-label="Menu">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+              </button>
             </div>
           </div>
+          {notificationsOpen ? (
+            <GuardNotificationsPanel
+              variant="mobile"
+              open={notificationsOpen}
+              walletAddress={address}
+              onUnreadCountChange={handleUnreadCountChange}
+              onClose={() => setNotificationsOpen(false)}
+            />
+          ) : null}
+        </div>
 
         {/* Desktop header - hidden on mobile */}
-        <header className="hidden lg:flex h-20 shrink-0 border-b border-slate-800/60 items-center px-4 sm:px-6 gap-4 bg-[#0f1115]">
+        <header className="hidden lg:flex h-20 shrink-0 border-b border-slate-800/60 items-center px-4 sm:px-6 gap-4 bg-[#0f1115] w-full">
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <div className="emboss-raised flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-[#1a1d24]">
               <Image src="/images/icons/dashboard-icon.png" alt="" width={20} height={20} className="w-5 h-5 sm:w-6 sm:h-6 opacity-90" />
@@ -426,66 +542,31 @@ export default function GuardLayout({ children }: { children: React.ReactNode })
             <Image src="/images/icons/sign.png" alt="" width={12} height={12} className="hidden sm:block w-3 h-3 opacity-70" />
             <span className="text-white font-semibold text-sm sm:text-base">{title}</span>
           </div>
-          <div className="hidden md:flex flex-1 min-w-0 mx-4" style={{ minWidth: "320px" }}>
+          <div className="hidden md:flex flex-1 min-w-0">
             <GuardHeaderSearch />
           </div>
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0 ml-auto">
             <button type="button" className="emboss-inset-3d-input flex items-center gap-2 rounded-lg bg-[#1a1d24] px-3 py-3 sm:px-4 sm:py-3.5 text-white text-sm font-medium hover:bg-[#1e2128] transition border border-slate-800/50">
               <Image src="/images/icons/wallet-header.png" alt="" width={24} height={24} className="w-5 h-5 sm:w-6 sm:h-6 opacity-80" />
               <span className="hidden min-[400px]:inline">{formatBalance(totalAssetUsd)}</span>
             </button>
-            <button type="button" onClick={() => setXpModalOpen(true)} className="emboss-inset-3d-input flex items-center rounded-lg bg-[#1a1d24] px-3 py-3 sm:px-4 sm:py-3.5 text-sm font-semibold text-[#4066FF] hover:bg-[#1e2128] transition border border-slate-800/50 shrink-0" aria-label="Experience points">
-              <XpLabel iconClassName="w-4 h-4 sm:w-[18px] sm:h-[18px] shrink-0" />
+            <button type="button" onClick={() => void openXpFlow()} className="emboss-inset-3d-input flex items-center rounded-lg bg-[#1a1d24] px-3 py-3 sm:px-4 sm:py-3.5 text-sm font-semibold text-[#4066FF] hover:bg-[#1e2128] transition border border-slate-800/50 shrink-0" aria-label="Experience points">
+              <XpLabel xp={waitlistXp} iconClassName="w-4 h-4 sm:w-[18px] sm:h-[18px] shrink-0" />
             </button>
             <div className="relative shrink-0" ref={notificationRef}>
               <button type="button" onClick={() => setNotificationsOpen((v) => !v)} className="emboss-raised relative flex items-center justify-center w-10 h-11 sm:w-11 sm:h-12 rounded-lg bg-[#1a1d24] text-slate-400 hover:text-white hover:bg-[#1e2128] transition shrink-0" aria-label="Notifications" aria-expanded={notificationsOpen}>
                 <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
                 <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#2563EB]" aria-hidden />
               </button>
-              {notificationsOpen && (
-                <div className="absolute right-0 top-full mt-2 z-50 w-[380px] max-h-[85vh] flex flex-col rounded-xl bg-[#1a1d24] border border-slate-700/60 shadow-xl overflow-hidden">
-                  <div className="p-4 border-b border-slate-700/60 flex items-center justify-between shrink-0">
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-white font-bold text-base">Notifications</h3>
-                      <span className="flex items-center justify-center min-w-[22px] h-[22px] rounded-full bg-[#2563EB] text-white text-xs font-semibold">2</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button type="button" className="text-[#60a5fa] hover:text-[#93c5fd] text-sm font-medium transition">Mark all as read</button>
-                      <button type="button" className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700/50 transition" aria-label="More options"><svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" /></svg></button>
-                    </div>
-                  </div>
-                  <div className="overflow-y-auto flex-1 min-h-0">
-                    {NOTIFICATIONS.map((n) => (
-                      <div key={n.id} className="p-4 border-b border-slate-700/50 last:border-b-0 hover:bg-slate-800/30 transition">
-                        <div className="flex gap-3">
-                          <div className="shrink-0 pt-0.5">
-                            {n.icon === "logo" ? (
-                              <div className="w-9 h-9 rounded-full bg-[#2563EB]/80 flex items-center justify-center overflow-hidden p-1.5">
-                                <Image src={senseiCardLogo} alt="SenseiFi" width={28} height={28} className="w-6 h-6 object-contain object-center mt-0.5" />
-                              </div>
-                            ) : (
-                              <span className={`block w-2.5 h-2.5 rounded-full ${n.unread ? "bg-white" : "bg-transparent"}`} aria-hidden />
-                            )}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-white font-semibold text-sm leading-tight flex items-center gap-1.5">
-                              {n.titleIcon === "lock" && <svg className="w-4 h-4 text-amber-400 shrink-0" fill="currentColor" viewBox="0 0 24 24"><path fillRule="evenodd" d="M12 2a4 4 0 00-4 4v2H6a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V10a2 2 0 00-2-2h-2V6a4 4 0 00-4-4zm0 2a2 2 0 012 2v2h-4V6a2 2 0 012-2z" clipRule="evenodd" /></svg>}
-                              {n.titleIcon === "warning" && <svg className="w-4 h-4 text-amber-400 shrink-0" fill="currentColor" viewBox="0 0 24 24"><path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92z" clipRule="evenodd" /></svg>}
-                              {n.titleIcon === "lightning" && <svg className="w-4 h-4 text-amber-400 shrink-0" fill="currentColor" viewBox="0 0 24 24"><path fillRule="evenodd" d="M13 3v8h5l-6 10v-8H6l7-10z" clipRule="evenodd" /></svg>}
-                              {n.title}
-                            </p>
-                            <p className="text-slate-300 text-sm mt-1 leading-snug">{n.desc}</p>
-                            {n.button && (
-                              <button type="button" className="mt-3 rounded-lg bg-gradient-to-b from-[#4066FF] to-[#0026FF] hover:from-[#3355FF] hover:to-[#001fcc] text-white text-sm font-medium px-4 py-2 transition shadow-[0_4px_12px_rgba(0,38,255,0.25)]">{n.button}</button>
-                            )}
-                            <p className="text-slate-500 text-xs mt-2">{n.time}</p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              {notificationsOpen ? (
+                <GuardNotificationsPanel
+                  variant="desktop"
+                  open={notificationsOpen}
+                  walletAddress={address}
+                  onUnreadCountChange={handleUnreadCountChange}
+                  onClose={() => setNotificationsOpen(false)}
+                />
+              ) : null}
             </div>
             <button type="button" className="emboss-inset-3d-input flex items-center gap-2 sm:gap-3 rounded-lg bg-[#1a1d24] pl-1.5 pr-2 sm:pl-2 sm:pr-3 py-3 sm:py-3.5 hover:bg-[#1e2128] transition shrink-0 border border-slate-800/50">
               <Image src="/images/icons/avatar-boy.png" alt="" width={36} height={36} className="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover shrink-0" />
@@ -500,6 +581,13 @@ export default function GuardLayout({ children }: { children: React.ReactNode })
         <div className={`flex-1 min-h-0 overflow-auto p-6 ${["/guard", "/guard/wallet-security", "/guard/activity-monitor", "/guard/threat-intelligence", "/guard/contract-scanner", "/guard/settings"].includes(pathname) ? "hide-scrollbar" : ""}`}>{children}</div>
       </main>
       <ClaimXpModal open={xpModalOpen} onClose={() => setXpModalOpen(false)} />
+      <ClaimXpSuccessModal
+        open={xpSuccessOpen}
+        onClose={() => setXpSuccessOpen(false)}
+        data={xpSuccessData}
+        onBuyXp={openBuyXpFlow}
+      />
+      <GuardChatbotFab />
     </div>
     </GuardSearchProvider>
     </ConnectNetworksModalProvider>

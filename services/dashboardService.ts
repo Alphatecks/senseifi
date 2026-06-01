@@ -1,3 +1,5 @@
+import { parseInsufficientXpResponse } from './xpTypes';
+
 export interface DashboardSecurityStatus {
   score: number;
   status: string;
@@ -81,6 +83,104 @@ export async function getDashboardSummary(address: string): Promise<DashboardSum
   if (!ok || !data?.success) return null;
   console.log('[Dashboard API] Summary response:', data);
   return data.data;
+}
+
+export interface ExtensionOverviewData {
+  scans_this_month?: number;
+  scans_trend_percent?: number;
+  unread_alerts?: number;
+  alerts_trend_percent?: number;
+  high_risk_alerts?: number;
+}
+
+export interface ExtensionTradeInsightsFilters {
+  wallet_address: string;
+  page?: number;
+  per_page?: number;
+  period?: string;
+  risk_level?: string;
+  search?: string;
+}
+
+export interface ExtensionTradeInsightItem {
+  title?: string;
+  type?: string;
+  action?: string;
+  event?: string;
+  id?: string;
+  tx_id?: string;
+  tx_hash?: string;
+  transaction_hash?: string;
+  wallet?: string;
+  wallet_address?: string;
+  status?: string;
+  risk_level?: string;
+  risk_band?: string;
+  severity?: string;
+  risk_score?: number;
+  riskScore?: number;
+  score?: number;
+  time?: string;
+  detected_at?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+interface ExtensionTradeInsightsWrapped {
+  items?: ExtensionTradeInsightItem[];
+  rows?: ExtensionTradeInsightItem[];
+  results?: ExtensionTradeInsightItem[];
+}
+
+export async function getExtensionOverview(walletAddress: string): Promise<ExtensionOverviewData | null> {
+  if (!walletAddress?.trim()) return null;
+  const params = new URLSearchParams({ wallet_address: walletAddress.trim() });
+  const { ok, status, data } = await dashboardFetch<{
+    success?: boolean;
+    data?: ExtensionOverviewData;
+  }>(`/dashboard/extension/overview?${params.toString()}`);
+  if (status === 404 || !ok || !data) return null;
+  const wrapped = data as { success?: boolean; data?: ExtensionOverviewData };
+  if (wrapped.success && wrapped.data) return wrapped.data;
+  if (wrapped.data) return wrapped.data;
+  return data as ExtensionOverviewData;
+}
+
+export async function getExtensionTradeInsights(
+  filters: ExtensionTradeInsightsFilters
+): Promise<ExtensionTradeInsightItem[]> {
+  if (!filters.wallet_address?.trim()) return [];
+  const params = new URLSearchParams({
+    wallet_address: filters.wallet_address.trim(),
+    page: String(filters.page ?? 1),
+    per_page: String(filters.per_page ?? 10),
+  });
+  if (filters.period?.trim()) params.set("period", filters.period.trim());
+  if (filters.risk_level?.trim()) params.set("risk_level", filters.risk_level.trim());
+  if (filters.search?.trim()) params.set("search", filters.search.trim());
+
+  const { ok, status, data } = await dashboardFetch<
+    | { success?: boolean; data?: ExtensionTradeInsightItem[] | ExtensionTradeInsightsWrapped }
+    | ExtensionTradeInsightItem[]
+    | ExtensionTradeInsightsWrapped
+  >(`/dashboard/extension/trade-insights?${params.toString()}`);
+  if (status === 404 || !ok || !data) return [];
+
+  if (Array.isArray(data)) return data as ExtensionTradeInsightItem[];
+
+  const wrapped = data as {
+    success?: boolean;
+    data?: ExtensionTradeInsightItem[] | ExtensionTradeInsightsWrapped;
+  };
+  const payload = wrapped.data ?? data;
+  if (Array.isArray(payload)) return payload;
+  if (!payload || typeof payload !== "object") return [];
+
+  const candidate = payload as ExtensionTradeInsightsWrapped;
+  if (Array.isArray(candidate.items)) return candidate.items;
+  if (Array.isArray(candidate.rows)) return candidate.rows;
+  if (Array.isArray(candidate.results)) return candidate.results;
+  return [];
 }
 
 export interface UnreadAlertItem {
@@ -534,10 +634,39 @@ export async function analyzeTransaction(body: AnalyzeTransactionRequest): Promi
   const endpoint = `/dashboard/${encodeURIComponent(walletAddress)}/analyze-tx`;
   const { ok, status, data } = await dashboardFetch<AnalyzeTransactionResponse>(endpoint, {
     method: 'POST',
-    body: JSON.stringify(body),
+    body: JSON.stringify({
+      to: body.to,
+      value: body.value,
+      data: body.data,
+      chain_id: body.chain_id,
+    }),
   });
   console.log('[Dashboard API] Analyze transaction response:', { ok, status, data, endpoint });
-  if (!data) return null;
+  const xpError = parseInsufficientXpResponse(status, data);
+  if (xpError) throw xpError;
+  if (!ok || !data) return null;
+  return data;
+}
+
+export interface DappConnectionCheckRequest {
+  wallet_address: string;
+  url: string;
+}
+
+export async function checkDappConnection(body: DappConnectionCheckRequest): Promise<Record<string, unknown> | null> {
+  const walletAddress = body.wallet_address?.trim();
+  const url = body.url?.trim();
+  if (!walletAddress || !url) return null;
+  const { ok, status, data } = await dashboardFetch<Record<string, unknown>>(
+    '/protection/dapp/connection-check',
+    {
+      method: 'POST',
+      body: JSON.stringify({ wallet_address: walletAddress, url }),
+    }
+  );
+  const xpError = parseInsufficientXpResponse(status, data);
+  if (xpError) throw xpError;
+  if (!ok || !data) return null;
   return data;
 }
 
@@ -601,6 +730,8 @@ export async function scanContract(contractAddress: string, forAddress?: string 
     '/scan-contract',
     { method: 'POST', body: JSON.stringify(body) }
   );
+  const xpError = parseInsufficientXpResponse(status, data);
+  if (xpError) throw xpError;
   if (!ok) return null;
   const result = data && typeof data === 'object' && 'scan_id' in data ? (data as ScanContractResult) : (data as { data?: ScanContractResult })?.data ?? null;
   return result ?? null;
@@ -628,6 +759,35 @@ export async function getScanContractDetails(scanId: string): Promise<ScanContra
   const parsed = data as { success?: boolean; data?: ScanContractDetailResponse } | null;
   if (parsed?.success && parsed.data) return parsed.data;
   return null;
+}
+
+function parseScanContractResult(
+  data: ScanContractResult | { success?: boolean; data?: ScanContractResult } | null | undefined
+): ScanContractResult | null {
+  if (!data || typeof data !== "object") return null;
+  if ("scan_id" in data && typeof (data as ScanContractResult).scan_id === "string") {
+    return data as ScanContractResult;
+  }
+  const wrapped = data as { success?: boolean; data?: ScanContractResult };
+  if (wrapped.success && wrapped.data?.scan_id) return wrapped.data;
+  if (wrapped.data?.scan_id) return wrapped.data;
+  return null;
+}
+
+/** Load the most recent scan for a contract without creating a new scan (when backend supports it). */
+export async function getLatestContractScan(
+  contractAddress: string,
+  forAddress?: string | null
+): Promise<ScanContractResult | null> {
+  if (!contractAddress?.trim()) return null;
+  const params = new URLSearchParams();
+  if (forAddress?.trim()) params.set("for_address", forAddress.trim());
+  const qs = params.toString() ? `?${params.toString()}` : "";
+  const { ok, status, data } = await dashboardFetch<
+    ScanContractResult | { success: boolean; data: ScanContractResult }
+  >(`/scan-contract/contract/${encodeURIComponent(contractAddress.trim())}${qs}`);
+  if (status === 404 || !ok) return null;
+  return parseScanContractResult(data);
 }
 
 // --- Risk profile (scan history for wallet) ---

@@ -169,6 +169,9 @@ export default function ActivityMonitorPage() {
   const [overviewLoading, setOverviewLoading] = useState(true);
   const [liveFeedFullOpen, setLiveFeedFullOpen] = useState(false);
   const [liveFeedSearch, setLiveFeedSearch] = useState("");
+  const [mobileDappsExpanded, setMobileDappsExpanded] = useState(false);
+
+  const MOBILE_DAPPS_PREVIEW = 3;
 
   const activityMonitorParams = { user_id: dashboardUser?.user_id ?? undefined, wallet_address: address ?? undefined };
 
@@ -199,6 +202,10 @@ export default function ActivityMonitorPage() {
       .then((data) => setConnectedDappsList(data ?? null))
       .finally(() => setConnectedDappsLoading(false));
   }, [connectedTab, dashboardUser?.user_id, address]);
+
+  useEffect(() => {
+    if (connectedTab !== "dapps") setMobileDappsExpanded(false);
+  }, [connectedTab]);
 
   const fetchFeed = useCallback(() => {
     const userId = dashboardUser?.user_id;
@@ -515,43 +522,54 @@ export default function ActivityMonitorPage() {
             </ul>
           )}
           {connectedTab === "dapps" && (
-            <ul className="space-y-3">
-              {connectedDappsLoading ? (
-                <li className="py-6 text-center text-slate-400 text-xs">Loading…</li>
-              ) : !connectedDappsList?.length ? (
-                <li className="py-6 text-center text-slate-400 text-xs">No connected dApps</li>
-              ) : (
-                connectedDappsList.map((d, i) => {
-                  const statusColor = (d.status || "").toLowerCase() === "active" ? "text-[#32BB1D]" : "text-slate-400";
-                  return (
-                    <li key={d.dapp_name + d.connected_wallet_address + i} className="rounded-xl p-3 flex flex-col gap-2.5" style={{ backgroundColor: "#25283D" }}>
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="w-9 h-9 rounded-full bg-slate-600/60 flex items-center justify-center shrink-0 text-white font-bold text-xs">
-                            {d.dapp_name?.charAt(0) ?? "?"}
-                          </span>
-                          <div className="min-w-0">
-                            <p className="text-sm font-semibold text-white">{d.dapp_name}</p>
-                            <p className="text-[10px] text-slate-400 truncate">{d.description}</p>
+            <>
+              <ul className="space-y-3">
+                {connectedDappsLoading ? (
+                  <li className="py-6 text-center text-slate-400 text-xs">Loading…</li>
+                ) : !connectedDappsList?.length ? (
+                  <li className="py-6 text-center text-slate-400 text-xs">No connected dApps</li>
+                ) : (
+                  (mobileDappsExpanded ? connectedDappsList : connectedDappsList.slice(0, MOBILE_DAPPS_PREVIEW)).map((d, i) => {
+                    const statusColor = (d.status || "").toLowerCase() === "active" ? "text-[#32BB1D]" : "text-slate-400";
+                    return (
+                      <li key={d.dapp_name + d.connected_wallet_address + i} className="rounded-xl p-3 flex flex-col gap-2.5" style={{ backgroundColor: "#25283D" }}>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="w-9 h-9 rounded-full bg-slate-600/60 flex items-center justify-center shrink-0 text-white font-bold text-xs">
+                              {d.dapp_name?.charAt(0) ?? "?"}
+                            </span>
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-white">{d.dapp_name}</p>
+                              <p className="text-[10px] text-slate-400 truncate">{d.description}</p>
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="text-xs font-medium text-white">{d.tokens}</p>
+                            <p className={`text-[10px] mt-0.5 ${statusColor}`}>{d.status}</p>
                           </div>
                         </div>
-                        <div className="text-right shrink-0">
-                          <p className="text-xs font-medium text-white">{d.tokens}</p>
-                          <p className={`text-[10px] mt-0.5 ${statusColor}`}>{d.status}</p>
+                        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-[10px] text-slate-400">
+                          <span>Wallet: <span className="font-mono text-slate-300">{shortenAddress(d.connected_wallet_address)}</span></span>
+                          <span>Last Activity: <span className="text-slate-400">{d.last_activity}</span></span>
                         </div>
-                      </div>
-                      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-[10px] text-slate-400">
-                        <span>Wallet: <span className="font-mono text-slate-300">{shortenAddress(d.connected_wallet_address)}</span></span>
-                        <span>Last Activity: <span className="text-slate-400">{d.last_activity}</span></span>
-                      </div>
-                      <button type="button" className="w-full rounded-lg py-2.5 text-xs font-medium text-white transition" style={{ backgroundColor: "#3A3A42" }}>
-                        View Wallet
-                      </button>
-                    </li>
-                  );
-                })
-              )}
-            </ul>
+                        <button type="button" className="w-full rounded-lg py-2.5 text-xs font-medium text-white transition" style={{ backgroundColor: "#3A3A42" }}>
+                          View Wallet
+                        </button>
+                      </li>
+                    );
+                  })
+                )}
+              </ul>
+              {!connectedDappsLoading && (connectedDappsList?.length ?? 0) > MOBILE_DAPPS_PREVIEW && !mobileDappsExpanded ? (
+                <button
+                  type="button"
+                  onClick={() => setMobileDappsExpanded(true)}
+                  className="mt-3 text-xs font-semibold text-[#4066FF] hover:text-[#5b7cff] hover:underline"
+                >
+                  See more
+                </button>
+              ) : null}
+            </>
           )}
         </div>
 
