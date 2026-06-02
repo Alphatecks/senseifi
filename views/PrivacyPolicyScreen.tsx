@@ -8,7 +8,7 @@ export default function PrivacyPolicyScreen() {
     <article className="w-full bg-[#0a0a1a] text-white pt-28 md:pt-32 pb-20">
       <div className="w-full px-4 md:px-8 lg:px-12 xl:px-20">
         <div className="w-full max-w-3xl mx-auto">
-          <span className="inline-flex items-center rounded-full border border-blue-400/60 px-4 py-1 text-sm text-blue-300 mb-6">
+          <span className="inline-flex items-center rounded-full border border-[#0026FF] px-4 py-1 text-sm text-white mb-6">
             Legal
           </span>
           <h1 className="text-3xl md:text-4xl font-normal leading-tight text-white">Privacy Policy</h1>

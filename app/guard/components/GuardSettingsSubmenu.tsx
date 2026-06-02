@@ -1,8 +1,10 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import userCircleIcon from "@/assets/icons/user-circle (1).png";
+import LogOutConfirmationModal from "@/app/guard/components/LogOutConfirmationModal";
 
 export type SettingsSectionId = "profile" | "security" | "subscription" | "support" | "terms";
 
@@ -93,7 +95,7 @@ export function parseSettingsSection(value: string | null | undefined): Settings
 type GuardSettingsSubmenuProps = {
   activeSection: SettingsSectionId;
   onSelectSection: (section: SettingsSectionId) => void;
-  onSignOut?: () => void;
+  onSignOut?: () => void | Promise<void>;
   variant?: "sidebar" | "drawer";
   onClose?: () => void;
   onBack?: () => void;
@@ -109,7 +111,22 @@ export default function GuardSettingsSubmenu({
   onBack,
   showCloseButton = false,
 }: GuardSettingsSubmenuProps) {
+  const router = useRouter();
   const isDrawer = variant === "drawer";
+  const [showLogOutModal, setShowLogOutModal] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const handleConfirmLogOut = async () => {
+    if (!onSignOut || isLoggingOut) return;
+    setIsLoggingOut(true);
+    try {
+      await onSignOut();
+      setShowLogOutModal(false);
+      router.push("/");
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
 
   const nav = (
     <nav className={`${isDrawer ? "px-4 py-2" : "p-3"} space-y-1 overflow-y-auto flex-1 min-h-0`}>
@@ -141,7 +158,7 @@ export default function GuardSettingsSubmenu({
       })}
       <button
         type="button"
-        onClick={onSignOut}
+        onClick={() => setShowLogOutModal(true)}
         className="w-full flex items-center gap-3 px-4 py-3.5 rounded-lg text-left font-medium hover:bg-slate-800/40 transition"
         style={{ color: INACTIVE_COLOR }}
       >
@@ -184,11 +201,21 @@ export default function GuardSettingsSubmenu({
     </div>
   );
 
+  const logOutModal = (
+    <LogOutConfirmationModal
+      open={showLogOutModal}
+      onClose={() => setShowLogOutModal(false)}
+      onConfirm={() => void handleConfirmLogOut()}
+      isLoggingOut={isLoggingOut}
+    />
+  );
+
   if (isDrawer) {
     return (
       <div className="flex flex-col flex-1 min-h-0 bg-[#0a0a1a]">
         {header}
         {nav}
+        {logOutModal}
       </div>
     );
   }
@@ -200,6 +227,7 @@ export default function GuardSettingsSubmenu({
     >
       {header}
       {nav}
+      {logOutModal}
     </div>
   );
 }

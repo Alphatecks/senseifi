@@ -74,7 +74,7 @@ export default function FAQSection() {
     >
       {/* Left Side */}
       <div ref={headerRef} className={`md:w-1/2 w-full px-8 md:px-24 flex flex-col items-start ${headerInView ? 'animate-slide-in-left' : 'opacity-0'}`}>
-        <span className="px-5 py-1 mb-6 rounded-full border border-blue-400 text-blue-400 font-medium text-base">FAQ</span>
+        <span className="px-5 py-1 mb-6 rounded-full border border-[#0026FF] text-white font-medium text-base">FAQ</span>
         <h2 className="text-4xl md:text-5xl font-medium text-white mb-6 leading-tight">Frequently Asked<br />Questions</h2>
         <p className="text-white/70 text-lg max-w-md mb-2">Quick answers about wallet security, SenseiGuard, SenseiTrade, SenseiCard, and getting started.</p>
       </div>

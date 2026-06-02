@@ -14,6 +14,8 @@
   const ALERT_OVERLAY_ID = 'senseiguard-alert-overlay';
   const STYLE_ID = 'senseiguard-scan-overlay-style';
   const pendingRequests = new Set();
+  /** Domains approved in-page this session — skips re-scan UI when wallet re-requests connect. */
+  const locallyApprovedConnectDomains = new Set();
   const CONNECT_METHODS = new Set(['eth_requestAccounts', 'wallet_requestPermissions']);
   /** Risk scores at or below this (out of 10) show "Safe to proceed" only. */
   const RISK_LEVEL10_REVIEW_THRESHOLD = 3;
@@ -404,6 +406,41 @@
     return overlay;
   }
 
+  function hideScanOverlayImmediately() {
+    const overlay = document.getElementById(OVERLAY_ID);
+    if (!overlay) return;
+    overlay.classList.remove('senseiguard-visible');
+  }
+
+  function markConnectApproved(domain) {
+    const normalized = String(domain || '').trim().toLowerCase();
+    if (normalized) locallyApprovedConnectDomains.add(normalized);
+  }
+
+  function isConnectApprovedLocally(domain) {
+    const normalized = String(domain || '').trim().toLowerCase();
+    return normalized ? locallyApprovedConnectDomains.has(normalized) : false;
+  }
+
+  async function recordUserDecision(choice, decision, requestContext) {
+    const isConnect = isConnectMethod(requestContext?.method);
+    const showSafeProceedOnly = isLowRiskDecision(decision) && !isMaliciousDecision(decision);
+    try {
+      await sendRuntimeMessage({
+        type: 'SENSEIGUARD_USER_DECISION',
+        decision: choice === 'proceed' ? 'proceed' : 'block',
+        context: {
+          method: requestContext?.method || null,
+          riskScore: decision?.riskScore || null,
+          domain: currentDomain(),
+          safeProceed: showSafeProceedOnly,
+        },
+      });
+    } catch (_error) {
+      // Best-effort telemetry/approval persistence — do not block wallet flow.
+    }
+  }
+
   function showScanOverlay(requestId, method) {
     if (!requestId) return;
     pendingRequests.add(requestId);
@@ -423,9 +460,12 @@
   function hideScanOverlay(requestId) {
     if (requestId) pendingRequests.delete(requestId);
     if (pendingRequests.size > 0) return;
-    const overlay = document.getElementById(OVERLAY_ID);
-    if (!overlay) return;
-    overlay.classList.remove('senseiguard-visible');
+    hideScanOverlayImmediately();
+  }
+
+  function completeScanRequest(requestId) {
+    if (requestId) pendingRequests.delete(requestId);
+    hideScanOverlayImmediately();
   }
 
   function isMaliciousDecision(decision) {
@@ -438,6 +478,7 @@
 
   function showMaliciousOverlay(decision, requestContext) {
     return new Promise((resolve) => {
+    hideScanOverlayImmediately();
     const overlay = ensureAlertOverlay();
     const riskTextNode = overlay.querySelector('#senseiguard-alert-risk');
     const incidentsNode = overlay.querySelector('#senseiguard-alert-incidents');
@@ -554,16 +595,6 @@
 
     if (blockBtn) {
       blockBtn.onclick = function () {
-        sendRuntimeMessage({
-          type: 'SENSEIGUARD_USER_DECISION',
-          decision: 'block',
-          context: {
-            method: requestContext?.method || null,
-            riskScore: decision?.riskScore || null,
-            domain: currentDomain(),
-            safeProceed: showSafeProceedOnly,
-          },
-        }).catch(function () {});
         overlay.classList.remove('senseiguard-visible');
         resolve('block');
       };
@@ -571,16 +602,6 @@
 
     if (proceedBtn) {
       proceedBtn.onclick = function () {
-        sendRuntimeMessage({
-          type: 'SENSEIGUARD_USER_DECISION',
-          decision: 'proceed',
-          context: {
-            method: requestContext?.method || null,
-            riskScore: decision?.riskScore || null,
-            domain: currentDomain(),
-            safeProceed: showSafeProceedOnly,
-          },
-        }).catch(function () {});
         overlay.classList.remove('senseiguard-visible');
         resolve('proceed');
       };
@@ -640,11 +661,16 @@
 
     const requestId = data.requestId;
     if (!requestId) return;
+    const domain = currentDomain();
+    const isConnect = isConnectMethod(data.method);
+    const skipScanUi = isConnect && isConnectApprovedLocally(domain);
     sendDebugEvent('tx_request_received', {
       method: data.method || 'unknown',
       frameHref: window.location ? window.location.href : '',
     });
-    showScanOverlay(requestId, data.method);
+    if (!skipScanUi) {
+      showScanOverlay(requestId, data.method);
+    }
 
     try {
       const response = await askBackgroundForDecision({
@@ -658,7 +684,6 @@
         reason: 'No decision returned',
       };
 
-      const isConnect = isConnectMethod(data.method);
       const requiresUserGate =
         (isConnect && !decision.skipUserGate) ||
         decision.action === 'warn' ||
@@ -667,7 +692,16 @@
       let finalDecision = decision;
 
       if (requiresUserGate) {
+        hideScanOverlayImmediately();
         const userChoice = await showMaliciousOverlay(decision, { method: data.method });
+        await recordUserDecision(
+          userChoice === 'proceed' ? 'proceed' : 'block',
+          decision,
+          { method: data.method }
+        );
+        if (userChoice === 'proceed' && isConnect) {
+          markConnectApproved(domain);
+        }
         if (userChoice === 'block' || userChoice === 'dismiss') {
           finalDecision = {
             ...decision,
@@ -691,6 +725,8 @@
         finalDecision = decision;
       }
 
+      completeScanRequest(requestId);
+
       window.postMessage(
         {
           source: EXTENSION_TO_PAGE,
@@ -705,6 +741,7 @@
         riskScore: finalDecision.riskScore || 0,
       });
     } catch (error) {
+      completeScanRequest(requestId);
       sendDebugEvent('tx_decision_error', {
         method: data.method || 'unknown',
         message: String(error && error.message ? error.message : error),

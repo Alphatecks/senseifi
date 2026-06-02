@@ -1,59 +1,21 @@
 import React from "react";
 import { useInView } from "../utils/useInView";
 import Image from "next/image";
-import { useDashboardUser } from "@/context/DashboardUserContext";
 import {
   getSubscriptionPlans,
   type SubscriptionPlanKey,
 } from "@/services/subscriptionService";
 import { useWallet } from "@/hooks/useWallet";
-import {
-  onchainSubscribe,
-} from "@/services/onchainPaymentService";
-import { usePublicClient, useSwitchChain, useWalletClient } from "wagmi";
-import { isHex, keccak256, stringToHex } from "viem";
+import { usePlanCheckout } from "@/hooks/usePlanCheckout";
 
 type PlanPricing = Record<SubscriptionPlanKey, { monthly: number; annual: number }>;
 type UnknownRecord = Record<string, unknown>;
-type Hex32 = `0x${string}`;
 
 const DEFAULT_PLAN_PRICING: PlanPricing = {
   pro: { monthly: 30, annual: 300 },
   pro_plus: { monthly: 50, annual: 500 },
   premium: { monthly: 200, annual: 2000 },
 };
-
-const ENV_ONCHAIN_USDC_CONTRACT = process.env.NEXT_PUBLIC_ONCHAIN_USDC_CONTRACT ?? "";
-const ENV_ONCHAIN_PAYMENT_CONTRACT = process.env.NEXT_PUBLIC_ONCHAIN_PAYMENT_CONTRACT ?? "";
-const ENV_ONCHAIN_CHAIN_ID = process.env.NEXT_PUBLIC_ONCHAIN_CHAIN_ID
-  ? Number(process.env.NEXT_PUBLIC_ONCHAIN_CHAIN_ID)
-  : null;
-
-const ERC20_APPROVE_ABI = [
-  {
-    type: "function",
-    name: "approve",
-    stateMutability: "nonpayable",
-    inputs: [
-      { name: "spender", type: "address" },
-      { name: "value", type: "uint256" },
-    ],
-    outputs: [{ name: "", type: "bool" }],
-  },
-] as const;
-
-const PAYMENT_UPSERT_BILLING_ABI = [
-  {
-    type: "function",
-    name: "upsertBilling",
-    stateMutability: "nonpayable",
-    inputs: [
-      { name: "subscriptionId", type: "bytes32" },
-      { name: "maxChargeUsdcRaw", type: "uint256" },
-    ],
-    outputs: [],
-  },
-] as const;
 
 function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === "object" && value !== null;
@@ -66,116 +28,6 @@ function toAmount(value: unknown): number | null {
     if (Number.isFinite(num)) return num;
   }
   return null;
-}
-
-function readString(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
-
-function readNumberish(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string") {
-    const parsed = Number(value);
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  return null;
-}
-
-function readBaseUnits(value: unknown): bigint | null {
-  if (typeof value === "bigint") return value >= 0n ? value : null;
-  if (typeof value === "number") {
-    if (!Number.isSafeInteger(value) || value < 0) return null;
-    return BigInt(value);
-  }
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    if (!/^\d+$/.test(trimmed)) return null;
-    try {
-      return BigInt(trimmed);
-    } catch {
-      return null;
-    }
-  }
-  return null;
-}
-
-function isHex32(value: string): value is Hex32 {
-  return isHex(value) && /^0x[a-fA-F0-9]{64}$/.test(value);
-}
-
-function readSubscribeExecutionData(payload: unknown): {
-  subscriptionIdBytes32: Hex32;
-  amountUsdcPerPeriodBaseUnits: bigint;
-  maxChargeUsdcBaseUnits: bigint;
-  tokenContract: string;
-  paymentContract: string;
-  chainId: number | null;
-} {
-  const root = isRecord(payload) && isRecord(payload.data) ? payload.data : payload;
-  if (!isRecord(root)) {
-    throw new Error("Invalid subscribe response payload.");
-  }
-
-  const responseSubscriptionId = readString(root.subscription_id_bytes32) ?? readString(root.subscriptionIdBytes32);
-  const subscriptionSourceId =
-    readString(root.subscription_id) ??
-    readString(root.subscriptionId) ??
-    readString(root.id);
-  const subscriptionIdBytes32 = responseSubscriptionId && isHex32(responseSubscriptionId)
-    ? responseSubscriptionId
-    : subscriptionSourceId
-      ? keccak256(stringToHex(subscriptionSourceId))
-      : null;
-  if (!subscriptionIdBytes32 || !isHex32(subscriptionIdBytes32)) {
-    throw new Error("Subscribe response is missing a valid subscription id.");
-  }
-
-  const amountUsdcPerPeriodBaseUnits =
-    readBaseUnits(root.amount_usdc_per_period_base_units) ??
-    readBaseUnits(root.amountUsdcPerPeriodBaseUnits);
-  if (!amountUsdcPerPeriodBaseUnits || amountUsdcPerPeriodBaseUnits <= 0n) {
-    throw new Error("Subscribe response is missing amount_usdc_per_period_base_units.");
-  }
-
-  const maxChargeUsdcBaseUnits =
-    readBaseUnits(root.max_charge_usdc_base_units) ??
-    readBaseUnits(root.maxChargeUsdcBaseUnits) ??
-    amountUsdcPerPeriodBaseUnits;
-  if (!maxChargeUsdcBaseUnits || maxChargeUsdcBaseUnits < amountUsdcPerPeriodBaseUnits) {
-    throw new Error("Subscribe response has invalid max_charge_usdc_base_units.");
-  }
-
-  const tokenContract =
-    readString(root.token_contract) ??
-    readString(root.tokenContract) ??
-    readString(root.usdc_contract) ??
-    readString(root.usdcContract) ??
-    readString(ENV_ONCHAIN_USDC_CONTRACT) ??
-    "";
-  const paymentContract =
-    readString(root.payment_contract) ??
-    readString(root.paymentContract) ??
-    readString(ENV_ONCHAIN_PAYMENT_CONTRACT) ??
-    "";
-  if (!isAddress(tokenContract) || !isAddress(paymentContract)) {
-    throw new Error("Missing token/payment contract addresses for onchain approval.");
-  }
-
-  const chainId =
-    readNumberish(root.chain_id) ??
-    readNumberish(root.chainId) ??
-    (Number.isFinite(ENV_ONCHAIN_CHAIN_ID) ? ENV_ONCHAIN_CHAIN_ID : null);
-
-  return {
-    subscriptionIdBytes32,
-    amountUsdcPerPeriodBaseUnits,
-    maxChargeUsdcBaseUnits,
-    tokenContract,
-    paymentContract,
-    chainId: chainId && chainId > 0 ? Math.trunc(chainId) : null,
-  };
 }
 
 function readCycleAmount(value: unknown): number | null {
@@ -213,28 +65,18 @@ function parsePlanPricingPayload(payload: unknown): PlanPricing | null {
   return foundAtLeastOne ? nextPricing : null;
 }
 
-function isAddress(value: string): boolean {
-  return /^0x[a-fA-F0-9]{40}$/.test(value.trim());
-}
-
 type WhyTrustSectionProps = {
   showPricing?: boolean;
 };
 
 export default function WhyTrustSection({ showPricing = true }: WhyTrustSectionProps) {
   const {
-    activeAddress,
     connectedAddress,
-    isConnected,
     isConnectedOrRemembered,
     disconnectWallet,
     isDisconnecting,
-    chainId,
   } = useWallet();
-  const { dashboardUser } = useDashboardUser();
-  const { data: walletClient } = useWalletClient();
-  const publicClient = usePublicClient();
-  const { switchChainAsync } = useSwitchChain();
+  const { handleCheckout, checkoutLoadingPlan, billingError, billingSuccess } = usePlanCheckout();
   const [hasMounted, setHasMounted] = React.useState(false);
   const [mobileRef, mobileInView] = useInView<HTMLDivElement>({ threshold: 0.05 });
   const [desktopRef, desktopInView] = useInView<HTMLDivElement>({ threshold: 0.05 });
@@ -245,10 +87,6 @@ export default function WhyTrustSection({ showPricing = true }: WhyTrustSectionP
   const [isProPlusAnnual, setIsProPlusAnnual] = React.useState(false);
   const [isPremiumAnnual, setIsPremiumAnnual] = React.useState(false);
   const [planPricing, setPlanPricing] = React.useState<PlanPricing>(DEFAULT_PLAN_PRICING);
-  const [checkoutLoadingPlan, setCheckoutLoadingPlan] = React.useState<SubscriptionPlanKey | null>(null);
-  const [billingError, setBillingError] = React.useState<string | null>(null);
-  const [billingSuccess, setBillingSuccess] = React.useState<string | null>(null);
-  const [paymentMethodPending, setPaymentMethodPending] = React.useState(false);
 
   const getAnnualBeforeDiscount = (monthly: number) => monthly * 12;
   const getAnnualSavings = (monthly: number, annual: number) =>
@@ -261,87 +99,6 @@ export default function WhyTrustSection({ showPricing = true }: WhyTrustSectionP
   React.useEffect(() => {
     setHasMounted(true);
   }, []);
-
-  const handleCheckout = async (plan: SubscriptionPlanKey, isAnnual: boolean) => {
-    if (!dashboardUser?.user_id) {
-      setBillingSuccess(null);
-      setBillingError("Connect a wallet first to start onchain billing.");
-      return;
-    }
-
-    const payerAddress = activeAddress?.trim() ?? "";
-    if (!isAddress(payerAddress)) {
-      setBillingSuccess(null);
-      setBillingError("Connect a valid wallet address before continuing.");
-      return;
-    }
-    if (!isConnected || !walletClient || !publicClient) {
-      setBillingSuccess(null);
-      setBillingError(
-        "Wallet session is not active. Reconnect your wallet to approve and activate billing."
-      );
-      return;
-    }
-
-    setBillingError(null);
-    setBillingSuccess(null);
-    setPaymentMethodPending(false);
-    setCheckoutLoadingPlan(plan);
-    try {
-      const billingCycle = isAnnual ? "annual" : "monthly";
-      const subscribeResult = await onchainSubscribe({
-        user_id: dashboardUser.user_id,
-        plan,
-        billing_cycle: billingCycle,
-        payer_address: payerAddress,
-      });
-
-      if (!subscribeResult.success) {
-        setBillingError(subscribeResult.error);
-        return;
-      }
-
-      const executionData = readSubscribeExecutionData(subscribeResult.data);
-      const amountPerPeriodRaw = executionData.amountUsdcPerPeriodBaseUnits;
-      const maxChargeRaw = executionData.maxChargeUsdcBaseUnits;
-
-      if (executionData.chainId && chainId !== executionData.chainId) {
-        if (!switchChainAsync) {
-          setBillingError(`Switch wallet network to chain ${executionData.chainId} and try again.`);
-          return;
-        }
-        await switchChainAsync({ chainId: executionData.chainId });
-      }
-
-      setPaymentMethodPending(true);
-
-      const approveHash = await walletClient.writeContract({
-        address: executionData.tokenContract as `0x${string}`,
-        abi: ERC20_APPROVE_ABI,
-        functionName: "approve",
-        args: [executionData.paymentContract as `0x${string}`, amountPerPeriodRaw],
-      });
-      await publicClient.waitForTransactionReceipt({ hash: approveHash });
-
-      const upsertHash = await walletClient.writeContract({
-        address: executionData.paymentContract as `0x${string}`,
-        abi: PAYMENT_UPSERT_BILLING_ABI,
-        functionName: "upsertBilling",
-        args: [executionData.subscriptionIdBytes32, maxChargeRaw],
-      });
-      await publicClient.waitForTransactionReceipt({ hash: upsertHash });
-
-      setPaymentMethodPending(false);
-      setBillingSuccess(
-        `Payment method pending confirmation completed for ${plan.replace("_", " ").toUpperCase()} (${billingCycle}). Charges occur only after onchain billing + backend processing.`
-      );
-    } catch {
-      setPaymentMethodPending(false);
-      setBillingError("Unable to complete billing setup. Reconnect wallet and try again.");
-    } finally {
-      setCheckoutLoadingPlan(null);
-    }
-  };
 
   React.useEffect(() => {
     let active = true;
@@ -385,9 +142,11 @@ export default function WhyTrustSection({ showPricing = true }: WhyTrustSectionP
     <section className="w-full py-24 bg-black text-white flex flex-col items-center">
       {/* Mobile Why Section Header - matches screenshot, does NOT affect desktop */}
       <div ref={mobileRef} className="block md:hidden w-full flex flex-col items-center justify-center mb-8 mt-2">
-        <span className="px-4 py-1 rounded-full border border-blue-400 text-blue-300 text-sm font-medium bg-transparent mb-4 text-center">Why</span>
+        <span className="px-4 py-1 rounded-full border border-[#0026FF] text-white text-sm font-medium bg-transparent mb-4 text-center">Why</span>
         <h2 className={`text-2xl font-normal text-center mb-3 leading-snug ${mobileInView ? "animate-slide-in-left" : "opacity-0"}`}>Why Traders Trust<br/>SenseiFi</h2>
-        <p className={`text-xs text-white/70 text-center max-w-xs mb-4 ${mobileInView ? "animate-slide-in-left delay-200" : "opacity-0"}`}>A complete DeFi platform designed to keep your assets secure, your trades smart, and your spending seamless.</p>
+        <p className={`text-xs text-white/70 text-center max-w-xs mb-4 ${mobileInView ? "animate-slide-in-left delay-200" : "opacity-0"}`}>
+          SenseiFi combines wallet protection, AI trading intelligence, and multi chain monitoring so you can manage digital assets with clarity and control.
+        </p>
         <Image src="/images/frame1.png" alt="Frame 1" width={320} height={160} className={`mx-auto mb-4 w-full max-w-xs ${mobileInView ? "animate-zoom-in-out" : "opacity-0"}`} />
         <Image src="/images/frame2.png" alt="Frame 2" width={320} height={160} className={`mx-auto mb-4 w-full max-w-xs ${mobileInView ? "animate-zoom-in-out delay-200" : "opacity-0"}`} />
         <Image src="/images/frame3.png" alt="Frame 3" width={320} height={160} className={`mx-auto mb-4 w-full max-w-xs ${mobileInView ? "animate-zoom-in-out delay-[400ms]" : "opacity-0"}`} />
@@ -396,46 +155,70 @@ export default function WhyTrustSection({ showPricing = true }: WhyTrustSectionP
       {/* Desktop Why Section Header - untouched */}
       <div ref={desktopRef} className="hidden md:block w-full">
         <div className="flex justify-center w-full">
-          <span className="px-6 py-2 rounded-full border border-blue-400 text-blue-300 text-lg font-medium bg-transparent mt-4 mb-2 text-center">Why</span>
+          <span className="px-6 py-2 rounded-full border border-[#0026FF] text-white text-lg font-medium bg-transparent mt-4 mb-2 text-center">Why</span>
         </div>
         <h2 className={`text-3xl md:text-5xl font-normal mb-6 text-center ${desktopInView ? "animate-slide-in-left" : "opacity-0"}`}>Why Traders Trust SenseiFi</h2>
         <p className={`text-base md:text-lg text-white/70 mb-16 text-center max-w-3xl mx-auto ${desktopInView ? "animate-slide-in-left delay-200" : "opacity-0"}`}>
-          A complete DeFi platform designed to keep your assets secure, your trades smart, and your spending seamless.
+          SenseiFi combines wallet protection, AI trading intelligence, and multi chain monitoring so you can manage digital assets with clarity and control.
         </p>
       </div>
       <div className="relative flex flex-col items-center w-full">
         <div className="hidden md:block relative w-full max-w-[1200px]">
           <Image src="/images/cross.svg" alt="Cross" width={1200} height={1200} className="w-full h-auto" />
-          <div className="absolute left-1/2 top-[18%] -translate-x-1/2 flex w-[210px] lg:w-[250px] flex-col items-center text-center">
+          <div className="absolute left-[calc(50%+0.2rem)] top-[18%] flex w-[210px] -translate-x-1/2 flex-col items-center text-center lg:left-1/2 lg:w-[250px]">
             <div className="flex items-center justify-center text-white font-normal text-lg lg:text-2xl mb-2 gap-2">
               <Image src="/images/icons/flash.png" alt="Flash" width={24} height={24} />
-              <span>Unmatched Speed</span>
+              <span>AI Trading Insights</span>
             </div>
-            <div className="text-white/70 text-sm lg:text-base animate-zoom-in-out">Quick transactions, instant insights, and rapid access to your assets.</div>
+            <div className="text-white/70 text-sm lg:text-base animate-zoom-in-out">
+              SenseiTrade delivers market signals, trend alerts, and portfolio guidance tailored to how you move on chain.
+            </div>
           </div>
           {/* Bottom card inside cross */}
-          <div className="absolute left-1/2 bottom-[3%] -translate-x-1/2 flex w-[210px] lg:w-[250px] flex-col items-center text-center">
+          <div className="absolute bottom-[3%] left-[calc(50%+0.75rem)] flex w-[210px] -translate-x-1/2 flex-col items-center text-center lg:left-[calc(50%+1rem)] lg:w-[250px]">
             <div className="flex items-center justify-center text-white font-normal text-lg lg:text-xl mb-2 gap-2">
               <Image src="/images/icons/flash.png" alt="Flash" width={24} height={24} />
-              <span>Smart Automation</span>
+              <span>Decode Before You Sign</span>
             </div>
-            <div className="text-white/70 text-sm lg:text-base animate-zoom-in-out">Automated trading tools and portfolio management for smarter decisions.</div>
+            <div className="text-white/70 text-sm lg:text-base animate-zoom-in-out">
+              SenseiGuard reviews contracts and transaction requests before approval, flagging phishing sites, drainer contracts, and unsafe permissions.
+            </div>
           </div>
           {/* Left side card inside cross */}
-          <div className="absolute top-[58%] left-[5%] -translate-y-1/2 flex w-[190px] lg:w-[230px] flex-col items-center text-center">
-            <div className="flex items-center justify-center text-white font-normal text-lg lg:text-xl mb-2 gap-2">
-              <Image src="/images/icons/flash.png" alt="Flash" width={24} height={24} />
-              <span>Seamless Spending</span>
+          <div className="absolute top-[58%] left-[6%] -translate-y-1/2 flex w-[220px] flex-col items-center px-1 text-center lg:left-[7%] lg:w-[260px]">
+            <div className="mb-2 flex items-start justify-center gap-2">
+              <Image
+                src="/images/icons/flash.png"
+                alt="Flash"
+                width={24}
+                height={24}
+                className="mt-0.5 shrink-0"
+              />
+              <span className="max-w-[11rem] text-sm font-normal leading-snug text-white lg:max-w-[13rem] lg:text-base">
+                Multi Chain Monitoring
+              </span>
             </div>
-            <div className="text-white/70 text-sm lg:text-base animate-zoom-in-out">Instant crypto payments and subscription management.</div>
+            <div className="text-sm leading-snug text-white/70 lg:text-base animate-zoom-in-out">
+              Track wallets and assets across Ethereum, BNB Chain, Polygon, Base, and other supported networks from one dashboard.
+            </div>
           </div>
           {/* Right side card inside cross */}
-          <div className="absolute top-[58%] right-[4%] -translate-y-1/2 flex w-[190px] lg:w-[230px] flex-col items-center text-center">
-            <div className="flex items-center justify-center text-white font-normal text-lg lg:text-xl mb-2 gap-2">
-              <Image src="/images/icons/flash.png" alt="Flash" width={24} height={24} />
-              <span>Advanced Security</span>
+          <div className="absolute top-[58%] right-[6%] -translate-y-1/2 flex w-[220px] flex-col items-center px-1 text-center lg:right-[7%] lg:w-[260px]">
+            <div className="mb-2 flex items-start justify-center gap-2">
+              <Image
+                src="/images/icons/flash.png"
+                alt="Flash"
+                width={24}
+                height={24}
+                className="mt-0.5 shrink-0"
+              />
+              <span className="max-w-[11rem] text-sm font-normal leading-snug text-white lg:max-w-[13rem] lg:text-base">
+                Real Time Threat Defense
+              </span>
             </div>
-            <div className="text-white/70 text-sm lg:text-base animate-zoom-in-out">Multi-layered wallet protection and real-time threat alerts.</div>
+            <div className="text-sm leading-snug text-white/70 lg:text-base animate-zoom-in-out">
+              Scan wallets and contracts, monitor activity, and receive live alerts for scams and suspicious behavior across supported chains.
+            </div>
           </div>
         </div>
       </div>

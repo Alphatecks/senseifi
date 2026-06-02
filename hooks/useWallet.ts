@@ -1,12 +1,11 @@
 'use client';
 
 import { useAccount, useConnect, useDisconnect, useChainId } from 'wagmi';
-import { walletService } from '../services/walletService';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { walletService, type DashboardUser } from '../services/walletService';
+import { useEffect, useMemo, useState } from 'react';
 import { useDashboardUser } from '@/context/DashboardUserContext';
 
 const LAST_CONNECTED_WALLET_KEY = 'senseifi:last-connected-wallet';
-const LAST_CONNECTED_CONNECTOR_KEY = 'senseifi:last-connected-connector';
 
 export function useWallet() {
   const { setDashboardUser } = useDashboardUser();
@@ -15,7 +14,6 @@ export function useWallet() {
   const { disconnect } = useDisconnect();
   const chainId = useChainId();
   const [persistedAddress, setPersistedAddress] = useState<string | null>(null);
-  const autoReconnectAttemptedRef = useRef(false);
 
   const walletType: 'metamask' | 'coinbase' = (() => {
     const id = connector?.id ?? '';
@@ -38,32 +36,12 @@ export function useWallet() {
     if (typeof window === 'undefined') return;
     if (isConnected && address?.trim()) {
       window.localStorage.setItem(LAST_CONNECTED_WALLET_KEY, address.trim());
-      if (connector?.id) {
-        window.localStorage.setItem(LAST_CONNECTED_CONNECTOR_KEY, connector.id);
-      }
       setPersistedAddress(address.trim());
     }
-  }, [isConnected, address, connector]);
+  }, [isConnected, address]);
 
   const isWalletRestoring = status === 'connecting' || status === 'reconnecting';
   const isWalletSessionPending = isWalletRestoring || isPending;
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (isConnected || isPending || autoReconnectAttemptedRef.current) return;
-    if (isWalletRestoring) return;
-    autoReconnectAttemptedRef.current = true;
-
-    const savedConnectorId = window.localStorage.getItem(LAST_CONNECTED_CONNECTOR_KEY)?.trim();
-    if (!savedConnectorId) return;
-
-    const savedConnector = connectors.find((c) => c.id === savedConnectorId);
-    if (!savedConnector) return;
-
-    void connectAsync({ connector: savedConnector }).catch(() => {
-      // Silently ignore auto-reconnect failures; user can reconnect manually.
-    });
-  }, [isConnected, isPending, isWalletRestoring, connectors, connectAsync]);
 
   const connectedAddress = useMemo(() => {
     if (address?.trim()) return address.trim();
@@ -74,6 +52,7 @@ export function useWallet() {
     // Try multiple possible MetaMask connector IDs
     const metaMaskConnector = connectors.find((c) => 
       c.id === 'metaMask' || 
+      c.id === 'metaMaskSDK' ||
       c.id === 'io.metamask' ||
       c.name?.toLowerCase().includes('metamask')
     );
@@ -112,7 +91,6 @@ export function useWallet() {
       }
       if (typeof window !== 'undefined') {
         window.localStorage.removeItem(LAST_CONNECTED_WALLET_KEY);
-        window.localStorage.removeItem(LAST_CONNECTED_CONNECTOR_KEY);
       }
       setPersistedAddress(null);
       setDashboardUser(null);
@@ -122,7 +100,9 @@ export function useWallet() {
     }
   };
 
-  const registerWalletWithBackend = async (walletTypeOverride?: 'metamask' | 'coinbase') => {
+  const registerWalletWithBackend = async (
+    walletTypeOverride?: 'metamask' | 'coinbase'
+  ): Promise<DashboardUser | null> => {
     if (!address || !chainId) {
       throw new Error('Wallet not connected');
     }
@@ -134,6 +114,7 @@ export function useWallet() {
       const resolvedWalletType = walletTypeOverride ?? walletType;
       const { dashboard_user } = await walletService.connectWallet(address, chainId, resolvedWalletType);
       if (dashboard_user) setDashboardUser(dashboard_user);
+      return dashboard_user ?? null;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to register wallet';
       setRegistrationError(errorMessage);

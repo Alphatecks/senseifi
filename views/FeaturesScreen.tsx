@@ -27,7 +27,7 @@ const FEATURE_CARDS = [
 
 function FeatureBadge({ label }: { label: string }) {
   return (
-    <div className="absolute right-4 top-4 inline-flex items-center gap-1.5 rounded-full border border-blue-400/60 bg-white px-3 py-1 text-xs font-medium text-blue-500 shadow-sm">
+    <div className="absolute right-4 top-4 inline-flex items-center gap-1.5 rounded-full border border-[#0026FF] bg-black/40 px-3 py-1 text-xs font-medium text-white shadow-sm backdrop-blur-sm">
       <span>{label}</span>
       <Image src="/images/scaled_logo.png" alt="" width={14} height={14} className="h-3.5 w-3.5 object-contain" />
     </div>
@@ -55,7 +55,7 @@ export default function FeaturesScreen() {
 
       <section className="relative z-10 mx-auto w-full max-w-6xl px-4 pt-32 md:px-8 md:pt-40 lg:px-12">
         <div className="flex flex-col items-center text-center">
-          <span className="mb-6 inline-flex items-center rounded-full border border-blue-400 px-4 py-1 text-sm font-medium text-blue-400">
+          <span className="mb-6 inline-flex items-center rounded-full border border-[#0026FF] px-4 py-1 text-sm font-medium text-white">
             Features
           </span>
           <h1 className="max-w-4xl text-4xl font-normal leading-tight md:text-5xl lg:text-6xl">

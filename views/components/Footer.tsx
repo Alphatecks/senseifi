@@ -1,5 +1,5 @@
 import Image from 'next/image';
-import Link from 'next/link';
+import MarketingNavLink from '@/views/marketing/MarketingNavLink';
 
 export default function Footer() {
   return (
@@ -14,18 +14,30 @@ export default function Footer() {
             <h3 className="text-sm uppercase tracking-[0.18em] text-white/70 mb-4">Explore</h3>
             <ul className="space-y-3 text-white/80 text-sm">
               <li>
-                <Link href="/" className="hover:text-white transition">
+                <MarketingNavLink href="/" className="hover:text-white transition">
                   Home
-                </Link>
+                </MarketingNavLink>
               </li>
               <li>
-                <Link href="/about" prefetch className="hover:text-white transition">
+                <MarketingNavLink href="/about" className="hover:text-white transition">
                   About Us
-                </Link>
+                </MarketingNavLink>
               </li>
-              <li><Link href="/pricing" className="hover:text-white transition">Pricing</Link></li>
-              <li><Link href="/features" className="hover:text-white transition">Features</Link></li>
-              <li><a href="#" className="hover:text-white transition">Contact</a></li>
+              <li>
+                <MarketingNavLink href="/pricing" className="hover:text-white transition">
+                  Pricing
+                </MarketingNavLink>
+              </li>
+              <li>
+                <MarketingNavLink href="/features" className="hover:text-white transition">
+                  Features
+                </MarketingNavLink>
+              </li>
+              <li>
+                <MarketingNavLink href="/contact" className="hover:text-white transition">
+                  Contact
+                </MarketingNavLink>
+              </li>
             </ul>
           </div>
         </div>
@@ -77,9 +89,9 @@ export default function Footer() {
       <div className="w-full mt-10 border-t border-white/10 pt-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-xs text-white/60 pl-9 pr-6 md:pl-40 md:pr-8">
         <span>©2025 SenseiFi. All Rights Reserved.</span>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <a href="/privacy" className="hover:text-white transition">
+          <MarketingNavLink href="/privacy" className="hover:text-white transition">
             Privacy Policy
-          </a>
+          </MarketingNavLink>
           <a href="#" className="hover:text-white transition">
             Terms &amp; Condition
           </a>

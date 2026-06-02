@@ -7,16 +7,16 @@ import WhyTrustSection from "./WhyTrustSection";
 import CenteredAppDownload from "./CenteredAppDownload";
 
 const IMPACT_STATS = [
-  { value: "12,000+", label: "Digital Wallets" },
-  { value: "8,500+", label: "Traders" },
-  { value: "$10M+", label: "Crypto Card Transactions" },
+  { value: "12,000+", label: "Wallets Protected" },
+  { value: "8,500+", label: "Threats Flagged" },
+  { value: "1M+", label: "Security Scans Completed" },
   { value: "99.3%", label: "User Satisfaction" },
 ] as const;
 
 const CORE_VALUES = [
   {
     title: "Security First",
-    description: "Protecting users' assets is our top priority",
+    description: "Protecting user assets with proactive DeFi security is our top priority",
     icon: (
       <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5 text-[#0026FF]" aria-hidden="true">
         <path
@@ -30,7 +30,7 @@ const CORE_VALUES = [
   },
   {
     title: "Innovation",
-    description: "Constantly improving with AI and DeFi technology.",
+    description: "Advancing AI driven DeFi security and threat detection.",
     icon: (
       <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5 text-[#0026FF]" aria-hidden="true">
         <path
@@ -55,7 +55,7 @@ const CORE_VALUES = [
   },
   {
     title: "User Empowerment",
-    description: "Tools that give full control to users.",
+    description: "Security tools that keep users in control of every approval.",
     icon: (
       <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5 text-[#0026FF]" aria-hidden="true">
         <circle cx="12" cy="8" r="3" stroke="currentColor" strokeWidth="1.6" />
@@ -69,8 +69,8 @@ const CORE_VALUES = [
     ),
   },
   {
-    title: "Speed & Performance",
-    description: "Fast transactions and real-time insights.",
+    title: "Speed and Performance",
+    description: "Fast wallet scans and real time threat alerts when it matters most.",
     icon: (
       <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5 text-[#0026FF]" aria-hidden="true">
         <path
@@ -86,7 +86,7 @@ const CORE_VALUES = [
   },
   {
     title: "Accessibility",
-    description: "Making crypto management simple for everyone.",
+    description: "Making DeFi security clear and usable for every wallet user.",
     icon: (
       <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5 text-[#0026FF]" aria-hidden="true">
         <path
@@ -109,19 +109,19 @@ export default function AboutScreen() {
         <div className="w-full max-w-7xl mx-auto">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-6 items-center">
             <div className="order-2 lg:order-1">
-              <span className="inline-flex items-center rounded-full border border-blue-400/60 px-4 py-1 text-sm text-blue-300 mb-6">
+              <span className="inline-flex items-center rounded-full border border-[#0026FF] px-4 py-1 text-sm text-white mb-6">
                 About Us
               </span>
               <h1 className="text-4xl md:text-5xl xl:text-6xl font-normal leading-tight">
-                Making Crypto
+                DeFi Security
                 <br />
-                Management Clear,
+                Built to Protect
                 <br />
-                Secure, and Effortless
+                Before You Sign
               </h1>
               <p className="mt-6 text-white/75 text-base md:text-lg max-w-xl">
-                We combine advanced AI, real-time protection, and seamless financial tools to simplify how
-                you manage digital assets.
+                SenseiFi delivers DeFi security services that scan contracts, detect threats, and protect
+                wallets so you can use decentralized apps with confidence.
               </p>
               <div className="mt-8 flex flex-wrap items-center gap-3">
                 <Link
@@ -183,9 +183,9 @@ export default function AboutScreen() {
         <div className="w-full max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-5">
           <div className="rounded-[26px] border border-white/10 bg-[#0e1630] p-6 md:p-8 min-h-[480px] md:min-h-[640px] flex flex-col justify-between">
             <h2 className="text-4xl md:text-5xl font-normal leading-tight max-w-md">
-              Built for a Smarter,
+              Built for Safer
               <br />
-              Safer Crypto Future
+              DeFi Participation
             </h2>
             <div className="mt-8 relative w-full h-[340px] md:h-[440px] lg:h-[520px] overflow-hidden">
               <video
@@ -218,14 +218,14 @@ export default function AboutScreen() {
 
             <div className="rounded-[22px] border border-white/10 bg-[#0e1630] p-5 md:p-6">
               <h3 className="text-2xl md:text-4xl leading-tight font-medium">
-                SenseiFi is a next-generation DeFi intelligence and security platform designed to make crypto
-                management smarter, safer, and effortless.
+                SenseiFi is a DeFi security platform focused on protecting users before losses happen.
               </h3>
               <p className="mt-4 text-white/75 text-sm md:text-base max-w-2xl">
-                We combine AI-powered trading insights, advanced wallet protection, and seamless virtual
-                crypto cards to help users navigate the digital asset world with confidence.
+                Through SenseiGuard, our security dashboard, and the browser extension, we offer wallet
+                scans, contract analysis, threat intelligence, activity monitoring, and approval review
+                across supported chains.
               </p>
-              <button className="mt-6 inline-flex items-center rounded-full border border-blue-400/60 px-5 py-2 text-blue-300 text-sm">
+              <button className="mt-6 inline-flex items-center rounded-full border border-[#0026FF] px-5 py-2 text-white text-sm">
                 About Us
               </button>
             </div>

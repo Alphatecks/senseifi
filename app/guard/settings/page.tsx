@@ -16,6 +16,8 @@ import GuardSettingsSubmenu, {
   parseSettingsSection,
   type SettingsSectionId,
 } from "@/app/guard/components/GuardSettingsSubmenu";
+import SupportFeedbackSection from "@/app/guard/components/SupportFeedbackSection";
+import TermsPrivacySection from "@/app/guard/components/TermsPrivacySection";
 
 const WALLET_ICON_FALLBACK = "/images/icons/wallet-header.png";
 const PROVIDER_LOGOS: Record<string, string> = {
@@ -853,26 +855,14 @@ function SettingsPageContent() {
         )}
 
         {section === "support" && (
-          <div className="max-w-3xl space-y-8">
-            <div className="flex items-center gap-2">
-              {sectionIcon("support")}
-              <h2 className="text-xl font-semibold text-white">Support & Feedback</h2>
-            </div>
-            <div className="rounded-xl border border-slate-700/60 p-6" style={{ backgroundColor: CARD_BG }}>
-              <p className="text-slate-400">Support and feedback options will appear here.</p>
-            </div>
+          <div className="flex w-full flex-1 flex-col min-h-0 -mx-4 -mt-2 -mb-6 lg:mx-0 lg:mt-0 lg:mb-0">
+            <SupportFeedbackSection />
           </div>
         )}
 
         {section === "terms" && (
-          <div className="max-w-3xl space-y-8">
-            <div className="flex items-center gap-2">
-              {sectionIcon("terms")}
-              <h2 className="text-xl font-semibold text-white">Terms & Privacy Policy</h2>
-            </div>
-            <div className="rounded-xl border border-slate-700/60 p-6" style={{ backgroundColor: CARD_BG }}>
-              <p className="text-slate-400">Terms of service and privacy policy will appear here.</p>
-            </div>
+          <div className="flex w-full flex-1 flex-col min-h-0 -mx-4 -mt-2 -mb-6 lg:mx-0 lg:mt-0 lg:mb-0">
+            <TermsPrivacySection />
           </div>
         )}
       </div>

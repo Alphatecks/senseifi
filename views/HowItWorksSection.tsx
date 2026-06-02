@@ -9,7 +9,7 @@ export default function HowItWorksSection() {
     <>
       {/* Mobile How It Works Section */}
       <section ref={mobileRef} className="w-full py-12 bg-black text-white flex flex-col items-start px-4 block md:hidden">
-        <span className="px-4 py-1 rounded-full border border-blue-400 text-blue-300 text-sm font-medium bg-transparent mb-6 inline-block">How it works</span>
+        <span className="px-4 py-1 rounded-full border border-[#0026FF] text-white text-sm font-medium bg-transparent mb-6 inline-block">How it works</span>
         <h2 className={`text-3xl font-normal mb-4 leading-tight ${mobileInView ? "animate-fade-slide-up" : "opacity-0"}`}>From Secure to Smart to Seamless</h2>
         <p className={`text-white/70 text-base mb-6 ${mobileInView ? "animate-fade-slide-up delay-200" : "opacity-0"}`}>Protect your crypto, trade with intelligence, and spend effortlessly.<br/>SenseiFi guides you every step of the way.</p>
         <div className="flex flex-row gap-4 w-full overflow-x-auto pb-2 hide-scrollbar">
@@ -46,7 +46,7 @@ export default function HowItWorksSection() {
       <section ref={desktopRef} className="w-full py-24 bg-black text-white flex-col items-center hidden md:flex">
         <div className="w-full max-w-6xl px-6 lg:px-10 flex flex-col lg:flex-row lg:justify-between lg:items-start gap-8 mb-16">
           <div className="flex flex-col items-start">
-            <span className="px-4 py-1 rounded-full border border-blue-400 text-blue-300 text-sm font-medium bg-transparent mb-8">How it works</span>
+            <span className="px-4 py-1 rounded-full border border-[#0026FF] text-white text-sm font-medium bg-transparent mb-8">How it works</span>
             <h2 className={`text-4xl md:text-5xl font-normal mb-4 leading-tight ${desktopInView ? "animate-fade-slide-up" : "opacity-0"}`}>From Secure to Smart<br />to Seamless</h2>
           </div>
           <div className={`max-w-2xl text-white/70 text-lg lg:text-2xl lg:mt-2 ${desktopInView ? "animate-fade-slide-up delay-200" : "opacity-0"}`}>

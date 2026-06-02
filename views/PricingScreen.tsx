@@ -2,11 +2,11 @@
 
 import React from "react";
 import Image from "next/image";
-import Link from "next/link";
 import {
   getSubscriptionPlans,
   type SubscriptionPlanKey,
 } from "@/services/subscriptionService";
+import { usePlanCheckout } from "@/hooks/usePlanCheckout";
 
 type PlanPricing = Record<SubscriptionPlanKey, { monthly: number; annual: number }>;
 type UnknownRecord = Record<string, unknown>;
@@ -283,6 +283,7 @@ export default function PricingScreen() {
   const [isProPlusAnnual, setIsProPlusAnnual] = React.useState(false);
   const [isPremiumAnnual, setIsPremiumAnnual] = React.useState(false);
   const [planPricing, setPlanPricing] = React.useState<PlanPricing>(DEFAULT_PLAN_PRICING);
+  const { handleCheckout, checkoutLoadingPlan, billingError, billingSuccess } = usePlanCheckout();
 
   const getAnnualBeforeDiscount = (monthly: number) => monthly * 12;
   const getAnnualSavings = (monthly: number, annual: number) =>
@@ -331,6 +332,13 @@ export default function PricingScreen() {
         <h1 className="mb-12 text-center text-3xl font-normal md:mb-16 md:text-5xl lg:text-6xl">
           Pick your Perfect Plan
         </h1>
+
+        {billingError ? (
+          <p className="mb-6 w-full max-w-6xl px-4 text-sm text-red-300">{billingError}</p>
+        ) : null}
+        {billingSuccess ? (
+          <p className="mb-6 w-full max-w-6xl px-4 text-sm text-green-300">{billingSuccess}</p>
+        ) : null}
 
         <div className="flex w-full max-w-6xl flex-row gap-6 overflow-x-auto hide-scrollbar px-4 xl:justify-center xl:overflow-visible xl:px-0">
           {PRICING_PLANS.map((plan) => {
@@ -405,27 +413,31 @@ export default function PricingScreen() {
                     ) : null}
 
                     {plan.recommended ? (
-                      <Link
-                        href="/guard/settings?section=subscription"
-                        className="mb-6 mt-6 w-11/12 rounded-full py-3 text-center text-base font-normal text-white shadow-lg transition-colors duration-200"
+                      <button
+                        type="button"
+                        onClick={() => handleCheckout(plan.id, isAnnual)}
+                        disabled={checkoutLoadingPlan !== null}
+                        className="mb-6 mt-6 w-11/12 rounded-full py-3 text-center text-base font-normal text-white shadow-lg transition-colors duration-200 disabled:opacity-60"
                         style={{
                           background: "linear-gradient(135deg, #425EFF 40%, #7F5FFF 100%)",
                         }}
                       >
-                        {plan.cta}
-                      </Link>
+                        {checkoutLoadingPlan === plan.id ? "Creating subscription..." : plan.cta}
+                      </button>
                     ) : (
-                      <Link
-                        href="/guard/settings?section=subscription"
-                        className="mb-6 mt-6 w-11/12 rounded-full border-2 border-transparent py-3 text-center text-base font-normal text-white transition-colors duration-200"
+                      <button
+                        type="button"
+                        onClick={() => handleCheckout(plan.id, isAnnual)}
+                        disabled={checkoutLoadingPlan !== null}
+                        className="mb-6 mt-6 w-11/12 rounded-full border-2 border-transparent py-3 text-center text-base font-normal text-white transition-colors duration-200 disabled:opacity-60"
                         style={{
                           background:
                             "linear-gradient(#181C23, #181C23) padding-box, linear-gradient(90deg, #7F5FFF, #01C8FF, #FFB86C) border-box",
                           border: "2px solid transparent",
                         }}
                       >
-                        {plan.cta}
-                      </Link>
+                        {checkoutLoadingPlan === plan.id ? "Creating subscription..." : plan.cta}
+                      </button>
                     )}
                   </div>
                 </div>

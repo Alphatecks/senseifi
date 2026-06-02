@@ -177,7 +177,7 @@ export default function HomeScreen() {
       <section ref={featuresRef} className="w-full px-4 py-20 flex flex-col items-start bg-white md:mt-52 mt-16">
         {/* Mobile Features Section */}
         <div className="block md:hidden w-full">
-          <span className="px-4 py-1 rounded-full border border-blue-400 text-blue-500 text-sm font-medium bg-transparent mb-6 inline-block">Features</span>
+          <span className="px-4 py-1 rounded-full border border-[#0026FF] text-black text-sm font-medium bg-transparent mb-6 inline-block">Features</span>
           <h2 className={`text-4xl font-normal text-black mb-4 ${featuresInView ? "animate-fade-slide-up" : "opacity-0"}`}>Crypto Made Simple.<br/>Safe. Smart.</h2>
           <p className={`text-base text-black mb-6 ${featuresInView ? "animate-fade-slide-up delay-200" : "opacity-0"}`}>Trade with AI-powered insights, protect your wallets with real-time security, and spend crypto seamlessly all in one platform.</p>
           <div className="grid grid-cols-1 gap-8 w-full max-w-6xl mx-auto">
@@ -216,7 +216,7 @@ export default function HomeScreen() {
         {/* Desktop Features Section */}
         <div className="hidden md:block w-full">
           <div className="w-full flex justify-start px-6 lg:px-10 xl:pl-40">
-            <span className="px-4 py-1 rounded-full border border-blue-400 text-blue-500 text-sm font-medium bg-transparent mb-20 inline-block">Features</span>
+            <span className="px-4 py-1 rounded-full border border-[#0026FF] text-black text-sm font-medium bg-transparent mb-20 inline-block">Features</span>
           </div>
           <div className="w-full flex flex-col lg:flex-row lg:items-center gap-6 mb-8 -mt-6 px-6 lg:px-10 xl:px-0">
             <h2 className={`text-3xl md:text-5xl font-medium text-black text-left max-w-2xl xl:ml-40 ${featuresInView ? "animate-fade-slide-up" : "opacity-0"}`}>Crypto Made Simple. Safe. Smart.</h2>
