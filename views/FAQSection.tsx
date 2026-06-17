@@ -18,23 +18,25 @@ const faqs = [
     ),
   },
   {
-    question: "Can I trade using SenseiFi?",
+    question: "How does SenseiGuard protect my wallet?",
     answer: (
       <>
-        Yes, through{" "}
-        <strong className="text-white/90">SenseiTrade</strong>, SenseiFi&apos;s AI-powered trading workspace. It delivers market signals, trend alerts, and portfolio insights tailored to your strategy so you can trade with more context and less guesswork. Connect your wallet via the{" "}
-        <Link href="/connect-wallet" className="text-blue-400 hover:underline">
-          web app
+        <Link href="/guard/wallet-security" className="text-blue-400 hover:underline">
+          SenseiGuard
         </Link>{" "}
-        to get started. SenseiGuard is available today; SenseiTrade is rolling out progressively. Check Connect Wallet for the latest availability.
+        acts as a wallet firewall. It decodes transactions and smart contract calls before you sign, scores each action for risk, and warns you about phishing sites, malicious approvals, drainer contracts, and suspicious token transfers. The{" "}
+        <Link href="/guard/chrome-extension" className="text-blue-400 hover:underline">
+          SenseiGuard Chrome extension
+        </Link>{" "}
+        intercepts signing requests on dApps in real time, while the web dashboard gives you ongoing wallet security scans, approval reviews, and threat alerts across supported chains.
       </>
     ),
   },
   {
-    question: "How does SenseiCard work?",
+    question: "What threats does SenseiGuard detect?",
     answer: (
       <>
-        <strong className="text-white/90">SenseiCard</strong> lets you spend crypto in everyday life. Link your wallet, convert digital assets to fiat at competitive rates, and pay online or track subscriptions from your SenseiFi dashboard. Card issuance and payment processing are handled by regulated third-party providers. SenseiFi does not store sensitive card credentials directly. Subscription plans unlock higher transaction limits and priority conversion rates as you upgrade.
+        SenseiGuard is built to catch the attacks that cost users the most: unlimited token approvals, wallet drainers, fake airdrops, address-poisoning scams, impersonation sites, and high-risk smart contracts. It combines on-chain analysis with SenseiFi&apos;s AI detection engine to explain what a transaction actually does in plain language—so you know whether to sign, reject, or revoke access before anything leaves your wallet.
       </>
     ),
   },
@@ -76,7 +78,7 @@ export default function FAQSection() {
       <div ref={headerRef} className={`md:w-1/2 w-full px-8 md:px-24 flex flex-col items-start ${headerInView ? 'animate-slide-in-left' : 'opacity-0'}`}>
         <span className="px-5 py-1 mb-6 rounded-full border border-[#0026FF] text-white font-medium text-base">FAQ</span>
         <h2 className="text-4xl md:text-5xl font-medium text-white mb-6 leading-tight">Frequently Asked<br />Questions</h2>
-        <p className="text-white/70 text-lg max-w-md mb-2">Quick answers about wallet security, SenseiGuard, SenseiTrade, SenseiCard, and getting started.</p>
+        <p className="text-white/70 text-lg max-w-md mb-2">Quick answers about wallet security, SenseiGuard, and getting started.</p>
       </div>
       {/* Right Side */}
       <div className="md:w-1/2 w-full flex flex-col gap-6 px-8 mt-12 md:mt-0">

@@ -21,26 +21,7 @@ import {
 } from "@/app/guard/components/GuardSkeletons";
 import { getDashboardSummary, getWalletAssets, syncWalletAssets, getDashboardActivity, getWalletsForAddress, scanContract, getScanContractDetails, getUnreadAlerts, getThreatIntelligence, markAlertRead, markAllAlertsRead } from "@/services/dashboardService";
 import type { DashboardSummaryData, WalletAsset, DashboardActivity, WalletListItem, ScanContractResult, ScanContractDetailResponse, UnreadAlertsData, ThreatIntelligenceItem } from "@/services/dashboardService";
-
-/** Resolve logo URL for connected wallet: API logo_url, known provider logo, or default icon. */
-const PROVIDER_LOGOS: Record<string, string> = {
-  metamask: "https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Fox.svg",
-  "meta mask": "https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Fox.svg",
-  coinbase: "https://images.ctfassets.net/q5ulk4bp65r7/3TBS4oVkD1ghowTqVQJlqj/2dfd4ea3b623a7c0d8deb2ff445dee9e/Consumer_Product_Wallet.svg",
-  "coinbase wallet": "https://images.ctfassets.net/q5ulk4bp65r7/3TBS4oVkD1ghowTqVQJlqj/2dfd4ea3b623a7c0d8deb2ff445dee9e/Consumer_Product_Wallet.svg",
-  walletconnect: "https://raw.githubusercontent.com/WalletConnect/walletconnect-assets/master/Logo/Blue%20(Default)/Logo.svg",
-  "wallet connect": "https://raw.githubusercontent.com/WalletConnect/walletconnect-assets/master/Logo/Blue%20(Default)/Logo.svg",
-  rabby: "https://rabby.io/assets/images/logo-128.png",
-  phantom: "https://phantom.imgix.net/logo.png",
-  trust: "https://trustwallet.com/assets/images/media/assets/TWT.png",
-  "trust wallet": "https://trustwallet.com/assets/images/media/assets/TWT.png",
-};
-const DEFAULT_WALLET_ICON = "/images/icons/wallet-header.png";
-function getConnectedWalletLogoUrl(w: WalletListItem): string {
-  if (w.logo_url) return w.logo_url;
-  const key = (w.provider || "").toLowerCase().trim();
-  return PROVIDER_LOGOS[key] ?? DEFAULT_WALLET_ICON;
-}
+import { getWalletProviderLogoUrl } from "@/config/walletProviderLogos";
 import { walletService } from "@/services/walletService";
 
 import frameCheckIcon from "@/assets/icons/Frame 2147237641.png";
@@ -51,6 +32,11 @@ import walletHealthIcon from "@/assets/icons/Frame 2147237579 (1).png";
 import shieldIcon from "@/assets/icons/Shield.png";
 import securityStatusIcon from "@/assets/icons/Vector.png";
 import walletCardBg from "@/assets/icons/Rectangle 1000002102.png";
+
+function getConnectedWalletLogoUrl(w: WalletListItem): string {
+  if (w.logo_url) return w.logo_url;
+  return getWalletProviderLogoUrl(w.provider);
+}
 
 function formatLastScan(lastScanAt: string | null): string {
   if (!lastScanAt) return "Never";
@@ -386,11 +372,11 @@ export default function GuardDashboardPage() {
   );
 
   return (
-    <div className="p-4 space-y-6 lg:rounded-2xl lg:bg-blue-950/25 lg:border lg:border-blue-900/40 lg:p-6">
-      {/* MOBILE LAYOUT - visible only below lg, no outer card background on mobile */}
-      <div className="lg:hidden space-y-4">
+    <div className="p-4 space-y-6 xl:rounded-2xl xl:bg-blue-950/25 xl:border xl:border-blue-900/40 xl:p-6">
+      {/* MOBILE / TABLET LAYOUT - below xl */}
+      <div className="xl:hidden space-y-4">
         {/* Security Status - full width on mobile */}
-        <div className="-mx-6 w-[calc(100%+3rem)] rounded-2xl bg-gradient-to-br from-blue-950 to-slate-900 border border-slate-700/80 p-5 flex flex-col shadow-[inset_1px_1px_0_0_rgba(255,255,255,0.06)]">
+        <div className="rounded-2xl bg-gradient-to-br from-blue-950 to-slate-900 border border-slate-700/80 p-5 flex flex-col shadow-[inset_1px_1px_0_0_rgba(255,255,255,0.06)]">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <Image src={securityStatusIcon} alt="" width={20} height={20} className="w-5 h-5 opacity-90" />
@@ -456,16 +442,16 @@ export default function GuardDashboardPage() {
           )}
         </div>
 
-        {/* 4 cards grid - full width on mobile for wider cards */}
-        <div className="grid grid-cols-2 gap-3 -mx-6 w-[calc(100%+3rem)]">
+        {/* 4 cards grid */}
+        <div className="grid grid-cols-1 min-[480px]:grid-cols-2 gap-3">
           <ThreatIntelligenceCard mobile loading={summaryLoading} summary={summary} onViewThreats={() => setThreatModalOpen(true)} />
           <RecentScansCard mobile loading={summaryLoading} summary={summary} onScanContracts={() => setContractScannerModalOpen(true)} />
           <TotalAssetCard mobile loading={summaryLoading} summary={summary} onViewWallets={() => setConnectedWalletModalOpen(true)} />
           <UnreadAlertsCard mobile loading={summaryLoading} summary={summary} onViewAlerts={() => setUnreadAlertModalOpen(true)} />
         </div>
 
-        {/* Wallet Assets - full width, no container on mobile */}
-        <section className="-mx-10 w-[calc(100%+5rem)] px-4">
+        {/* Wallet Assets */}
+        <section>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <Image src="/images/icons/wallets.png" alt="" width={20} height={20} className="w-5 h-5 opacity-90" />
@@ -539,8 +525,8 @@ export default function GuardDashboardPage() {
           </div>
         </section>
 
-        {/* Live Activity - full width on mobile */}
-        <section className="-mx-8 w-[calc(100%+4rem)] rounded-2xl bg-slate-900/80 border border-slate-800/80 p-4">
+        {/* Live Activity */}
+        <section className="rounded-2xl bg-slate-900/80 border border-slate-800/80 p-4">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <Image src={liveActivityTitleIcon} alt="" width={22} height={22} className="w-5 h-5 opacity-90" />
@@ -588,7 +574,7 @@ export default function GuardDashboardPage() {
         </section>
 
         {/* Security Tip */}
-        <section className="-mx-8 w-[calc(100%+4rem)] rounded-2xl bg-slate-900/80 border border-slate-800/80 p-4 flex flex-col gap-3">
+        <section className="rounded-2xl bg-slate-900/80 border border-slate-800/80 p-4 flex flex-col gap-3">
           <div className="flex items-center gap-2 shrink-0">
             <Image src={liveActivityTitleIcon} alt="" width={22} height={22} className="w-5 h-5 object-contain opacity-90" />
             <h2 className="text-xs font-medium text-slate-400 tracking-wider">Security Tip</h2>
@@ -605,12 +591,12 @@ export default function GuardDashboardPage() {
         </section>
       </div>
 
-      {/* DESKTOP LAYOUT - visible only at lg+, unchanged */}
-      <div className="hidden lg:block space-y-6">
-          {/* Status card + 2x2 cards beside it */}
-          <div className="grid grid-cols-1 lg:grid-cols-[auto_1fr] gap-4">
+      {/* DESKTOP LAYOUT - xl and up */}
+      <div className="hidden xl:block space-y-6">
+          {/* Status card + 2x2 cards beside it (side-by-side only at 2xl+) */}
+          <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,32rem)_minmax(0,1fr)] gap-4">
             {/* Wallet Security Overview */}
-            <div className="rounded-2xl bg-gradient-to-br from-blue-950 to-slate-900 border border-slate-700/80 p-5 flex flex-col shadow-[inset_1px_1px_0_0_rgba(255,255,255,0.06)] lg:max-w-lg">
+            <div className="rounded-2xl bg-gradient-to-br from-blue-950 to-slate-900 border border-slate-700/80 p-5 flex flex-col shadow-[inset_1px_1px_0_0_rgba(255,255,255,0.06)] min-w-0 2xl:max-w-lg">
               {summaryLoading ? (
                 <>
                   <SecurityStatusSkeleton />
@@ -622,9 +608,9 @@ export default function GuardDashboardPage() {
                 </>
               ) : (
                 <>
-              <div className="flex flex-col sm:flex-row sm:items-start gap-4 flex-1 pt-8">
-                <div className="flex flex-col items-center sm:items-start shrink-0">
-                  <div className="relative w-44 h-44 sm:w-52 sm:h-52 rounded-full gauge-emboss-inset">
+              <div className="flex flex-col xl:flex-row xl:items-start gap-4 flex-1 pt-4 xl:pt-8">
+                <div className="flex flex-col items-center xl:items-start shrink-0 mx-auto xl:mx-0">
+                  <div className="relative w-36 h-36 xl:w-44 xl:h-44 2xl:w-52 2xl:h-52 rounded-full gauge-emboss-inset">
                     <svg className="w-full h-full -rotate-90 animate-arc-rotate" viewBox="0 0 36 36">
                       <defs>
                         <radialGradient id="walletProgressGradient" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
@@ -656,23 +642,20 @@ export default function GuardDashboardPage() {
                         d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                       />
                     </svg>
-                    <span className="absolute inset-0 flex items-center justify-center text-4xl sm:text-5xl font-bold text-white">{summary?.security_status?.score == null ? "—" : `${summary.security_status.score}%`}</span>
+                    <span className="absolute inset-0 flex items-center justify-center text-3xl xl:text-4xl 2xl:text-5xl font-bold text-white">{summary?.security_status?.score == null ? "—" : `${summary.security_status.score}%`}</span>
                   </div>
                 </div>
-                <div className="flex-1 min-w-0 flex flex-col sm:mt-16">
+                <div className="flex-1 min-w-0 flex flex-col justify-center xl:mt-16 text-center xl:text-left">
                   <p className="text-sm text-slate-300">Status: <span className="inline-flex items-center justify-center min-w-[5rem] px-4 py-1 rounded-lg bg-[#0026FF] text-white font-medium capitalize">{summary?.security_status?.status ?? "—"}</span></p>
-                  <p className="text-base text-slate-400 mt-2">{summary?.security_status?.message ?? ""}</p>
+                  <p className="text-sm xl:text-base text-slate-400 mt-2">{summary?.security_status?.message ?? ""}</p>
                 </div>
               </div>
-              <div className="flex items-center w-full mt-4 gap-4">
-                <div className="w-44 sm:w-52 shrink-0 flex items-center">
-                  <p className="text-base text-slate-400">Last Scan: {formatLastScan(summary?.security_status?.last_scan_at ?? null)}</p>
-                </div>
-                <div className="flex-1 min-w-4" />
+              <div className="flex flex-col sm:flex-row sm:items-center w-full mt-4 gap-3 sm:gap-4">
+                <p className="text-sm xl:text-base text-slate-400 sm:flex-1 min-w-0">Last Scan: {formatLastScan(summary?.security_status?.last_scan_at ?? null)}</p>
                 <button
                   type="button"
                   onClick={openRescanModal}
-                  className="rounded-lg bg-gradient-to-b from-[#4066FF] to-[#0026FF] hover:from-[#3355FF] hover:to-[#001fcc] text-white text-base font-medium px-6 py-3 transition shadow-[0_4px_12px_rgba(0,38,255,0.25)] ring-1 ring-inset ring-[#4066FF]/90 shrink-0"
+                  className="rounded-lg bg-gradient-to-b from-[#4066FF] to-[#0026FF] hover:from-[#3355FF] hover:to-[#001fcc] text-white text-sm xl:text-base font-medium px-5 xl:px-6 py-2.5 xl:py-3 transition shadow-[0_4px_12px_rgba(0,38,255,0.25)] ring-1 ring-inset ring-[#4066FF]/90 shrink-0 w-full sm:w-auto"
                 >
                   Run Full Scan
                 </button>
@@ -682,7 +665,7 @@ export default function GuardDashboardPage() {
             </div>
 
             {/* Four cards in 2x2 */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 min-w-0">
               <ThreatIntelligenceCard loading={summaryLoading} summary={summary} onViewThreats={() => setThreatModalOpen(true)} />
               <RecentScansCard loading={summaryLoading} summary={summary} onScanContracts={() => setContractScannerModalOpen(true)} />
               <TotalAssetCard loading={summaryLoading} summary={summary} onViewWallets={() => setConnectedWalletModalOpen(true)} />
@@ -1246,26 +1229,26 @@ function ThreatIntelligenceCard({ mobile, summary, loading, onViewThreats }: { m
   const trend = summary?.threats_trend_percent;
   const positive = trend != null && trend >= 0;
   return (
-    <div className={`rounded-xl flex flex-col bg-gradient-to-br from-blue-950 to-slate-900 ${mobile ? "p-2.5 min-h-[115px]" : "p-5 min-h-[180px]"}`}>
-      <div className="flex items-center gap-2">
+    <div className={`rounded-xl flex flex-col min-w-0 overflow-hidden bg-gradient-to-br from-blue-950 to-slate-900 ${mobile ? "p-2.5 min-h-[115px]" : "p-4 min-h-[160px] 2xl:min-h-[180px]"}`}>
+      <div className="flex items-center gap-2 min-w-0">
         <Image src="/images/icons/alert.png" alt="" width={mobile ? 16 : 20} height={mobile ? 16 : 20} className="shrink-0" />
-        <p className={`text-white font-medium ${mobile ? "text-xs" : "text-base"}`}>Threat Intelligence</p>
+        <p className={`text-white font-medium truncate min-w-0 ${mobile ? "text-xs" : "text-sm xl:text-base"}`}>Threat Intelligence</p>
       </div>
-      <div className={`flex items-baseline gap-2 mt-2 ${mobile ? "mt-1" : "mt-3"}`}>
-        <span className={`text-white font-normal ${mobile ? "text-xl" : "text-4xl"}`}>{count != null ? count : "—"}</span>
+      <div className={`flex items-baseline gap-2 flex-wrap ${mobile ? "mt-1" : "mt-3"}`}>
+        <span className={`text-white font-normal ${mobile ? "text-xl" : "text-2xl xl:text-3xl 2xl:text-4xl"}`}>{count != null ? count : "—"}</span>
         {trend != null && (
-          <span className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium ${positive ? "bg-[#2F4F2F] text-[#A0E0A0]" : ""}`} style={positive ? undefined : { backgroundColor: "rgba(240,5,0,0.2)", color: "#F00500" }}>
+          <span className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium shrink-0 ${positive ? "bg-[#2F4F2F] text-[#A0E0A0]" : ""}`} style={positive ? undefined : { backgroundColor: "rgba(240,5,0,0.2)", color: "#F00500" }}>
             <svg className={`w-2.5 h-2.5 ${positive ? "" : "rotate-180"}`} fill="currentColor" viewBox="0 0 24 24"><path d="M7 14l5-5 5 5z" /></svg>
             {positive ? "+" : ""}{trend}%
           </span>
         )}
       </div>
-      <div className={`flex items-center justify-between mt-auto ${mobile ? "pt-2" : "pt-4"}`}>
-        <p className={`text-slate-400 ${mobile ? "text-[10px]" : "text-sm"}`}>This month</p>
+      <div className={`flex flex-wrap items-center gap-x-2 gap-y-1.5 justify-between mt-auto ${mobile ? "pt-2" : "pt-3 xl:pt-4"}`}>
+        <p className={`text-slate-400 min-w-0 ${mobile ? "text-[10px]" : "text-xs xl:text-sm"}`}>This month</p>
         <button
           type="button"
           onClick={onViewThreats}
-          className={`rounded bg-gradient-to-b from-[#4066FF] to-[#0026FF] text-white font-medium transition ${mobile ? "text-xs px-2.5 py-1.5" : "text-sm px-4 py-2.5"}`}
+          className={`shrink-0 whitespace-nowrap rounded bg-gradient-to-b from-[#4066FF] to-[#0026FF] text-white font-medium transition ${mobile ? "text-xs px-2.5 py-1.5" : "text-xs xl:text-sm px-2.5 py-1.5 xl:px-4 xl:py-2.5"}`}
         >
           View Threat
         </button>
@@ -1281,26 +1264,26 @@ function TotalAssetCard({ mobile, summary, loading, onViewWallets }: { mobile?: 
   const trend = summary?.total_asset_trend_percent;
   const positive = trend != null && trend >= 0;
   return (
-    <div className={`rounded-xl flex flex-col bg-gradient-to-br from-blue-950 to-slate-900 ${mobile ? "p-2.5 min-h-[115px]" : "p-5 min-h-[180px]"}`}>
-      <div className="flex items-center gap-2">
+    <div className={`rounded-xl flex flex-col min-w-0 overflow-hidden bg-gradient-to-br from-blue-950 to-slate-900 ${mobile ? "p-2.5 min-h-[115px]" : "p-4 min-h-[160px] 2xl:min-h-[180px]"}`}>
+      <div className="flex items-center gap-2 min-w-0">
         <Image src="/images/icons/wallets.png" alt="" width={mobile ? 16 : 20} height={mobile ? 16 : 20} className="shrink-0" />
-        <p className={`text-white font-medium ${mobile ? "text-xs" : "text-base"}`}>Total Asset</p>
+        <p className={`text-white font-medium truncate min-w-0 ${mobile ? "text-xs" : "text-sm xl:text-base"}`}>Total Asset</p>
       </div>
-      <div className={`flex items-baseline gap-2 ${mobile ? "mt-1" : "mt-3"}`}>
-        <span className={`text-white font-normal ${mobile ? "text-xl" : "text-4xl"}`}>{value}</span>
+      <div className={`flex items-baseline gap-2 flex-wrap ${mobile ? "mt-1" : "mt-3"}`}>
+        <span className={`text-white font-normal ${mobile ? "text-xl" : "text-2xl xl:text-3xl 2xl:text-4xl"}`}>{value}</span>
         {!mobile && trend != null && (
-          <span className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-sm font-medium ${positive ? "bg-[#2F4F2F] text-[#A0E0A0]" : ""}`} style={positive ? undefined : { backgroundColor: "rgba(240,5,0,0.2)", color: "#F00500" }}>
+          <span className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs xl:text-sm font-medium shrink-0 ${positive ? "bg-[#2F4F2F] text-[#A0E0A0]" : ""}`} style={positive ? undefined : { backgroundColor: "rgba(240,5,0,0.2)", color: "#F00500" }}>
             <svg className={`w-3 h-3 ${positive ? "" : "rotate-180"}`} fill="currentColor" viewBox="0 0 24 24"><path d="M7 14l5-5 5 5z" /></svg>
             {positive ? "+" : ""}{trend}%
           </span>
         )}
       </div>
-      <div className={`flex items-center justify-between mt-auto ${mobile ? "pt-2" : "pt-4"}`}>
-        <p className={`text-slate-400 ${mobile ? "text-[10px]" : "text-sm"}`}>This month</p>
+      <div className={`flex flex-wrap items-center gap-x-2 gap-y-1.5 justify-between mt-auto ${mobile ? "pt-2" : "pt-3 xl:pt-4"}`}>
+        <p className={`text-slate-400 min-w-0 ${mobile ? "text-[10px]" : "text-xs xl:text-sm"}`}>This month</p>
         <button
           type="button"
           onClick={onViewWallets}
-          className={`rounded bg-gradient-to-b from-[#4066FF] to-[#0026FF] text-white font-medium transition ${mobile ? "text-xs px-2.5 py-1.5" : "text-sm px-4 py-2.5"}`}
+          className={`shrink-0 whitespace-nowrap rounded bg-gradient-to-b from-[#4066FF] to-[#0026FF] text-white font-medium transition ${mobile ? "text-xs px-2.5 py-1.5" : "text-xs xl:text-sm px-2.5 py-1.5 xl:px-4 xl:py-2.5"}`}
         >
           View wallets
         </button>
@@ -1316,29 +1299,29 @@ function UnreadAlertsCard({ mobile, summary, loading, onViewAlerts }: { mobile?:
   const trend = summary?.alerts_trend_percent;
   const positive = trend != null && trend >= 0;
   return (
-    <div className={`rounded-xl flex flex-col bg-gradient-to-br from-blue-950 to-slate-900 ${mobile ? "p-2.5 min-h-[115px]" : "p-5 min-h-[180px]"}`}>
-      <div className="flex items-center gap-2">
+    <div className={`rounded-xl flex flex-col min-w-0 overflow-hidden bg-gradient-to-br from-blue-950 to-slate-900 ${mobile ? "p-2.5 min-h-[115px]" : "p-4 min-h-[160px] 2xl:min-h-[180px]"}`}>
+      <div className="flex items-center gap-2 min-w-0">
         <Image src="/images/icons/alert-02.png" alt="" width={mobile ? 16 : 20} height={mobile ? 16 : 20} className="shrink-0" />
-        <p className={`text-white font-medium ${mobile ? "text-xs" : "text-base"}`}>Unread Alerts</p>
+        <p className={`text-white font-medium truncate min-w-0 ${mobile ? "text-xs" : "text-sm xl:text-base"}`}>Unread Alerts</p>
       </div>
-      <div className={`flex items-baseline gap-2 ${mobile ? "mt-1" : "mt-3"}`}>
-        <span className={`text-white font-normal ${mobile ? "text-xl" : "text-4xl"}`}>{count != null ? count : "—"}</span>
+      <div className={`flex items-baseline gap-2 flex-wrap ${mobile ? "mt-1" : "mt-3"}`}>
+        <span className={`text-white font-normal ${mobile ? "text-xl" : "text-2xl xl:text-3xl 2xl:text-4xl"}`}>{count != null ? count : "—"}</span>
         {trend != null && (
-          <span className={`inline-flex items-center gap-0.5 rounded font-medium ${mobile ? "px-1.5 py-0.5 text-[10px]" : "px-2 py-0.5 text-sm"} ${positive ? "bg-[#2F4F2F] text-[#A0E0A0]" : ""}`} style={positive ? undefined : { backgroundColor: "rgba(240,5,0,0.2)", color: "#F00500" }}>
+          <span className={`inline-flex items-center gap-0.5 rounded font-medium shrink-0 ${mobile ? "px-1.5 py-0.5 text-[10px]" : "px-2 py-0.5 text-xs xl:text-sm"} ${positive ? "bg-[#2F4F2F] text-[#A0E0A0]" : ""}`} style={positive ? undefined : { backgroundColor: "rgba(240,5,0,0.2)", color: "#F00500" }}>
             <svg className={`${positive ? "" : "rotate-180"} ${mobile ? "w-2.5 h-2.5" : "w-3 h-3"}`} fill="currentColor" viewBox="0 0 24 24"><path d="M7 14l5-5 5 5z" /></svg>
             {positive ? "+" : ""}{trend}%
           </span>
         )}
       </div>
-      <div className={`flex items-center justify-between mt-auto ${mobile ? "pt-2" : "pt-4"}`}>
-        <div className="flex items-center gap-1.5">
+      <div className={`flex flex-wrap items-center gap-x-2 gap-y-1.5 justify-between mt-auto ${mobile ? "pt-2" : "pt-3 xl:pt-4"}`}>
+        <div className="flex items-center gap-1.5 min-w-0">
           {!mobile && <Image src="/images/icons/alert-01.png" alt="" width={16} height={16} className="w-4 h-4 shrink-0" />}
-          <p className={`text-slate-400 ${mobile ? "text-[10px]" : "text-sm"}`}>{highRisk != null ? `${highRisk} high risk` : "—"}</p>
+          <p className={`text-slate-400 truncate min-w-0 ${mobile ? "text-[10px]" : "text-xs xl:text-sm"}`}>{highRisk != null ? `${highRisk} high risk` : "—"}</p>
         </div>
         <button
           type="button"
           onClick={onViewAlerts}
-          className={`rounded bg-gradient-to-b from-[#4066FF] to-[#0026FF] text-white font-medium transition ${mobile ? "text-xs px-2.5 py-1.5" : "text-sm px-4 py-2.5"}`}
+          className={`shrink-0 whitespace-nowrap rounded bg-gradient-to-b from-[#4066FF] to-[#0026FF] text-white font-medium transition ${mobile ? "text-xs px-2.5 py-1.5" : "text-xs xl:text-sm px-2.5 py-1.5 xl:px-4 xl:py-2.5"}`}
         >
           View Alerts
         </button>
@@ -1353,26 +1336,26 @@ function RecentScansCard({ mobile, summary, loading, onScanContracts }: { mobile
   const trend = summary?.scans_trend_percent;
   const positive = trend != null && trend >= 0;
   return (
-    <div className={`rounded-xl flex flex-col bg-gradient-to-br from-blue-950 to-slate-900 ${mobile ? "p-2.5 min-h-[115px]" : "p-5 min-h-[180px]"}`}>
-      <div className="flex items-center gap-2">
+    <div className={`rounded-xl flex flex-col min-w-0 overflow-hidden bg-gradient-to-br from-blue-950 to-slate-900 ${mobile ? "p-2.5 min-h-[115px]" : "p-4 min-h-[160px] 2xl:min-h-[180px]"}`}>
+      <div className="flex items-center gap-2 min-w-0">
         <Image src="/images/icons/scan.png" alt="" width={mobile ? 16 : 20} height={mobile ? 16 : 20} className="shrink-0" />
-        <p className={`text-white font-medium ${mobile ? "text-xs" : "text-base"}`}>Recent Scans</p>
+        <p className={`text-white font-medium truncate min-w-0 ${mobile ? "text-xs" : "text-sm xl:text-base"}`}>Recent Scans</p>
       </div>
-      <div className={`flex items-baseline gap-2 ${mobile ? "mt-1" : "mt-3"}`}>
-        <span className={`text-white font-normal ${mobile ? "text-xl" : "text-4xl"}`}>{count != null ? count : "—"}</span>
+      <div className={`flex items-baseline gap-2 flex-wrap ${mobile ? "mt-1" : "mt-3"}`}>
+        <span className={`text-white font-normal ${mobile ? "text-xl" : "text-2xl xl:text-3xl 2xl:text-4xl"}`}>{count != null ? count : "—"}</span>
         {trend != null && (
-          <span className={`inline-flex items-center gap-0.5 rounded font-medium ${positive ? "bg-[#2F4F2F] text-[#A0E0A0]" : ""} ${mobile ? "px-1.5 py-0.5 text-[10px]" : "px-2 py-0.5 text-sm"}`} style={positive ? undefined : { backgroundColor: "rgba(240,5,0,0.2)", color: "#F00500" }}>
+          <span className={`inline-flex items-center gap-0.5 rounded font-medium shrink-0 ${positive ? "bg-[#2F4F2F] text-[#A0E0A0]" : ""} ${mobile ? "px-1.5 py-0.5 text-[10px]" : "px-2 py-0.5 text-xs xl:text-sm"}`} style={positive ? undefined : { backgroundColor: "rgba(240,5,0,0.2)", color: "#F00500" }}>
             <svg className={`${positive ? "" : "rotate-180"} ${mobile ? "w-2.5 h-2.5" : "w-3 h-3"}`} fill="currentColor" viewBox="0 0 24 24"><path d="M7 14l5-5 5 5z" /></svg>
             {positive ? "+" : ""}{trend}%
           </span>
         )}
       </div>
-      <div className={`flex items-center justify-between mt-auto ${mobile ? "pt-2" : "pt-4"}`}>
-        <p className={`text-slate-400 ${mobile ? "text-[10px]" : "text-sm"}`}>This month</p>
+      <div className={`flex flex-wrap items-center gap-x-2 gap-y-1.5 justify-between mt-auto ${mobile ? "pt-2" : "pt-3 xl:pt-4"}`}>
+        <p className={`text-slate-400 min-w-0 ${mobile ? "text-[10px]" : "text-xs xl:text-sm"}`}>This month</p>
         <button
           type="button"
           onClick={onScanContracts}
-          className={`rounded bg-gradient-to-b from-[#4066FF] to-[#0026FF] text-white font-medium transition ${mobile ? "text-xs px-2 py-1.5" : "text-sm px-4 py-2.5"}`}
+          className={`shrink-0 whitespace-nowrap rounded bg-gradient-to-b from-[#4066FF] to-[#0026FF] text-white font-medium transition ${mobile ? "text-xs px-2 py-1.5" : "text-xs xl:text-sm px-2.5 py-1.5 xl:px-4 xl:py-2.5"}`}
         >
           Scan Contracts
         </button>

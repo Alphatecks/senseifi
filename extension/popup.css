@@ -5,7 +5,7 @@
   src: url('assets/fonts/satoshi/Satoshi-Regular.otf') format('opentype');
   font-weight: 400;
   font-style: normal;
-  font-display: swap;
+  font-display: optional;
 }
 
 @font-face {
@@ -13,23 +13,15 @@
   src: url('assets/fonts/satoshi/Satoshi-Medium.otf') format('opentype');
   font-weight: 500;
   font-style: normal;
-  font-display: swap;
+  font-display: optional;
 }
 
 @font-face {
   font-family: 'Satoshi';
   src: url('assets/fonts/satoshi/Satoshi-Bold.otf') format('opentype');
-  font-weight: 600;
+  font-weight: 600 700;
   font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Satoshi';
-  src: url('assets/fonts/satoshi/Satoshi-Bold.otf') format('opentype');
-  font-weight: 700;
-  font-style: normal;
-  font-display: swap;
+  font-display: optional;
 }
 
 *,
@@ -38,9 +30,48 @@
   box-sizing: border-box;
 }
 
-/* Curved popup card (Chrome’s outer frame is square; we clip content to rounded corners) */
 :root {
   --popup-radius: 20px;
+  --panel-width: 380px;
+}
+
+/* Side panel: docked beside the page instead of a toolbar dropdown popup */
+html.sg-side-panel {
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  border-radius: 0;
+}
+
+html.sg-side-panel body.welcome {
+  min-width: 0;
+  max-width: none;
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  border-radius: 0;
+}
+
+html.sg-side-panel .welcome-scroll-shell {
+  max-height: none;
+  height: 100%;
+  min-height: 100vh;
+  border-radius: 0;
+}
+
+html.sg-side-panel .welcome-close,
+html.sg-side-panel #cw-header-close {
+  display: none;
+}
+
+/* Hide wrong default view until cached UI state is applied (prevents welcome flash). */
+html.sg-booting .welcome-scroll-shell {
+  opacity: 0;
+}
+
+html:not(.sg-booting) .welcome-scroll-shell {
+  opacity: 1;
+  transition: opacity 0.12s ease;
 }
 
 /* Extension popups often scroll `html`, not `body` — lock document and scroll only inside shell */
@@ -958,7 +989,24 @@ body.welcome {
   color: #6b7280;
 }
 
-.cw-qr-block {
+.cw-qr-frame--walletconnect {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+}
+
+.cw-qr-connect-btn {
+  margin-top: 12px;
+  width: 100%;
+  justify-content: center;
+}
+
+.cw-row--walletconnect .cw-wallet-icon {
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 2px;
+}
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1815,7 +1863,7 @@ body.welcome {
   width: 100%;
   min-height: 170px;
   border-radius: 18px;
-  border: 1px solid rgba(74, 105, 220, 0.45);
+  border: none;
   background: radial-gradient(115% 135% at 12% 8%, rgba(55, 75, 160, 0.32) 0%, rgba(17, 25, 58, 0.4) 50%, rgba(8, 11, 31, 0.95) 100%);
   color: #ffffff;
   padding: 14px 10px 12px;
@@ -1832,7 +1880,7 @@ body.welcome {
     inset 0 -1px 0 rgba(0, 0, 0, 0.34),
     0 8px 24px rgba(0, 24, 110, 0.38);
   overflow: hidden;
-  transition: transform 0.16s ease, opacity 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  transition: transform 0.16s ease, box-shadow 0.2s ease;
 }
 
 .cw-action-card::before {
@@ -1850,12 +1898,14 @@ body.welcome {
 
 .cw-action-card:hover {
   transform: translateY(-1px);
-  opacity: 0.98;
-  border-color: rgba(132, 158, 255, 0.72);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.14),
     inset 0 -1px 0 rgba(0, 0, 0, 0.38),
     0 10px 28px rgba(0, 38, 167, 0.48);
+}
+
+.cw-action-card--coming-soon:hover .cw-action-icon-shell {
+  opacity: 1;
 }
 
 .cw-action-card:active {
@@ -1896,6 +1946,103 @@ body.welcome {
   line-height: 1.3;
   text-align: center;
   text-shadow: 0 0 14px currentColor;
+}
+
+.cw-action-text--compact {
+  font-size: 11px;
+  line-height: 1.25;
+  max-width: 11rem;
+}
+
+.cw-action-card--coming-soon .cw-action-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: #fde68a;
+  background: rgba(245, 158, 11, 0.16);
+  border: none;
+  line-height: 1.2;
+  pointer-events: none;
+}
+
+.cw-action-card--coming-soon .cw-action-icon-shell {
+  width: 70px;
+  height: 70px;
+  margin-top: 18px;
+  border-radius: 14px;
+  opacity: 1;
+  isolation: isolate;
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.14) 0%,
+    rgba(255, 255, 255, 0.06) 42%,
+    rgba(18, 24, 52, 0.35) 100%
+  );
+  border: none;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.18),
+    0 4px 14px rgba(0, 0, 0, 0.22);
+  overflow: visible;
+}
+
+.cw-action-card--coming-soon .cw-action-icon {
+  width: 84px;
+  height: 84px;
+  transform: scale(1.28);
+}
+
+.cw-action-card--chart.cw-action-card--coming-soon .cw-action-icon-shell {
+  background: linear-gradient(
+    145deg,
+    rgba(29, 78, 255, 0.16) 0%,
+    rgba(255, 255, 255, 0.06) 48%,
+    rgba(18, 24, 52, 0.38) 100%
+  );
+}
+
+.cw-action-card--hacked-wallet.cw-action-card--coming-soon .cw-action-icon-shell {
+  background: linear-gradient(
+    145deg,
+    rgba(168, 85, 247, 0.16) 0%,
+    rgba(255, 255, 255, 0.06) 48%,
+    rgba(18, 24, 52, 0.38) 100%
+  );
+}
+
+.cw-action-card--airdrop-hunter.cw-action-card--coming-soon .cw-action-icon-shell {
+  background: linear-gradient(
+    145deg,
+    rgba(34, 211, 238, 0.15) 0%,
+    rgba(255, 255, 255, 0.06) 48%,
+    rgba(18, 24, 52, 0.38) 100%
+  );
+}
+
+.cw-action-card--secure-transfer.cw-action-card--coming-soon .cw-action-icon-shell {
+  background: linear-gradient(
+    145deg,
+    rgba(52, 211, 153, 0.15) 0%,
+    rgba(255, 255, 255, 0.06) 48%,
+    rgba(18, 24, 52, 0.38) 100%
+  );
+}
+
+.cw-action-card--oracle.cw-action-card--coming-soon .cw-action-icon-shell {
+  background: linear-gradient(
+    145deg,
+    rgba(99, 102, 241, 0.16) 0%,
+    rgba(255, 255, 255, 0.06) 48%,
+    rgba(18, 24, 52, 0.38) 100%
+  );
 }
 
 .cw-action-card--scan-contract .cw-action-text {
@@ -1952,6 +2099,62 @@ body.welcome {
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
     inset 0 -1px 0 rgba(0, 0, 0, 0.34),
     0 8px 24px rgba(9, 42, 147, 0.28);
+}
+
+.cw-action-card--hacked-wallet .cw-action-text {
+  color: #c084fc;
+}
+
+.cw-action-card--hacked-wallet {
+  background:
+    linear-gradient(180deg, rgba(168, 85, 247, 0.22) 0%, rgba(168, 85, 247, 0.07) 26%, rgba(8, 11, 31, 0) 52%),
+    radial-gradient(115% 135% at 12% 8%, rgba(55, 75, 160, 0.32) 0%, rgba(17, 25, 58, 0.4) 50%, rgba(8, 11, 31, 0.95) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.34),
+    0 8px 24px rgba(88, 28, 135, 0.28);
+}
+
+.cw-action-card--airdrop-hunter .cw-action-text {
+  color: #22d3ee;
+}
+
+.cw-action-card--airdrop-hunter {
+  background:
+    linear-gradient(180deg, rgba(34, 211, 238, 0.2) 0%, rgba(34, 211, 238, 0.06) 26%, rgba(8, 11, 31, 0) 52%),
+    radial-gradient(115% 135% at 12% 8%, rgba(55, 75, 160, 0.32) 0%, rgba(17, 25, 58, 0.4) 50%, rgba(8, 11, 31, 0.95) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.34),
+    0 8px 24px rgba(8, 145, 178, 0.28);
+}
+
+.cw-action-card--secure-transfer .cw-action-text {
+  color: #34d399;
+}
+
+.cw-action-card--secure-transfer {
+  background:
+    linear-gradient(180deg, rgba(52, 211, 153, 0.2) 0%, rgba(52, 211, 153, 0.06) 26%, rgba(8, 11, 31, 0) 52%),
+    radial-gradient(115% 135% at 12% 8%, rgba(55, 75, 160, 0.32) 0%, rgba(17, 25, 58, 0.4) 50%, rgba(8, 11, 31, 0.95) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.34),
+    0 8px 24px rgba(4, 120, 87, 0.28);
+}
+
+.cw-action-card--oracle .cw-action-text {
+  color: #818cf8;
+}
+
+.cw-action-card--oracle {
+  background:
+    linear-gradient(180deg, rgba(99, 102, 241, 0.22) 0%, rgba(99, 102, 241, 0.07) 26%, rgba(8, 11, 31, 0) 52%),
+    radial-gradient(115% 135% at 12% 8%, rgba(55, 75, 160, 0.32) 0%, rgba(17, 25, 58, 0.4) 50%, rgba(8, 11, 31, 0.95) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.34),
+    0 8px 24px rgba(49, 46, 129, 0.28);
 }
 
 .cw-footer .welcome-footer-text,

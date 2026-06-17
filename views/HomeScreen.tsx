@@ -84,7 +84,7 @@ export default function HomeScreen() {
           <div className="flex flex-row flex-wrap gap-3 mb-12 z-10 relative w-full justify-center md:justify-start">
             <Link href="/connect-wallet" className="flex-1 min-w-[120px] max-w-[180px] md:flex-none md:min-w-0 md:max-w-none flex justify-center md:block" scroll={true}>
               <button className="w-full md:w-auto px-4 py-2 md:px-7 md:py-3 rounded-xl font-semibold text-sm md:text-base bg-gradient-to-r from-[#0026FF] to-[#0026FF] text-white shadow-lg border-2 border-white/20 hover:from-[#0026FF] hover:to-blue-500 transition">
-                Get Started
+                Connect Wallet
               </button>
             </Link>
           </div>

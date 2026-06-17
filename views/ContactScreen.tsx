@@ -5,25 +5,25 @@ import Image from "next/image";
 import contactHeroImage from "@/assets/images/Rectangle 111.png";
 
 const CONTACT_CARDS = [
-  {
-    label: "Give us call",
-    value: "(2033) 454-6125",
-    href: "tel:+20334546125",
-    icon: (
-      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={1.8}
-          d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
-        />
-      </svg>
-    ),
-  },
+  // {
+  //   label: "Give us call",
+  //   value: "(2033) 454-6125",
+  //   href: "tel:+20334546125",
+  //   icon: (
+  //     <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+  //       <path
+  //         strokeLinecap="round"
+  //         strokeLinejoin="round"
+  //         strokeWidth={1.8}
+  //         d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+  //       />
+  //     </svg>
+  //   ),
+  // },
   {
     label: "Send us Email",
-    value: "Blomk01@gmail.com",
-    href: "mailto:Blomk01@gmail.com",
+    value: "support@senseifi.io",
+    href: "mailto:support@senseifi.io",
     icon: (
       <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
         <path
@@ -35,22 +35,22 @@ const CONTACT_CARDS = [
       </svg>
     ),
   },
-  {
-    label: "Our Location",
-    value: "1761 Treva Groves",
-    href: "https://maps.google.com/?q=1761+Treva+Groves",
-    icon: (
-      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={1.8}
-          d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-        />
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-      </svg>
-    ),
-  },
+  // {
+  //   label: "Our Location",
+  //   value: "1761 Treva Groves",
+  //   href: "https://maps.google.com/?q=1761+Treva+Groves",
+  //   icon: (
+  //     <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+  //       <path
+  //         strokeLinecap="round"
+  //         strokeLinejoin="round"
+  //         strokeWidth={1.8}
+  //         d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+  //       />
+  //       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+  //     </svg>
+  //   ),
+  // },
 ] as const;
 
 const CONTACT_FAQS = [
@@ -58,29 +58,27 @@ const CONTACT_FAQS = [
     question: "Is SenseiFi safe to use?",
     answer: (
       <>
-        Absolutely.{" "}
+        Yes. SenseiFi uses a zero-access security model—we never collect or store your private keys, seed phrases, or wallet secrets.{" "}
         <span className="text-[#4066FF]">
-          SenseiFi uses multi-layered security, real-time threat detection, and smart contract analysis
+          SenseiGuard analyzes transactions and smart contracts before you sign, monitors wallet activity in real time, and flags phishing sites, malicious approvals, and suspicious contracts
         </span>{" "}
-        to protect your assets across multiple chains.
+        across supported chains. Your keys stay in your wallet; SenseiGuard provides the intelligence layer that helps you avoid costly mistakes.
       </>
     ),
   },
   {
-    question: "Can I trade using SenseiFi?",
+    question: "How does SenseiGuard protect my wallet?",
     answer: (
       <>
-        Yes, through <strong className="text-white/90">SenseiTrade</strong>, SenseiFi&apos;s AI-powered trading workspace. Connect
-        your wallet via the web app to get started. SenseiGuard is available today; SenseiTrade is rolling out progressively.
+        SenseiGuard acts as a wallet firewall. It decodes transactions and smart contract calls before you sign, scores each action for risk, and warns you about phishing sites, malicious approvals, drainer contracts, and suspicious token transfers. The SenseiGuard Chrome extension intercepts signing requests on dApps in real time, while the web dashboard gives you ongoing wallet security scans, approval reviews, and threat alerts.
       </>
     ),
   },
   {
-    question: "How does SenseiCard work?",
+    question: "What threats does SenseiGuard detect?",
     answer: (
       <>
-        <strong className="text-white/90">SenseiCard</strong> lets you spend crypto in everyday life. Link your wallet, convert
-        digital assets to fiat at competitive rates, and pay online or track subscriptions from your SenseiFi dashboard.
+        SenseiGuard is built to catch unlimited token approvals, wallet drainers, fake airdrops, address-poisoning scams, impersonation sites, and high-risk smart contracts. It combines on-chain analysis with SenseiFi&apos;s AI detection engine to explain what a transaction actually does in plain language—so you know whether to sign, reject, or revoke access before anything leaves your wallet.
       </>
     ),
   },
@@ -265,27 +263,20 @@ export default function ContactScreen() {
 
       {/* Contact cards */}
       <section className="mx-auto mt-10 max-w-7xl px-4 md:mt-14 md:px-8 lg:px-12 xl:px-20">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3 md:gap-5">
+        <div className="flex justify-center">
           {CONTACT_CARDS.map((card) => (
             <a
               key={card.label}
               href={card.href}
-              target={card.label === "Our Location" ? "_blank" : undefined}
-              rel={card.label === "Our Location" ? "noopener noreferrer" : undefined}
-              className="group flex items-center justify-between rounded-2xl border-0 bg-[#030821] px-5 py-5 transition hover:bg-[#0a0f2a]"
+              className="group flex w-full max-w-md items-center justify-center gap-4 rounded-2xl border-0 bg-[#030821] px-8 py-5 text-center transition hover:bg-[#0a0f2a]"
             >
-              <div className="flex items-start gap-4">
-                <span className="mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#0026FF]/15 text-[#4066FF]">
-                  {card.icon}
-                </span>
-                <div>
-                  <p className="text-sm text-white/55">{card.label}</p>
-                  <p className="mt-1 text-base font-medium text-white">{card.value}</p>
-                </div>
-              </div>
-              <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-0 text-lg text-white/70 transition group-hover:text-white">
-                +
+              <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#0026FF]/15 text-[#4066FF]">
+                {card.icon}
               </span>
+              <div>
+                <p className="text-sm text-white/55">{card.label}</p>
+                <p className="mt-1 text-base font-medium text-white">{card.value}</p>
+              </div>
             </a>
           ))}
         </div>

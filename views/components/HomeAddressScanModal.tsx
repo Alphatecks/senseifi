@@ -10,6 +10,7 @@ import {
 } from "@/services/dashboardService";
 import type { RunFullScanData, ScanContractDetailResponse, ScanContractResult } from "@/services/dashboardService";
 import { isContractAddressOnChain, truncateEvmAddress } from "@/utils/evmAddress";
+import { parseContractScanInput } from "@/utils/contractScan";
 
 type HomeAddressScanModalProps = {
   open: boolean;
@@ -58,6 +59,23 @@ export default function HomeAddressScanModal({ open, address, onClose }: HomeAdd
     void (async () => {
       try {
         const trimmed = address.trim();
+        const parsedTarget = parseContractScanInput(trimmed);
+
+        if (parsedTarget?.chainFamily === "solana") {
+          setScanKind("contract");
+          const result = await scanContract(trimmed, undefined, {
+            chainFamily: "solana",
+            network: parsedTarget.network ?? "mainnet-beta",
+          });
+          if (cancelled) return;
+          if (!result) {
+            setError("Program scan failed. Try again or verify the address.");
+            return;
+          }
+          setContractResult(result);
+          return;
+        }
+
         const isEthContract = await isContractAddressOnChain(trimmed, 1);
         if (cancelled) return;
 

@@ -108,7 +108,7 @@ const WALLET_TYPE_LOGO: Record<string, string> = {
   "trust wallet": "https://trustwallet.com/assets/images/media/assets/TWT.png",
   coinbase: "https://images.ctfassets.net/q5ulk4bp65r7/3TBS4oVkD1ghowTqVQJlqj/2dfd4ea3b623a7c0d8deb2ff445dee9e/Consumer_Product_Wallet.svg",
   rabby: "https://rabby.io/assets/images/logo-128.png",
-  phantom: "https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/phantom.svg",
+  phantom: '/images/icons/phantom.svg',
   "wallet connect": "https://cdn.jsdelivr.net/gh/WalletConnect/walletconnect-assets@master/Logo/Blue%20(Default)/Logo.svg",
 };
 function getWalletTypeLogoUrl(walletTypeDisplay: string): string {

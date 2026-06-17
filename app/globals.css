@@ -88,6 +88,16 @@
   display: none; /* Chrome/Safari/Webkit */
 }
 
+@keyframes scroll-hint-nudge {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(5px);
+  }
+}
+
 @keyframes logo-marquee {
   0% {
     transform: translateX(0);

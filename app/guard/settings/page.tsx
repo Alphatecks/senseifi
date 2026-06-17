@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useWallet } from "@/hooks/useWallet";
 import { useDashboardUser } from "@/context/DashboardUserContext";
 import { useConnectNetworksModal } from "@/context/ConnectWalletsModalContext";
-import { getWalletsForAddress, getActivityMonitorDapps } from "@/services/dashboardService";
+import { getConnectedWallets, getActivityMonitorDapps } from "@/services/dashboardService";
 import type { WalletListItem, ActivityMonitorDappItem } from "@/services/dashboardService";
 import { walletService } from "@/services/walletService";
 import { getBillingHistory, type BillingHistoryItem } from "@/services/subscriptionService";
@@ -18,25 +18,18 @@ import GuardSettingsSubmenu, {
 } from "@/app/guard/components/GuardSettingsSubmenu";
 import SupportFeedbackSection from "@/app/guard/components/SupportFeedbackSection";
 import TermsPrivacySection from "@/app/guard/components/TermsPrivacySection";
-
-const WALLET_ICON_FALLBACK = "/images/icons/wallet-header.png";
-const PROVIDER_LOGOS: Record<string, string> = {
-  metamask: "https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Fox.svg",
-  "meta mask": "https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Fox.svg",
-  coinbase: "https://images.ctfassets.net/q5ulk4bp65r7/3TBS4oVkD1ghowTqVQJlqj/2dfd4ea3b623a7c0d8deb2ff445dee9e/Consumer_Product_Wallet.svg",
-  "coinbase wallet": "https://images.ctfassets.net/q5ulk4bp65r7/3TBS4oVkD1ghowTqVQJlqj/2dfd4ea3b623a7c0d8deb2ff445dee9e/Consumer_Product_Wallet.svg",
-  walletconnect: "https://raw.githubusercontent.com/WalletConnect/walletconnect-assets/master/Logo/Blue%20(Default)/Logo.svg",
-  "wallet connect": "https://raw.githubusercontent.com/WalletConnect/walletconnect-assets/master/Logo/Blue%20(Default)/Logo.svg",
-  rabby: "https://rabby.io/assets/images/logo-128.png",
-  phantom: "https://phantom.imgix.net/logo.png",
-  trust: "https://trustwallet.com/assets/images/media/assets/TWT.png",
-  "trust wallet": "https://trustwallet.com/assets/images/media/assets/TWT.png",
-};
+import { getWalletProviderLogoUrl } from "@/config/walletProviderLogos";
 
 function getWalletLogoUrl(w: WalletListItem): string {
   if (w.logo_url) return w.logo_url;
-  const key = (w.provider || "").toLowerCase().trim();
-  return PROVIDER_LOGOS[key] ?? WALLET_ICON_FALLBACK;
+  return getWalletProviderLogoUrl(w.provider);
+}
+
+function formatWalletAddress(address: string, chainFamily?: string): string {
+  if (chainFamily === "solana") {
+    return `${address.slice(0, 4)}…${address.slice(-4)}`;
+  }
+  return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
 
 function formatWalletDate(iso: string): string {
@@ -176,29 +169,47 @@ function SettingsPageContent() {
   };
 
   useEffect(() => {
-    if (!address) {
+    const userId = dashboardUser?.user_id?.trim();
+    if (!userId && !address) {
       setConnectedWallets([]);
       return;
     }
     setConnectedWalletsLoading(true);
-    getWalletsForAddress(address)
+    getConnectedWallets({
+      userId: userId || undefined,
+      forAddress: !userId ? address ?? undefined : undefined,
+      perPage: 50,
+    })
       .then((res) => setConnectedWallets(res?.data ?? []))
       .finally(() => setConnectedWalletsLoading(false));
-  }, [address]);
+  }, [address, dashboardUser?.user_id]);
 
   const refreshConnectedWallets = useCallback(async () => {
-    if (!address) {
+    const userId = dashboardUser?.user_id?.trim();
+    if (!userId && !address) {
       setConnectedWallets([]);
       return;
     }
     setConnectedWalletsLoading(true);
     try {
-      const res = await getWalletsForAddress(address);
+      const res = await getConnectedWallets({
+        userId: userId || undefined,
+        forAddress: !userId ? address ?? undefined : undefined,
+        perPage: 50,
+      });
       setConnectedWallets(res?.data ?? []);
     } finally {
       setConnectedWalletsLoading(false);
     }
-  }, [address]);
+  }, [address, dashboardUser?.user_id]);
+
+  useEffect(() => {
+    const onWalletsUpdated = () => {
+      void refreshConnectedWallets();
+    };
+    window.addEventListener('senseifi:wallets-updated', onWalletsUpdated);
+    return () => window.removeEventListener('senseifi:wallets-updated', onWalletsUpdated);
+  }, [refreshConnectedWallets]);
 
   const handleRemoveWalletClick = (wallet: WalletListItem) => {
     setWalletToRemove(wallet);
@@ -349,16 +360,18 @@ function SettingsPageContent() {
       <div className="space-y-3 lg:space-y-4">
         <div className="flex items-center justify-between gap-3">
           <h3 className="text-base font-semibold text-white">Connected wallets</h3>
-          <button
-            type="button"
-            onClick={() => connectNetworksModal?.openConnectNetworksModal()}
-            className="text-sm font-medium text-slate-500 hover:text-slate-300 transition shrink-0 lg:rounded-lg lg:border lg:border-slate-600/60 lg:px-3 lg:py-2 lg:text-slate-300 lg:hover:bg-slate-800/50"
-          >
-            <span className="lg:hidden">+ Add wallets</span>
-            <span className="hidden lg:inline">+ Add networks</span>
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => connectNetworksModal?.openConnectNetworksModal()}
+              className="text-sm font-medium text-slate-500 hover:text-slate-300 transition lg:rounded-lg lg:border lg:border-slate-600/60 lg:px-3 lg:py-2 lg:text-slate-300 lg:hover:bg-slate-800/50"
+            >
+              <span className="lg:hidden">Networks</span>
+              <span className="hidden lg:inline">Manage networks</span>
+            </button>
+          </div>
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 lg:gap-4">
           {connectedWalletsLoading ? (
             <p className="col-span-full text-slate-400 text-sm py-4">Loading connected wallets…</p>
           ) : connectedWallets.length === 0 ? (
@@ -370,20 +383,22 @@ function SettingsPageContent() {
                 className="rounded-xl p-4 flex flex-col lg:border lg:border-slate-700/60"
                 style={{ backgroundColor: CARD_BG }}
               >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-3 min-w-0">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
                     <span className="w-11 h-11 lg:w-12 lg:h-12 rounded-full bg-[#4a4d5c] lg:bg-slate-600/60 shrink-0 flex items-center justify-center overflow-hidden p-1.5 lg:p-1">
                       <img src={getWalletLogoUrl(w)} alt="" referrerPolicy="no-referrer" className="w-full h-full object-contain" />
                     </span>
-                    <div className="min-w-0">
-                      <p className="font-semibold lg:font-medium text-white capitalize">{w.provider || "Wallet"}</p>
-                      <p className="text-sm text-slate-500 capitalize lg:normal-case lg:font-mono lg:truncate lg:max-w-[120px]">
-                        <span className="lg:hidden">{w.provider || "Wallet"}</span>
-                        <span className="hidden lg:inline">{w.address.slice(0, 6)}…{w.address.slice(-4)}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold lg:font-medium text-white capitalize truncate">{w.provider || "Wallet"}</p>
+                      <p className="text-sm text-slate-500 truncate">
+                        {w.network_label || w.currency || (w.chain_family === "solana" ? "Solana" : "EVM")}
+                      </p>
+                      <p className="text-xs text-slate-600 font-mono truncate hidden lg:block">
+                        {formatWalletAddress(w.address, w.chain_family)}
                       </p>
                     </div>
                   </div>
-                  <span className="text-sm text-slate-500 shrink-0">{formatWalletDate(w.connected_at)}</span>
+                  <span className="text-sm text-slate-500 shrink-0 sm:text-right">{formatWalletDate(w.connected_at)}</span>
                 </div>
                 <div className="flex gap-2 mt-4">
                   <button
@@ -416,7 +431,7 @@ function SettingsPageContent() {
             + Add Dapps
           </button>
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 lg:gap-4">
           {connectedDappsLoading ? (
             <p className="col-span-full text-slate-400 text-sm py-4">Loading connected dApps…</p>
           ) : connectedDapps.length === 0 ? (
@@ -428,12 +443,12 @@ function SettingsPageContent() {
                   className="rounded-xl p-4 flex flex-col lg:border lg:border-slate-700/60"
                   style={{ backgroundColor: CARD_BG }}
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
                       <span className="w-11 h-11 lg:w-12 lg:h-12 rounded-full bg-[#4a4d5c] lg:bg-slate-600/60 shrink-0 flex items-center justify-center text-white font-semibold text-lg">
                         {d.dapp_name?.charAt(0) ?? "?"}
                       </span>
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <p className="font-semibold lg:font-medium text-white truncate">{d.dapp_name}</p>
                         <p className="text-sm text-slate-500 truncate">
                           <span className="lg:hidden">{d.description || d.dapp_name}</span>
@@ -441,7 +456,7 @@ function SettingsPageContent() {
                         </p>
                       </div>
                     </div>
-                    <span className="text-sm text-slate-500 shrink-0">{d.last_activity || "—"}</span>
+                    <span className="text-sm text-slate-500 shrink-0 sm:text-right">{d.last_activity || "—"}</span>
                   </div>
                   <div className="flex gap-2 mt-4">
                     <button
@@ -563,8 +578,8 @@ function SettingsPageContent() {
   );
 
   return (
-    <div className="flex flex-col lg:flex-row min-h-0 flex-1 min-h-full lg:rounded-2xl lg:overflow-hidden lg:border lg:border-slate-800/50 lg:shadow-xl -mx-6 -mt-6 lg:mx-0 lg:mt-0" style={{ backgroundColor: SETTINGS_BG }}>
-      <aside className="hidden lg:flex flex-col w-[32rem] shrink-0 border-b lg:border-b-0 border-slate-700/50 lg:relative p-4 lg:min-h-full" style={{ backgroundColor: SETTINGS_BG }}>
+    <div className="flex flex-col xl:flex-row min-h-0 flex-1 min-h-full xl:rounded-2xl xl:overflow-hidden xl:border xl:border-slate-800/50 xl:shadow-xl -mx-4 sm:-mx-6 -mt-4 sm:-mt-6 xl:mx-0 xl:mt-0" style={{ backgroundColor: SETTINGS_BG }}>
+      <aside className="hidden xl:flex flex-col w-64 2xl:w-72 shrink-0 border-b xl:border-b-0 border-slate-700/50 xl:relative p-4 xl:min-h-full" style={{ backgroundColor: SETTINGS_BG }}>
         <GuardSettingsSubmenu
           variant="sidebar"
           activeSection={section}
@@ -574,10 +589,33 @@ function SettingsPageContent() {
       </aside>
 
       {/* Right content */}
-      <div className="flex-1 min-w-0 min-h-full overflow-auto px-4 pb-6 pt-2 lg:p-6 flex flex-col" style={{ backgroundColor: SETTINGS_BG }}>
+      <div className="flex-1 min-w-0 min-h-full overflow-auto px-4 pb-6 pt-2 xl:p-6 flex flex-col" style={{ backgroundColor: SETTINGS_BG }}>
+        <nav
+          className="xl:hidden flex gap-2 overflow-x-auto pb-4 -mx-1 px-1 hide-scrollbar shrink-0"
+          aria-label="Settings sections"
+        >
+          {SETTINGS_NAV_ITEMS.map((item) => {
+            const active = section === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setSection(item.id)}
+                className={`shrink-0 flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition whitespace-nowrap ${
+                  active
+                    ? "bg-[#1e2032] text-white border border-slate-600/60"
+                    : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/40"
+                }`}
+              >
+                {item.icon(active)}
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
+        </nav>
         {section === "profile" && (
           <div
-            className="lg:max-w-5xl lg:rounded-xl lg:border lg:border-slate-700/60 lg:overflow-hidden lg:p-6 lg:bg-[#242636]"
+            className="xl:max-w-5xl xl:rounded-xl xl:border xl:border-slate-700/60 xl:overflow-hidden xl:p-6 xl:bg-[#242636]"
             style={{ backgroundColor: SETTINGS_BG }}
           >
             {profileContent}
@@ -586,7 +624,7 @@ function SettingsPageContent() {
 
         {section === "security" && (
           <>
-            <div className="lg:hidden space-y-6" style={{ backgroundColor: SETTINGS_BG }}>
+            <div className="xl:hidden space-y-6" style={{ backgroundColor: SETTINGS_BG }}>
               <div className="flex items-center gap-2">
                 {sectionIcon("security")}
                 <h2 className="text-lg font-semibold text-white">Security Preferences</h2>
@@ -594,7 +632,7 @@ function SettingsPageContent() {
               {securitySections}
             </div>
 
-            <div className="hidden lg:block w-full max-w-5xl">
+            <div className="hidden xl:block w-full max-w-5xl">
               <div
                 className="rounded-2xl border border-slate-700/60 overflow-hidden shadow-[0_16px_40px_rgba(0,0,0,0.45)]"
                 style={{ background: "linear-gradient(180deg, rgba(20,24,45,0.98) 0%, rgba(17,21,40,0.98) 100%)" }}
@@ -631,8 +669,8 @@ function SettingsPageContent() {
                 <h2 className="text-white text-base md:text-lg font-semibold">Subscription & Billing</h2>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 w-full">
-                <div className="bg-[#181C23] rounded-xl flex flex-col w-full min-h-[560px] shadow-lg">
+              <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4 w-full">
+                <div className="bg-[#181C23] rounded-xl flex flex-col w-full min-h-0 md:min-h-[480px] shadow-lg">
                   <div className="flex items-center justify-between mb-0 p-8 pb-0">
                     <span className="text-lg font-semibold">PRO PLAN</span>
                     <img src="/images/icons/pro.png" alt="Pro" className="w-16 h-16" />
@@ -665,7 +703,7 @@ function SettingsPageContent() {
                   </div>
                 </div>
 
-                <div className="bg-[#181C23] rounded-xl flex flex-col w-full min-h-[560px] shadow-lg border-2 border-blue-600">
+                <div className="bg-[#181C23] rounded-xl flex flex-col w-full min-h-0 md:min-h-[480px] shadow-lg border-2 border-blue-600">
                   <div className="flex items-center justify-between mb-0 p-8 pb-0">
                     <span className="text-lg font-semibold">PRO+ PLAN <span className="text-xs text-blue-400 ml-2">(Recommended)</span></span>
                     <img src="/images/icons/proplus.png" alt="Pro+" className="w-16 h-16" />
@@ -701,7 +739,7 @@ function SettingsPageContent() {
                   </div>
                 </div>
 
-                <div className="bg-[#181C23] rounded-xl flex flex-col w-full min-h-[560px] shadow-lg">
+                <div className="bg-[#181C23] rounded-xl flex flex-col w-full min-h-0 md:min-h-[480px] shadow-lg">
                   <div className="flex items-center justify-between mb-0 p-8 pb-0">
                     <span className="text-lg font-semibold">PREMIUM PLAN</span>
                     <img src="/images/icons/premium.png" alt="Premium" className="w-16 h-16" />
@@ -749,13 +787,13 @@ function SettingsPageContent() {
                   </span>
                   <h3 className="text-white text-base md:text-lg font-semibold">Billing History</h3>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="relative">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+                  <div className="relative flex-1 min-w-0">
                     <input
                       value={billingSearch}
                       onChange={(e) => setBillingSearch(e.target.value)}
                       placeholder="Search"
-                      className="w-44 sm:w-56 rounded-lg border border-slate-700/70 bg-[#1d223a] py-2 pl-9 pr-3 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-[#4066FF]"
+                      className="w-full sm:w-44 md:w-56 rounded-lg border border-slate-700/70 bg-[#1d223a] py-2 pl-9 pr-3 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-[#4066FF]"
                     />
                     <svg className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M11 18a7 7 0 100-14 7 7 0 000 14z" />
@@ -764,7 +802,7 @@ function SettingsPageContent() {
                   <select
                     value={billingStatus}
                     onChange={(e) => setBillingStatus(e.target.value)}
-                    className="rounded-lg border border-slate-700/70 bg-[#1d223a] py-2 px-3 text-sm text-slate-200 focus:outline-none focus:ring-1 focus:ring-[#4066FF]"
+                    className="w-full sm:w-auto rounded-lg border border-slate-700/70 bg-[#1d223a] py-2 px-3 text-sm text-slate-200 focus:outline-none focus:ring-1 focus:ring-[#4066FF]"
                     aria-label="Filter billing status"
                   >
                     <option value="confirmed">Confirmed</option>
@@ -775,8 +813,56 @@ function SettingsPageContent() {
                 </div>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[760px] text-sm">
+              <div className="md:hidden space-y-3">
+                {billingLoading ? (
+                  <p className="text-slate-400 text-sm py-4">Loading billing history…</p>
+                ) : billingError ? (
+                  <p className="text-red-400 text-sm py-4">{billingError}</p>
+                ) : billingRows.length === 0 ? (
+                  <p className="text-slate-400 text-sm py-4">No billing history found.</p>
+                ) : billingRows.map((row) => (
+                  <div key={row.id} className="rounded-xl border border-slate-700/60 bg-[#1a1d2e] p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="text-white font-medium">{row.planName}</p>
+                      <span className={row.status.toLowerCase() === "confirmed" || row.status.toLowerCase() === "completed" ? "text-[#32BB1D]" : row.status.toLowerCase() === "pending" ? "text-amber-500" : "text-[#F00500]"}>
+                        {row.status}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <p className="text-slate-500 text-xs">Amount</p>
+                        <p className="text-slate-300">{row.amount}</p>
+                      </div>
+                      <div>
+                        <p className="text-slate-500 text-xs">Purchase date</p>
+                        <p className="text-slate-300">{row.purchaseDate}</p>
+                      </div>
+                      <div>
+                        <p className="text-slate-500 text-xs">End date</p>
+                        <p className="text-slate-300">{row.endDate}</p>
+                      </div>
+                      <div className="flex items-end justify-end">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (row.invoiceUrl) window.open(row.invoiceUrl, "_blank", "noopener,noreferrer");
+                          }}
+                          disabled={!row.invoiceUrl}
+                          className="flex items-center justify-center w-8 h-8 rounded-md text-slate-200 hover:text-white hover:bg-slate-800/80 transition disabled:opacity-40"
+                          aria-label={`Download ${row.planName} invoice`}
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1M8 12l4 4m0 0l4-4m-4 4V4" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-sm">
                   <thead>
                     <tr className="text-left text-slate-300 bg-[#0F1426]">
                       <th className="py-3 px-4 rounded-l-lg font-medium">Plan name</th>
@@ -855,13 +941,13 @@ function SettingsPageContent() {
         )}
 
         {section === "support" && (
-          <div className="flex w-full flex-1 flex-col min-h-0 -mx-4 -mt-2 -mb-6 lg:mx-0 lg:mt-0 lg:mb-0">
+          <div className="flex w-full flex-1 flex-col min-h-0 -mx-4 -mt-2 -mb-6 xl:mx-0 xl:mt-0 xl:mb-0">
             <SupportFeedbackSection />
           </div>
         )}
 
         {section === "terms" && (
-          <div className="flex w-full flex-1 flex-col min-h-0 -mx-4 -mt-2 -mb-6 lg:mx-0 lg:mt-0 lg:mb-0">
+          <div className="flex w-full flex-1 flex-col min-h-0 -mx-4 -mt-2 -mb-6 xl:mx-0 xl:mt-0 xl:mb-0">
             <TermsPrivacySection />
           </div>
         )}

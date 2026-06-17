@@ -2,7 +2,7 @@
 
 SenseiGuard extension for real-time wallet protection. The current runtime now includes:
 
-- A popup UX for onboarding + wallet connection
+- A side panel UX for onboarding + wallet connection (opens beside the page when you click the toolbar icon)
 - A background service worker as the security coordinator
 - A content script + in-page provider hook to intercept signing/transaction methods
 - Policy enforcement, alerting, domain monitoring, and telemetry queueing
@@ -16,15 +16,12 @@ SenseiGuard extension for real-time wallet protection. The current runtime now i
 
 ## Runtime architecture
 
-- **Popup (`popup.html`, `popup.js`):** onboarding flow and wallet connect controls, current protection toggle, latest alert snapshot.
+- **Side panel (`popup.html`, `popup.js`):** onboarding flow and wallet connect controls, current protection toggle, latest alert snapshot. Opens in Chrome’s side panel (not a dropdown popup).
 - **Background (`background.js`):** central brain for message routing, tx risk decisions, domain risk checks, policy logic, state/session, notifications, and telemetry.
 - **Content script (`content-script.js`):** bridge between page context and background worker.
-- **In-page hook (`inpage-hook.js`):** wraps `ethereum.request` for:
-  - `eth_sendTransaction`
-  - `eth_sign`
-  - `eth_signTypedData`
-  - `eth_signTypedData_v3`
-  - `eth_signTypedData_v4`
+- **Chain family registry (`lib/chain-families.js`):** shared routing for EVM + non-EVM wallets. Add new families here and ship a matching in-page hook.
+- **EVM hook (`inpage-hook.js`):** wraps `ethereum.request` for EIP-1193 methods (`eth_requestAccounts`, `eth_sendTransaction`, signing methods, etc.).
+- **Solana hook (`solana-hook.js`):** wraps Phantom-style `window.solana` providers and Wallet Standard wallets for `connect`, `signTransaction`, `signMessage`, etc. Works on any Solana dApp, not a single site allowlist.
 
 ## Branding
 
@@ -41,7 +38,9 @@ SenseiGuard extension for real-time wallet protection. The current runtime now i
 - **Host permissions:** required — SenseiFi API origin (`https://senseifi-backend.onrender.com/*`) for risk APIs, telemetry, threat feed, wallet connect. **Optional** — `http://*/*` and `https://*/*` (user-granted via popup “Allow site protection” or when connecting a wallet) so content scripts and `scripting` injection can run on dApp pages.
 - **Chrome Web Store copy:** see **`CHROME_WEB_STORE_LISTING.md`** (single purpose, host justification, permission blurbs).
 - **`wallet-connect.js`** runs `eth_requestAccounts` in the **active tab’s MAIN world** (wallets inject on web pages, not in the popup), then notifies background with `SENSEIGUARD_REGISTER_WALLET`.
-- **Usage:** Focus a normal **`https://`** tab → open the popup → **Connect** (pick MetaMask or Coinbase, or use the main button after a row sets the provider). Approve in the wallet.
+- **Web ↔ extension session sync:** any SenseiFi page (`senseifi.io`, `localhost`) broadcasts wallet connect/disconnect to the extension content script. Opening the side panel also requests a sync from the active SenseiFi tab.
+- **WalletConnect (Trust, Rabby, MetaMask, 300+ wallets):** opens the same web app page as **`/connect-wallet?extension=1`** (Reown AppKit). When the user connects there, the content script relays the session back to the extension. Configure **`WALLET_CONNECT_BRIDGE_URL`** in **`config.js`** (default `https://senseifi.io/connect-wallet`; for local dev use `http://localhost:3000/connect-wallet`).
+- **Usage:** Focus a normal **`https://`** tab → open the side panel → **Connect** via WalletConnect. Approve in your wallet or complete pairing on the SenseiFi tab.
 - Response is stored under **`chrome.storage.local`** key **`senseiguard_wallet_connect`**.
 
 ## Decision flow (high level)

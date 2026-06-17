@@ -76,6 +76,8 @@ const nextConfig = {
     config.resolve.alias = {
       ...config.resolve.alias,
       '@react-native-async-storage/async-storage': path.resolve(__dirname, 'lib/stubs/async-storage-web.js'),
+      // WalletConnect/Reown resolve uint8arrays from nested node_modules; npm hoists it to root.
+      uint8arrays: path.resolve(__dirname, 'node_modules/uint8arrays'),
     };
     config.module.rules.unshift({
       test: /\.svg$/,

@@ -108,7 +108,7 @@ export default function Header({ hideGetStarted }: HeaderProps) {
                 prefetch
                 className="hidden md:inline-flex flex-none mr-0 md:mr-0 lg:mr-4 xl:mr-40 bg-gradient-radial from-[#0026FF] to-blue-400 hover:from-[#0026FF] hover:to-blue-500 text-white px-6 lg:px-8 py-2.5 lg:py-3 rounded-2xl font-medium transition shadow-lg border-2 border-white items-center justify-center"
               >
-                Get started
+                Connect Wallet
               </Link>
             )
           )}
@@ -187,7 +187,7 @@ export default function Header({ hideGetStarted }: HeaderProps) {
                 prefetch
                 className="w-auto px-6 bg-gradient-radial from-[#0026FF] to-blue-400 hover:from-[#0026FF] hover:to-blue-500 text-white py-3 rounded-2xl font-medium transition shadow-lg border-2 border-white whitespace-nowrap flex items-center justify-center"
               >
-                Get started
+                Connect Wallet
               </Link>
             )}
           </div>

@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import type { DashboardUser } from "@/services/walletService";
+import { isWalletSessionRevoked } from "@/utils/walletSession";
 
 type DashboardUserContextValue = {
   dashboardUser: DashboardUser | null;
@@ -16,6 +17,7 @@ export function DashboardUserProvider({ children }: { children: React.ReactNode 
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    if (isWalletSessionRevoked()) return;
     try {
       const raw = window.localStorage.getItem(DASHBOARD_USER_STORAGE_KEY);
       if (!raw) return;

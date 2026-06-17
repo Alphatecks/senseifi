@@ -2,9 +2,11 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import MarketingNavLink from "@/views/marketing/MarketingNavLink";
 import subtractShape from "@/assets/images/Subtract.png";
 import WhyTrustSection from "./WhyTrustSection";
 import CenteredAppDownload from "./CenteredAppDownload";
+import TransparentVideo from "./components/TransparentVideo";
 
 const IMPACT_STATS = [
   { value: "12,000+", label: "Wallets Protected" },
@@ -102,13 +104,107 @@ const CORE_VALUES = [
   },
 ] as const;
 
+const PARTNER_LOGOS = [
+  { src: "/images/id9jl1arwx_logos 1.png", alt: "Phantom", className: "h-7 w-auto object-contain" },
+  { src: "/images/idR3970tUM_1775665826564 1.png", alt: "Coinbase", className: "h-7 w-auto object-contain" },
+  { src: "/images/g18.png", alt: "Binance", className: "h-7 w-auto object-contain" },
+  { src: "/images/Group.png", alt: "WalletConnect Pay", className: "h-6 w-auto object-contain" },
+  { src: "/images/MetaMask-logo-white 1.png", alt: "MetaMask", className: "h-7 w-auto object-contain" },
+] as const;
+
+function MobilePartnerMarquee() {
+  return (
+    <div className="logo-marquee-track flex items-center gap-x-10 whitespace-nowrap">
+      {PARTNER_LOGOS.map((logo) => (
+        <img key={logo.src} src={logo.src} alt={logo.alt} className={logo.className} />
+      ))}
+      {PARTNER_LOGOS.map((logo) => (
+        <img key={`${logo.src}-dup`} src={logo.src} alt="" aria-hidden="true" className={logo.className} />
+      ))}
+    </div>
+  );
+}
+
 export default function AboutScreen() {
   return (
     <main className="w-full bg-[#0a0a1a] text-white pt-32 md:pt-36 pb-0">
       <section className="w-full px-4 md:px-8 lg:px-12 xl:px-20">
         <div className="w-full max-w-7xl mx-auto">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-6 items-center">
-            <div className="order-2 lg:order-1">
+          {/* Mobile hero */}
+          <div className="relative block overflow-hidden md:hidden">
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-[28rem]" aria-hidden="true">
+              <div className="absolute inset-0 starfield opacity-80" />
+              <div className="absolute -right-16 -top-12 h-[24rem] w-[24rem] bg-[radial-gradient(circle_at_center,_rgba(0,38,255,0.55),_rgba(0,38,255,0)_70%)] blur-3xl" />
+              <div
+                className="absolute right-0 top-0 h-[18rem] w-[18rem] opacity-30"
+                style={{
+                  backgroundImage:
+                    "linear-gradient(rgba(255,255,255,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.06) 1px, transparent 1px)",
+                  backgroundSize: "36px 36px",
+                  maskImage: "radial-gradient(circle at top right, black 20%, transparent 72%)",
+                  WebkitMaskImage: "radial-gradient(circle at top right, black 20%, transparent 72%)",
+                }}
+              />
+              <div className="absolute inset-0 bg-gradient-to-b from-[#0a0a1a] via-transparent to-[#0a0a1a]" />
+            </div>
+
+            <div className="relative z-10 flex flex-col items-center px-2 pt-2 text-center">
+              <span className="mb-5 inline-flex items-center rounded-full border border-[#0026FF] px-4 py-1 text-sm text-[#5B7CFF]">
+                About Us
+              </span>
+              <h1 className="max-w-[20rem] text-[2rem] font-normal leading-[1.15] tracking-tight">
+                Making Crypto
+                <br />
+                Management Clear,
+                <br />
+                Secure, and Effortless
+              </h1>
+              <p className="mt-5 max-w-[19rem] text-sm leading-relaxed text-white/80">
+                We combine advanced AI, real-time protection, and seamless financial tools to simplify
+                how you manage digital assets.
+              </p>
+              <div className="mt-7 flex w-full max-w-[20rem] items-center justify-center gap-2.5">
+                <Link
+                  href="/connect-wallet"
+                  className="inline-flex flex-1 items-center justify-center rounded-xl border-2 border-white/20 bg-[#0026FF] px-4 py-2.5 text-sm font-medium"
+                >
+                  Sign up
+                </Link>
+                <MarketingNavLink
+                  href="/features"
+                  className="inline-flex flex-1 items-center justify-center rounded-xl border-2 border-white/20 bg-transparent px-3 py-2.5 text-sm"
+                >
+                  Explore Products <span className="ml-1 text-base">›</span>
+                </MarketingNavLink>
+              </div>
+            </div>
+
+            <div className="relative z-0 -mx-4 mt-6 h-[150px] overflow-hidden [mask-image:linear-gradient(to_bottom,#000_55%,transparent_100%)] [-webkit-mask-image:linear-gradient(to_bottom,#000_55%,transparent_100%)]">
+              <TransparentVideo
+                src="/images/About%20header%20gif.mp4"
+                className="absolute inset-x-0 top-0 h-[300px] w-full"
+                threshold={42}
+                scale={1.25}
+                align="top"
+              />
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-x-0 bottom-0 h-16 backdrop-blur-[8px] [mask-image:linear-gradient(to_top,#000_15%,transparent_100%)] [-webkit-mask-image:linear-gradient(to_top,#000_15%,transparent_100%)]"
+              />
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-[#0a0a1a] via-[#0a0a1a]/60 to-transparent"
+              />
+            </div>
+
+            <div className="relative z-10 mt-2 w-full overflow-hidden pb-2">
+              <MobilePartnerMarquee />
+            </div>
+          </div>
+
+          {/* Desktop hero */}
+          <div className="hidden md:grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-6 items-center">
+            <div>
               <span className="inline-flex items-center rounded-full border border-[#0026FF] px-4 py-1 text-sm text-white mb-6">
                 About Us
               </span>
@@ -130,13 +226,16 @@ export default function AboutScreen() {
                 >
                   Sign up
                 </Link>
-                <button className="inline-flex items-center rounded-xl border-2 border-white/20 bg-white/10 px-6 py-3 text-sm md:text-base">
+                <MarketingNavLink
+                  href="/features"
+                  className="inline-flex items-center rounded-xl border-2 border-white/20 bg-white/10 px-6 py-3 text-sm md:text-base"
+                >
                   Explore Products <span className="ml-2 text-lg">›</span>
-                </button>
+                </MarketingNavLink>
               </div>
             </div>
 
-            <div className="order-1 lg:order-2 relative">
+            <div className="relative">
               <div className="overflow-hidden">
                 <video
                   src="/images/About%20header%20gif.mp4"
@@ -145,30 +244,14 @@ export default function AboutScreen() {
                   muted
                   playsInline
                   preload="metadata"
-                  className="w-full h-[280px] md:h-[420px] lg:h-[500px] object-contain mix-blend-screen contrast-125 brightness-110"
+                  className="w-full h-[420px] lg:h-[500px] object-contain mix-blend-screen contrast-125 brightness-110"
                 />
               </div>
             </div>
           </div>
 
-          <div className="w-full mt-10 md:mt-12">
-            <div className="block md:hidden w-full overflow-hidden">
-              <div className="logo-marquee-track flex items-center gap-x-10 whitespace-nowrap">
-                <img src="/images/id9jl1arwx_logos 1.png" alt="Phantom" className="h-7 w-auto object-contain" />
-                <img src="/images/idR3970tUM_1775665826564 1.png" alt="Coinbase" className="h-7 w-auto object-contain" />
-                <img src="/images/g18.png" alt="Binance" className="h-7 w-auto object-contain" />
-                <img src="/images/Group.png" alt="WalletConnect Pay" className="h-6 w-auto object-contain" />
-                <img src="/images/MetaMask-logo-white 1.png" alt="MetaMask" className="h-7 w-auto object-contain" />
-
-                <img src="/images/id9jl1arwx_logos 1.png" alt="" aria-hidden="true" className="h-7 w-auto object-contain" />
-                <img src="/images/idR3970tUM_1775665826564 1.png" alt="" aria-hidden="true" className="h-7 w-auto object-contain" />
-                <img src="/images/g18.png" alt="" aria-hidden="true" className="h-7 w-auto object-contain" />
-                <img src="/images/Group.png" alt="" aria-hidden="true" className="h-6 w-auto object-contain" />
-                <img src="/images/MetaMask-logo-white 1.png" alt="" aria-hidden="true" className="h-7 w-auto object-contain" />
-              </div>
-            </div>
-
-            <div className="hidden md:flex flex-nowrap items-center justify-center gap-x-10 text-white whitespace-nowrap">
+          <div className="hidden md:block w-full mt-10 md:mt-12">
+            <div className="flex flex-nowrap items-center justify-center gap-x-10 text-white whitespace-nowrap">
               <img src="/images/id9jl1arwx_logos 1.png" alt="Phantom" className="h-10 w-auto object-contain" />
               <img src="/images/idR3970tUM_1775665826564 1.png" alt="Coinbase" className="h-10 w-auto object-contain" />
               <img src="/images/g18.png" alt="Binance" className="h-10 w-auto object-contain" />

@@ -25,6 +25,13 @@ import type {
   ContractLiquidityData,
   ContractCommunitySignalsData,
 } from "@/services/dashboardService";
+import {
+  formatContractScanNetworkLabel,
+  normalizeContractAddressForCompare,
+  parseContractScanInput,
+  type ParsedContractScanTarget,
+  type SolanaNetwork,
+} from "@/utils/contractScan";
 
 import trendUpIcon from "@/assets/icons/trend-up.png";
 
@@ -63,7 +70,7 @@ function shortAddress(addr: string): string {
 }
 
 function normalizeAddress(addr: string | null | undefined): string {
-  return (addr ?? "").trim().toLowerCase();
+  return normalizeContractAddressForCompare(addr);
 }
 
 function addressesMatch(a: string | null | undefined, b: string | null | undefined): boolean {
@@ -491,7 +498,9 @@ export default function ContractScannerPage() {
   const contractScanXpBlocked = !canAffordContractScan(Boolean(address?.trim()));
   const [contractLink, setContractLink] = useState("");
   const [chainIdInput, setChainIdInput] = useState("");
+  const [solanaNetwork, setSolanaNetwork] = useState<SolanaNetwork>("mainnet-beta");
   const [lastScanChainId, setLastScanChainId] = useState<number>(1);
+  const [lastScanTarget, setLastScanTarget] = useState<ParsedContractScanTarget | null>(null);
   const [scanLoading, setScanLoading] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
   const [currentScan, setCurrentScan] = useState<ScanContractResult | null>(null);
@@ -540,15 +549,19 @@ export default function ContractScannerPage() {
     getContractCommunitySignals(contractAddress).then(setCommunitySignals);
   }, []);
 
+  const parsedScanTarget = parseContractScanInput(contractLink);
+  const isSolanaScanTarget = parsedScanTarget?.chainFamily === "solana";
   const chainIdParsed = chainIdInput.trim() === "" ? null : parseInt(chainIdInput.trim(), 10);
   const chainIdValid = chainIdParsed != null && !Number.isNaN(chainIdParsed) && chainIdParsed > 0;
-  const scanDisabled = scanLoading || !contractLink.trim() || contractScanXpBlocked;
-  const scanDisabledDesktop = scanDisabled || !chainIdValid;
+  const scanDisabled = scanLoading || !contractLink.trim() || contractScanXpBlocked || !parsedScanTarget;
+  const scanDisabledDesktop = scanDisabled;
 
   const handleScan = async () => {
-    const addr = contractLink.trim();
-    const cid = chainIdValid ? chainIdParsed! : 1;
-    if (!addr || !cid) return;
+    const target = parseContractScanInput(contractLink.trim());
+    if (!target) {
+      setScanError("Enter a valid EVM or Solana contract address, or an explorer link.");
+      return;
+    }
     if (contractScanXpBlocked) {
       setScanError(`Insufficient XP balance (need ${contractScanCost} XP to scan contracts).`);
       return;
@@ -556,7 +569,8 @@ export default function ContractScannerPage() {
     setScanLoading(true);
     setScanError(null);
     setSelectedHistoryItem(null);
-    setLastScanChainId(cid);
+    setLastScanTarget(target);
+    setLastScanChainId(target.chainFamily === "evm" ? (chainIdValid ? chainIdParsed! : target.chainId ?? 1) : 101);
     setCurrentScan(null);
     setScanDetails(null);
     setScamPattern(null);
@@ -564,7 +578,11 @@ export default function ContractScannerPage() {
     setLiquidity(null);
     setCommunitySignals(null);
     try {
-      const result = await scanContract(addr, address ?? undefined, cid);
+      const result = await scanContract(contractLink.trim(), address ?? undefined, {
+        chainId: chainIdValid ? chainIdParsed! : target.chainId,
+        chainFamily: target.chainFamily,
+        network: target.chainFamily === "solana" ? solanaNetwork : undefined,
+      });
       if (result?.scan_id && result?.contract_address) {
         setCurrentScan(result);
         setMobileDetailsOpen(true);
@@ -587,14 +605,20 @@ export default function ContractScannerPage() {
 
   const loadContractScanResult = useCallback(
     async (contractAddr: string, chainId = 1) => {
+      const target = parseContractScanInput(contractAddr);
       const cached = await getLatestContractScan(contractAddr, address ?? undefined);
       if (cached?.scan_id && cached.contract_address) {
         setCurrentScan(cached);
+        setLastScanTarget(target);
         fetchContractDetails(cached.scan_id, cached.contract_address);
         return true;
       }
       if (contractScanXpBlocked) return false;
-      const result = await scanContract(contractAddr, address ?? undefined, chainId);
+      const result = await scanContract(contractAddr, address ?? undefined, {
+        chainId: target?.chainFamily === "evm" ? chainId : undefined,
+        chainFamily: target?.chainFamily,
+        network: target?.chainFamily === "solana" ? solanaNetwork : undefined,
+      });
       if (result?.scan_id && result?.contract_address) {
         setCurrentScan(result);
         fetchContractDetails(result.scan_id, result.contract_address);
@@ -603,7 +627,7 @@ export default function ContractScannerPage() {
       }
       return false;
     },
-    [address, contractScanXpBlocked, fetchContractDetails, refreshWaitlistXp]
+    [address, contractScanXpBlocked, fetchContractDetails, refreshWaitlistXp, solanaNetwork]
   );
 
   const handleSelectHistoryItem = async (item: RiskProfileCachedContract) => {
@@ -663,10 +687,17 @@ export default function ContractScannerPage() {
   const keyRiskFlagsList: string[] = [];
   if (ownerPrivileges?.pause) keyRiskFlagsList.push("Owner can pause all token transfers");
   if (currentScan && currentScan.critical_risk_flags > 0) keyRiskFlagsList.push("Critical risk flags detected");
+  if (Array.isArray(details?.goplus_risk_flags)) {
+    details.goplus_risk_flags.slice(0, 3).forEach((flag) => keyRiskFlagsList.push(flag));
+  }
   if (ownerPrivileges && !keyRiskFlagsList.length) keyRiskFlagsList.push("Ownership has not been renounced");
   const positiveSignalsList: string[] = [];
-  if (details?.reputation?.verified_source) positiveSignalsList.push("Source code verified on Etherscan");
+  if (details?.reputation?.verified_source) positiveSignalsList.push("Source code verified on explorer");
   if (details?.reputation && !details.reputation.reported_scam) positiveSignalsList.push("No critical vulnerabilities in last audit");
+  if (currentScan?.detected_standard) positiveSignalsList.push(`Detected standard: ${currentScan.detected_standard}`);
+  if (Array.isArray(details?.goplus_risk_flags) && !details.goplus_risk_flags.length && (currentScan?.trust_score ?? 0) >= 70) {
+    positiveSignalsList.push("No GoPlus risk flags reported");
+  }
   const riskDistributionList = riskBreakdown
     ? [
         { label: "Simulation", value: riskBreakdown.simulation ?? 0 },
@@ -677,9 +708,23 @@ export default function ContractScannerPage() {
     : [];
   const maxRiskVal = Math.max(10, ...riskDistributionList.map((r) => r.value));
   const chainIdForDisplay = currentScan ? lastScanChainId : (chainIdValid ? chainIdParsed! : 1);
-  const networkName = CHAIN_ID_TO_NETWORK[chainIdForDisplay] ?? (chainIdForDisplay ? `Chain ${chainIdForDisplay}` : "—");
-  const contractStandard = (currentScan?.token_controlled || scanDetails?.token_controlled) ?? "—";
-  const contractName = shortAddress((selectedContractAddress ?? contractLink.trim()) || "—");
+  const networkName =
+    formatContractScanNetworkLabel(currentScan ?? scanDetails) ||
+    (lastScanTarget?.chainFamily === "solana"
+      ? solanaNetwork === "mainnet-beta"
+        ? "Solana Mainnet"
+        : solanaNetwork
+      : CHAIN_ID_TO_NETWORK[chainIdForDisplay] ?? (chainIdForDisplay ? `Chain ${chainIdForDisplay}` : "—"));
+  const contractStandard =
+    currentScan?.detected_standard ||
+    (Array.isArray(details?.detected_standards) ? details.detected_standards.join(", ") : null) ||
+    currentScan?.token_controlled ||
+    scanDetails?.token_controlled ||
+    "—";
+  const contractName =
+    currentScan?.contract_name ||
+    details?.contract_name ||
+    shortAddress((selectedContractAddress ?? contractLink.trim()) || "—");
   const mobileHistoryItems = riskProfile ?? [];
   const visibleMobileHistory = mobileHistoryExpanded
     ? mobileHistoryItems
@@ -706,8 +751,14 @@ export default function ContractScannerPage() {
     : [];
   const mobileRiskBars = [
     { label: "Ownership Risk", value: riskBreakdown?.owner_privileges ?? 0 },
-    { label: "Approval Risk", value: riskBreakdown?.token_control_scope ?? riskBreakdown?.simulation ?? 0 },
-    { label: "Liquidity Safety", value: riskBreakdown?.anomaly ?? riskBreakdown?.contract_age ?? 0 },
+    {
+      label: "Approval Risk",
+      value: riskBreakdown?.token_control_scope ?? riskBreakdown?.token_scope ?? riskBreakdown?.simulation ?? 0,
+    },
+    {
+      label: "Liquidity Safety",
+      value: riskBreakdown?.anomaly ?? riskBreakdown?.user_anomaly ?? riskBreakdown?.contract_age ?? 0,
+    },
     { label: "Code Transparency", value: riskBreakdown?.reputation ?? 0 },
     { label: "Community Trust", value: riskBreakdown?.contract_age ?? 0 },
   ];
@@ -800,7 +851,7 @@ export default function ContractScannerPage() {
           <div className="relative mb-3">
             <input
               type="text"
-              placeholder="Enter Smart Contract Link"
+              placeholder="0x…, Solana program id, or explorer link"
               value={contractLink}
               onChange={(e) => setContractLink(e.target.value)}
               className="w-full rounded-lg border bg-[#25283D] border-[#25283D] text-white text-sm pl-4 pr-24 py-3 focus:outline-none focus:ring-1 focus:ring-slate-500 placeholder:text-slate-500"
@@ -923,48 +974,69 @@ export default function ContractScannerPage() {
               <h2 className="text-lg font-medium text-white">Contract Scanner</h2>
             </div>
             <div className="mb-3">
-              <label className="block text-sm text-slate-400 mb-2">Smart Contract Address</label>
+              <label className="block text-sm text-slate-400 mb-2">Contract / Program Address</label>
               <div className="rounded-lg border focus-within:ring-1 focus-within:ring-slate-500 emboss-inset-3d-input" style={{ borderColor: "#25283D", backgroundColor: "#25283D" }}>
                 <input
                   type="text"
-                  placeholder="Enter contract address (0x…)"
+                  placeholder="0x…, Solana program id, or Solscan URL"
                   value={contractLink}
                   onChange={(e) => setContractLink(e.target.value)}
                   className="w-full rounded-lg bg-transparent text-white text-sm pl-3 py-3 focus:outline-none placeholder:text-slate-500 border-0"
                 />
               </div>
             </div>
-            <div className="mb-4">
-              <label className="block text-sm text-slate-400 mb-2">Chain ID</label>
-              <div className="rounded-lg border focus-within:ring-1 focus-within:ring-slate-500 emboss-inset-3d-input" style={{ borderColor: "#25283D", backgroundColor: "#25283D" }}>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="e.g. 1 (Ethereum)"
-                  value={chainIdInput}
-                  onChange={(e) => setChainIdInput(e.target.value)}
-                  className="w-full rounded-lg bg-transparent text-white text-sm pl-3 py-3 focus:outline-none placeholder:text-slate-500 border-0"
-                />
+            {isSolanaScanTarget ? (
+              <div className="mb-4">
+                <label className="block text-sm text-slate-400 mb-2">Solana Network</label>
+                <div className="rounded-lg border focus-within:ring-1 focus-within:ring-slate-500 emboss-inset-3d-input" style={{ borderColor: "#25283D", backgroundColor: "#25283D" }}>
+                  <select
+                    value={solanaNetwork}
+                    onChange={(e) => setSolanaNetwork(e.target.value as SolanaNetwork)}
+                    className="w-full rounded-lg bg-transparent text-white text-sm pl-3 py-3 focus:outline-none border-0"
+                  >
+                    <option value="mainnet-beta">Mainnet Beta</option>
+                    <option value="devnet">Devnet</option>
+                    <option value="testnet">Testnet</option>
+                  </select>
+                </div>
               </div>
-              <button
-                type="button"
-                onClick={handleScan}
-                disabled={scanDisabledDesktop}
-                className="mt-3 w-full rounded-lg bg-gradient-to-b from-[#4066FF] to-[#0026FF] hover:from-[#3355FF] hover:to-[#001fcc] disabled:opacity-60 text-white text-sm font-medium py-3 transition"
-              >
-                {scanLoading ? "Scanning…" : contractScanXpBlocked && xpClaimed ? "Insufficient XP" : "Scan"}
-              </button>
-              {contractScanXpBlocked && xpClaimed ? (
-                <p className="mt-2 text-xs text-amber-300">Contract scan requires {contractScanCost} XP. Your balance is too low.</p>
-              ) : null}
-              {scanError ? <p className="mt-2 text-xs text-red-300">{scanError}</p> : null}
-            </div>
+            ) : (
+              <div className="mb-4">
+                <label className="block text-sm text-slate-400 mb-2">Chain ID (EVM)</label>
+                <div className="rounded-lg border focus-within:ring-1 focus-within:ring-slate-500 emboss-inset-3d-input" style={{ borderColor: "#25283D", backgroundColor: "#25283D" }}>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="e.g. 1 (Ethereum)"
+                    value={chainIdInput}
+                    onChange={(e) => setChainIdInput(e.target.value)}
+                    className="w-full rounded-lg bg-transparent text-white text-sm pl-3 py-3 focus:outline-none placeholder:text-slate-500 border-0"
+                  />
+                </div>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={handleScan}
+              disabled={scanDisabledDesktop}
+              className="mt-3 w-full rounded-lg bg-gradient-to-b from-[#4066FF] to-[#0026FF] hover:from-[#3355FF] hover:to-[#001fcc] disabled:opacity-60 text-white text-sm font-medium py-3 transition"
+            >
+              {scanLoading ? "Scanning…" : contractScanXpBlocked && xpClaimed ? "Insufficient XP" : "Scan"}
+            </button>
+            {contractScanXpBlocked && xpClaimed ? (
+              <p className="mt-2 text-xs text-amber-300">Contract scan requires {contractScanCost} XP. Your balance is too low.</p>
+            ) : null}
+            {scanError ? <p className="mt-2 text-xs text-red-300">{scanError}</p> : null}
+            {!parsedScanTarget && contractLink.trim() ? (
+              <p className="mt-2 text-xs text-amber-300">Could not detect a valid EVM or Solana contract from this input.</p>
+            ) : null}
             {currentScan && (
-              <div className="rounded-lg border p-5 space-y-0 text-sm min-h-[200px]" style={{ ...INNER_BG, backgroundColor: "#0d1029" }}>
+              <div className="rounded-lg border p-5 space-y-0 text-sm min-h-[200px] mt-4" style={{ ...INNER_BG, backgroundColor: "#0d1029" }}>
                 <p className="flex justify-between items-center gap-3 text-slate-300 py-3"><span className="text-slate-500 shrink-0">Network:</span><span className="text-right">{networkName}</span></p>
-                <p className="flex justify-between items-center gap-3 text-slate-300 py-3"><span className="text-slate-500 shrink-0">Contract Name:</span><span className="text-right font-mono">{shortAddress(currentScan.contract_address)}</span></p>
-                <p className="flex justify-between items-center gap-3 text-slate-300 py-3"><span className="text-slate-500 shrink-0">Contract Type:</span><span className="text-right">{currentScan.token_controlled || "—"}</span></p>
-                <p className="flex justify-between items-center gap-3 text-slate-300 py-3"><span className="text-slate-500 shrink-0">Detected Standard:</span><span className="text-right">{currentScan.token_controlled || "—"}</span></p>
+                <p className="flex justify-between items-center gap-3 text-slate-300 py-3"><span className="text-slate-500 shrink-0">Name:</span><span className="text-right">{contractName}</span></p>
+                <p className="flex justify-between items-center gap-3 text-slate-300 py-3"><span className="text-slate-500 shrink-0">Address:</span><span className="text-right font-mono">{shortAddress(currentScan.contract_address)}</span></p>
+                <p className="flex justify-between items-center gap-3 text-slate-300 py-3"><span className="text-slate-500 shrink-0">Token Scope:</span><span className="text-right">{currentScan.token_controlled || "—"}</span></p>
+                <p className="flex justify-between items-center gap-3 text-slate-300 py-3"><span className="text-slate-500 shrink-0">Detected Standard:</span><span className="text-right">{contractStandard}</span></p>
                 <p className="flex justify-between items-center gap-3 text-slate-300 py-3"><span className="text-slate-500 shrink-0">Scanned:</span><span className="text-right">{formatScanDate(currentScan.scanned_at)}</span></p>
               </div>
             )}

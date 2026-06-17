@@ -175,7 +175,7 @@ export default function GuardSettingsSubmenu({
           <button
             type="button"
             onClick={onBack}
-            className="lg:hidden p-1.5 -ml-1 text-slate-400 hover:text-white rounded-lg shrink-0"
+            className="xl:hidden p-1.5 -ml-1 text-slate-400 hover:text-white rounded-lg shrink-0"
             aria-label="Back to menu"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

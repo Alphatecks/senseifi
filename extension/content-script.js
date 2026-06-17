@@ -16,12 +16,43 @@
   const pendingRequests = new Set();
   /** Domains approved in-page this session — skips re-scan UI when wallet re-requests connect. */
   const locallyApprovedConnectDomains = new Set();
-  const CONNECT_METHODS = new Set(['eth_requestAccounts', 'wallet_requestPermissions']);
+  const chainFamilies =
+    globalThis.SenseiGuardChainFamilies ||
+    (globalThis.SenseiGuardChainFamilies = {
+      resolveChainFamily: function (value) {
+        return value === 'solana' ? 'solana' : 'evm';
+      },
+      isConnectMethod: function (chainFamily, method) {
+        if (chainFamily === 'solana') {
+          return method === 'connect' || method === 'wallet_standard_connect';
+        }
+        if (chainFamily === 'cosmos') {
+          return method === 'enable' || method === 'experimentalSuggestChain';
+        }
+        if (chainFamily === 'bitcoin') {
+          return method === 'requestAccounts' || method === 'connect';
+        }
+        return method === 'eth_requestAccounts' || method === 'wallet_requestPermissions';
+      },
+      getScanSubtitle: function (chainFamily, method) {
+        return 'real-time wallet risks';
+      },
+      connectApprovalKey: function (chainFamily, domain) {
+        return (chainFamily || 'evm') + '::' + String(domain || '').trim().toLowerCase();
+      },
+      HOOK_SCRIPTS: ['inpage-hook.js', 'solana-hook.js'],
+    });
   /** Risk scores at or below this (out of 10) show "Safe to proceed" only. */
   const RISK_LEVEL10_REVIEW_THRESHOLD = 3;
+  /** Keep the scanning overlay visible long enough to read during wallet connect. */
+  const CONNECT_SCAN_MIN_VISIBLE_MS = 900;
 
-  function isConnectMethod(method) {
-    return CONNECT_METHODS.has(method);
+  function resolveChainFamily(value) {
+    return chainFamilies.resolveChainFamily(value);
+  }
+
+  function isConnectMethod(chainFamily, method) {
+    return chainFamilies.isConnectMethod(resolveChainFamily(chainFamily), method);
   }
 
   function getRiskLevel10(decision) {
@@ -412,24 +443,26 @@
     overlay.classList.remove('senseiguard-visible');
   }
 
-  function markConnectApproved(domain) {
-    const normalized = String(domain || '').trim().toLowerCase();
-    if (normalized) locallyApprovedConnectDomains.add(normalized);
+  function markConnectApproved(chainFamily, domain) {
+    const key = chainFamilies.connectApprovalKey(resolveChainFamily(chainFamily), domain);
+    if (key) locallyApprovedConnectDomains.add(key);
   }
 
-  function isConnectApprovedLocally(domain) {
-    const normalized = String(domain || '').trim().toLowerCase();
-    return normalized ? locallyApprovedConnectDomains.has(normalized) : false;
+  function isConnectApprovedLocally(chainFamily, domain) {
+    const key = chainFamilies.connectApprovalKey(resolveChainFamily(chainFamily), domain);
+    return key ? locallyApprovedConnectDomains.has(key) : false;
   }
 
   async function recordUserDecision(choice, decision, requestContext) {
-    const isConnect = isConnectMethod(requestContext?.method);
+    const chainFamily = resolveChainFamily(requestContext?.chainFamily);
+    const isConnect = isConnectMethod(chainFamily, requestContext?.method);
     const showSafeProceedOnly = isLowRiskDecision(decision) && !isMaliciousDecision(decision);
     try {
       await sendRuntimeMessage({
         type: 'SENSEIGUARD_USER_DECISION',
         decision: choice === 'proceed' ? 'proceed' : 'block',
         context: {
+          chainFamily: chainFamily,
           method: requestContext?.method || null,
           riskScore: decision?.riskScore || null,
           domain: currentDomain(),
@@ -441,18 +474,13 @@
     }
   }
 
-  function showScanOverlay(requestId, method) {
+  function showScanOverlay(requestId, method, chainFamily) {
     if (!requestId) return;
     pendingRequests.add(requestId);
     const overlay = ensureScanOverlay();
     const subtitle = overlay.querySelector('.senseiguard-subtitle');
     if (subtitle) {
-      subtitle.textContent =
-        method === 'eth_sendTransaction'
-          ? 'transaction and approval risk'
-          : method && method.startsWith('eth_signTypedData')
-            ? 'typed-signature and phishing risk'
-            : 'real-time wallet risks';
+      subtitle.textContent = chainFamilies.getScanSubtitle(resolveChainFamily(chainFamily), method);
     }
     overlay.classList.add('senseiguard-visible');
   }
@@ -501,7 +529,7 @@
 
     const malicious = isMaliciousDecision(decision);
     const normalizedRiskLevel10 = getRiskLevel10(decision);
-    const isConnect = isConnectMethod(requestContext?.method);
+    const isConnect = isConnectMethod(resolveChainFamily(requestContext?.chainFamily), requestContext?.method);
     const showSafeProceedOnly = isLowRiskDecision(decision) && !malicious;
 
     if (riskTextNode) {
@@ -619,18 +647,24 @@
     });
   }
 
-  function injectInpageHook() {
-    if (document.getElementById('senseiguard-inpage-hook')) return;
-    const hookUrl = safeRuntimeGetUrl('inpage-hook.js');
+  function injectHookScript(scriptId, hookFile) {
+    if (document.getElementById(scriptId)) return;
+    const hookUrl = safeRuntimeGetUrl(hookFile);
     if (!hookUrl) return;
     const script = document.createElement('script');
-    script.id = 'senseiguard-inpage-hook';
+    script.id = scriptId;
     script.src = hookUrl;
     script.async = false;
     (document.documentElement || document.head).appendChild(script);
     script.onload = function () {
       script.remove();
     };
+  }
+
+  function injectProtectionHooks() {
+    (chainFamilies.HOOK_SCRIPTS || ['inpage-hook.js', 'solana-hook.js']).forEach(function (hookFile) {
+      injectHookScript('senseiguard-hook-' + hookFile.replace(/\.js$/, ''), hookFile);
+    });
   }
 
   async function askBackgroundForDecision(payload) {
@@ -662,21 +696,35 @@
     const requestId = data.requestId;
     if (!requestId) return;
     const domain = currentDomain();
-    const isConnect = isConnectMethod(data.method);
-    const skipScanUi = isConnect && isConnectApprovedLocally(domain);
+    const chainFamily = resolveChainFamily(data.chainFamily);
+    const isConnect = isConnectMethod(chainFamily, data.method);
+    const skipScanUi = isConnect && isConnectApprovedLocally(chainFamily, domain);
     sendDebugEvent('tx_request_received', {
+      chainFamily: chainFamily,
       method: data.method || 'unknown',
       frameHref: window.location ? window.location.href : '',
     });
+    const scanStartedAt = Date.now();
     if (!skipScanUi) {
-      showScanOverlay(requestId, data.method);
+      showScanOverlay(requestId, data.method, chainFamily);
     }
 
     try {
       const response = await askBackgroundForDecision({
+        chainFamily: chainFamily,
         method: data.method,
         params: data.params,
+        meta: data.meta || null,
       });
+
+      if (!skipScanUi && isConnect) {
+        const elapsed = Date.now() - scanStartedAt;
+        if (elapsed < CONNECT_SCAN_MIN_VISIBLE_MS) {
+          await new Promise(function (resolve) {
+            setTimeout(resolve, CONNECT_SCAN_MIN_VISIBLE_MS - elapsed);
+          });
+        }
+      }
 
       const decision = response?.decision || {
         action: 'allow',
@@ -693,14 +741,17 @@
 
       if (requiresUserGate) {
         hideScanOverlayImmediately();
-        const userChoice = await showMaliciousOverlay(decision, { method: data.method });
+        const userChoice = await showMaliciousOverlay(decision, {
+          chainFamily: chainFamily,
+          method: data.method,
+        });
         await recordUserDecision(
           userChoice === 'proceed' ? 'proceed' : 'block',
           decision,
-          { method: data.method }
+          { chainFamily: chainFamily, method: data.method }
         );
         if (userChoice === 'proceed' && isConnect) {
-          markConnectApproved(domain);
+          markConnectApproved(chainFamily, domain);
         }
         if (userChoice === 'block' || userChoice === 'dismiss') {
           finalDecision = {
@@ -764,5 +815,135 @@
     }
   });
 
-  injectInpageHook();
+  const EXTENSION_WALLET_BRIDGE_SOURCE = 'senseifi-connect-wallet';
+  const EXTENSION_WALLET_BRIDGE_TYPE = 'SENSEIGUARD_EXTENSION_WALLET_CONNECTED';
+  const EXTENSION_WALLET_BRIDGE_DISCONNECTED = 'SENSEIGUARD_EXTENSION_WALLET_DISCONNECTED';
+  const EXTENSION_REQUEST_SOURCE = 'senseiguard-extension';
+  const EXTENSION_REQUEST_WALLET_SESSION = 'SENSEIGUARD_REQUEST_WALLET_SESSION';
+
+  function isSenseifiWebAppPage() {
+    try {
+      var host = currentDomain();
+      return (
+        host === 'localhost' ||
+        host === '127.0.0.1' ||
+        host === 'senseifi.io' ||
+        host === 'www.senseifi.io' ||
+        host.endsWith('.senseifi.io')
+      );
+    } catch (_error) {
+      return false;
+    }
+  }
+
+  function persistWebWalletSession(payload) {
+    var wallet = payload.wallet || null;
+    var address = payload.address || (wallet && wallet.address) || null;
+    var chainId = payload.chainId || (wallet && wallet.chain_id) || null;
+    if (!address || !chainId) return;
+    var chainFamily =
+      (payload && payload.chainFamily) ||
+      (wallet && wallet.chain_family) ||
+      (chainId === 101 ? 'solana' : 'evm');
+
+    var response = {
+      success: true,
+      data: wallet || {
+        address: address,
+        chain_id: chainId,
+        chain_family: chainFamily,
+        wallet_type: payload.walletType || 'walletconnect',
+        connected_at: new Date().toISOString(),
+        is_active: true,
+      },
+      dashboard_user: payload.dashboard_user || null,
+    };
+
+    chrome.storage.local.set({
+      senseiguard_wc_bridge_result: {
+        ok: true,
+        address: address,
+        chainId: chainId,
+        response: response,
+        completedAt: Date.now(),
+      },
+      senseiguard_wc_bridge_pending: false,
+      senseiguard_wallet_connect: {
+        wallet: response.data,
+        dashboard_user: response.dashboard_user,
+        savedAt: Date.now(),
+      },
+      senseiguard_wallet_address: address,
+    });
+
+    sendRuntimeMessage({
+      type: 'SENSEIGUARD_REGISTER_WALLET',
+      wallet: response.data,
+      dashboardUser: response.dashboard_user,
+    }).catch(function () {
+      // Keep web sync resilient if background is unavailable.
+    });
+  }
+
+  function clearWebWalletSession() {
+    chrome.storage.local.remove([
+      'senseiguard_wc_bridge_result',
+      'senseiguard_wc_bridge_pending',
+      'senseiguard_wallet_connect',
+      'senseiguard_wallet_address',
+      'senseiguard_session',
+    ]);
+    sendRuntimeMessage({
+      type: 'SENSEIGUARD_CLEAR_WALLET_SESSION',
+    }).catch(function () {
+      // Keep disconnect sync resilient if background is unavailable.
+    });
+  }
+
+  function handleExtensionWalletBridgeMessage(event) {
+    if (!isSenseifiWebAppPage()) return;
+    if (event.source !== window) return;
+    var data = event.data;
+    if (!data || data.source !== EXTENSION_WALLET_BRIDGE_SOURCE) return;
+
+    if (data.type === EXTENSION_WALLET_BRIDGE_DISCONNECTED) {
+      clearWebWalletSession();
+      return;
+    }
+
+    if (data.type !== EXTENSION_WALLET_BRIDGE_TYPE) return;
+    persistWebWalletSession(data.payload || {});
+  }
+
+  window.addEventListener('message', handleExtensionWalletBridgeMessage);
+
+  if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage) {
+    chrome.runtime.onMessage.addListener(function (message, _sender, sendResponse) {
+      if (!message || message.type !== 'SENSEIGUARD_REQUEST_WEB_WALLET_SYNC') {
+        return false;
+      }
+      if (!isSenseifiWebAppPage()) {
+        sendResponse({ ok: false, error: 'Not a SenseiFi page' });
+        return false;
+      }
+      try {
+        window.postMessage(
+          {
+            source: EXTENSION_REQUEST_SOURCE,
+            type: EXTENSION_REQUEST_WALLET_SESSION,
+          },
+          window.location.origin
+        );
+        sendResponse({ ok: true });
+      } catch (error) {
+        sendResponse({
+          ok: false,
+          error: String(error && error.message ? error.message : error),
+        });
+      }
+      return false;
+    });
+  }
+
+  injectProtectionHooks();
 })();

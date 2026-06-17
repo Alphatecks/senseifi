@@ -7,6 +7,10 @@ import {
   type SubscriptionPlanKey,
 } from "@/services/subscriptionService";
 import { usePlanCheckout } from "@/hooks/usePlanCheckout";
+import {
+  getOnchainBillingNetworkLabel,
+  isTestnetOnchainBilling,
+} from "@/config/onchainBilling";
 
 type PlanPricing = Record<SubscriptionPlanKey, { monthly: number; annual: number }>;
 type UnknownRecord = Record<string, unknown>;
@@ -278,11 +282,72 @@ function BillingToggle({
   );
 }
 
+function IosChevronRight({ className }: { className?: string }) {
+  return (
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      aria-hidden="true"
+    >
+      <path
+        d="M9 6l6 6-6 6"
+        stroke="currentColor"
+        strokeWidth="2.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function PlanCarouselIndicators({
+  count,
+  activeIndex,
+  onSelect,
+}: {
+  count: number;
+  activeIndex: number;
+  onSelect: (index: number) => void;
+}) {
+  return (
+    <div
+      className="mt-6 flex items-center justify-center gap-2 xl:hidden"
+      role="tablist"
+      aria-label="Pricing plans"
+    >
+      {Array.from({ length: count }, (_, index) => {
+        const isActive = index === activeIndex;
+
+        return (
+          <button
+            key={index}
+            type="button"
+            role="tab"
+            aria-selected={isActive}
+            aria-label={`Plan ${index + 1} of ${count}`}
+            onClick={() => onSelect(index)}
+            className={`h-2 rounded-full transition-all duration-300 ${
+              isActive ? "w-6 bg-white" : "w-2 bg-white/35 hover:bg-white/55"
+            }`}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
 export default function PricingScreen() {
   const [isProAnnual, setIsProAnnual] = React.useState(false);
   const [isProPlusAnnual, setIsProPlusAnnual] = React.useState(false);
   const [isPremiumAnnual, setIsPremiumAnnual] = React.useState(false);
   const [planPricing, setPlanPricing] = React.useState<PlanPricing>(DEFAULT_PLAN_PRICING);
+  const [activePlanIndex, setActivePlanIndex] = React.useState(0);
+  const [showScrollHint, setShowScrollHint] = React.useState(false);
+  const plansScrollRef = React.useRef<HTMLDivElement>(null);
   const { handleCheckout, checkoutLoadingPlan, billingError, billingSuccess } = usePlanCheckout();
 
   const getAnnualBeforeDiscount = (monthly: number) => monthly * 12;
@@ -321,6 +386,60 @@ export default function PricingScreen() {
     };
   }, []);
 
+  React.useEffect(() => {
+    const scrollEl = plansScrollRef.current;
+    if (!scrollEl) return;
+
+    const updateCarouselState = () => {
+      const cards = Array.from(scrollEl.children) as HTMLElement[];
+      const canScroll = scrollEl.scrollWidth > scrollEl.clientWidth + 1;
+
+      if (cards.length === 0) {
+        setShowScrollHint(false);
+        setActivePlanIndex(0);
+        return;
+      }
+
+      const scrollCenter = scrollEl.scrollLeft + scrollEl.clientWidth / 2;
+      let closestIndex = 0;
+      let closestDistance = Number.POSITIVE_INFINITY;
+
+      cards.forEach((card, index) => {
+        const cardCenter = card.offsetLeft + card.offsetWidth / 2;
+        const distance = Math.abs(scrollCenter - cardCenter);
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          closestIndex = index;
+        }
+      });
+
+      setActivePlanIndex(closestIndex);
+      setShowScrollHint(canScroll && closestIndex < cards.length - 1);
+    };
+
+    updateCarouselState();
+    scrollEl.addEventListener("scroll", updateCarouselState, { passive: true });
+    window.addEventListener("resize", updateCarouselState);
+
+    return () => {
+      scrollEl.removeEventListener("scroll", updateCarouselState);
+      window.removeEventListener("resize", updateCarouselState);
+    };
+  }, []);
+
+  const scrollToPlan = (index: number) => {
+    const scrollEl = plansScrollRef.current;
+    if (!scrollEl) return;
+
+    const card = scrollEl.children[index] as HTMLElement | undefined;
+    if (!card) return;
+
+    scrollEl.scrollTo({
+      left: card.offsetLeft - (scrollEl.clientWidth - card.offsetWidth) / 2,
+      behavior: "smooth",
+    });
+  };
+
   return (
     <div className="relative w-full overflow-hidden bg-black text-white pt-32 md:pt-40 pb-16 md:pb-24">
       <div
@@ -339,8 +458,17 @@ export default function PricingScreen() {
         {billingSuccess ? (
           <p className="mb-6 w-full max-w-6xl px-4 text-sm text-green-300">{billingSuccess}</p>
         ) : null}
+        {isTestnetOnchainBilling() ? (
+          <p className="mb-6 w-full max-w-6xl px-4 text-sm text-amber-200">
+            Test billing mode: checkout uses {getOnchainBillingNetworkLabel()} with test USDC only.
+          </p>
+        ) : null}
 
-        <div className="flex w-full max-w-6xl flex-row gap-6 overflow-x-auto hide-scrollbar px-4 xl:justify-center xl:overflow-visible xl:px-0">
+        <div className="relative w-full max-w-6xl">
+          <div
+            ref={plansScrollRef}
+            className="flex w-full snap-x snap-mandatory scroll-smooth flex-row gap-6 overflow-x-auto hide-scrollbar px-4 xl:snap-none xl:justify-center xl:overflow-visible xl:px-0"
+          >
           {PRICING_PLANS.map((plan) => {
             const isAnnual = annualByPlan[plan.id];
             const pricing = planPricing[plan.id];
@@ -349,7 +477,7 @@ export default function PricingScreen() {
             return (
               <div
                 key={plan.id}
-                className={`flex min-h-[600px] w-[85vw] max-w-sm flex-shrink-0 flex-col rounded-xl bg-[#181C23] shadow-lg md:w-[380px] md:max-w-[400px] ${
+                className={`flex min-h-[600px] w-[85vw] max-w-sm flex-shrink-0 snap-center flex-col rounded-xl bg-[#181C23] shadow-lg md:w-[380px] md:max-w-[400px] ${
                   plan.recommended ? "border-2 border-blue-600" : ""
                 }`}
               >
@@ -444,6 +572,25 @@ export default function PricingScreen() {
               </div>
             );
           })}
+          </div>
+
+          {showScrollHint ? (
+            <div
+              className="pointer-events-none absolute inset-y-0 right-0 z-10 flex w-16 items-center justify-end xl:hidden"
+              aria-hidden="true"
+            >
+              <div className="absolute inset-0 bg-gradient-to-l from-black via-black/70 to-transparent" />
+              <span className="relative mr-1 flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white/90 backdrop-blur-sm animate-[scroll-hint-nudge_1.4s_ease-in-out_infinite]">
+                <IosChevronRight />
+              </span>
+            </div>
+          ) : null}
+
+          <PlanCarouselIndicators
+            count={PRICING_PLANS.length}
+            activeIndex={activePlanIndex}
+            onSelect={scrollToPlan}
+          />
         </div>
       </section>
 

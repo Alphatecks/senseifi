@@ -287,9 +287,9 @@ function AiThreatExplanationPanel({
       <p className={`${compact ? "text-sm" : "text-base"} text-slate-400 leading-relaxed flex-1`}>
         {displayDescription}
       </p>
-      <div className={`mt-4 flex gap-4 flex-wrap ${compact ? "items-stretch" : "items-center justify-between"}`}>
+      <div className={`mt-4 flex flex-col gap-3 ${compact ? "items-stretch" : "sm:flex-row sm:items-center sm:justify-between"}`}>
         <div
-          className={`rounded-lg font-medium ${compact ? "px-3 py-2.5 flex-1 text-center text-sm" : "px-4 py-2.5 w-fit text-base"}`}
+          className={`rounded-lg font-medium ${compact ? "px-3 py-2.5 text-center text-sm" : "px-4 py-2.5 text-base text-center sm:text-left w-full sm:w-auto"}`}
           style={RISK_LEVEL_BADGE_STYLE}
         >
           Risk Level: {displayRiskLevel}
@@ -298,7 +298,7 @@ function AiThreatExplanationPanel({
           type="button"
           onClick={onViewSummary}
           className={`rounded-lg font-medium text-white transition text-center shrink-0 ${
-            compact ? "py-2.5 px-4 flex-1" : "py-3 px-6"
+            compact ? "py-2.5 px-4 w-full" : "py-3 px-6 w-full sm:w-auto"
           }`}
           style={VIEW_SUMMARY_BUTTON_STYLE}
         >
@@ -351,7 +351,7 @@ function ScamFrequencyChartPanel({
       <div className={`flex-1 flex flex-col ${compact ? "min-h-[220px]" : "min-h-[220px] xl:min-h-0"}`}>
         <p className={`${compact ? "text-sm" : "text-base"} font-medium text-slate-400 mb-2`}>Scam Frequency</p>
         <div
-          className="relative flex-1 min-h-[180px] flex gap-2 items-stretch mt-2 overflow-visible"
+          className="relative flex-1 min-h-[180px] flex gap-2 items-stretch mt-2 overflow-hidden"
           style={{ maxHeight: compact ? 220 : 260 }}
         >
           <div className="flex flex-col justify-between py-0.5 text-slate-400 text-xs font-medium shrink-0 w-8">
@@ -359,7 +359,7 @@ function ScamFrequencyChartPanel({
               <span key={i}>{tick}</span>
             ))}
           </div>
-          <div className="flex-1 min-w-0 relative overflow-visible">
+          <div className="flex-1 min-w-0 relative overflow-hidden">
             <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} className="w-full h-full" preserveAspectRatio="none">
               {[0, 1, 2, 3].map((i) => (
                 <line
@@ -867,9 +867,9 @@ export default function ThreatIntelligencePage() {
   };
 
   return (
-    <div className="rounded-2xl p-4 xl:p-6 space-y-4 xl:space-y-6 xl:bg-blue-950/25 xl:border xl:border-blue-900/40">
-      {/* Mobile: full vertical stack for redesign */}
-      <div className={`xl:hidden flex flex-col gap-4 ${MOBILE_BLEED}`}>
+    <div className="rounded-2xl p-4 sm:p-6 space-y-4 lg:space-y-6 lg:bg-blue-950/25 lg:border lg:border-blue-900/40 min-w-0">
+      {/* Mobile / tablet: full vertical stack */}
+      <div className={`lg:hidden flex flex-col gap-4 ${MOBILE_BLEED}`}>
         <div className="grid grid-cols-2 gap-3">
           <div className={`${MOBILE_CARD} min-h-[160px]`} style={MOBILE_CARD_BG}>
               <div className="flex items-center gap-2 mb-2">
@@ -959,87 +959,87 @@ export default function ThreatIntelligencePage() {
       </div>
 
       {/* Desktop: metrics + AI | scam insights sidebar */}
-      <div className="hidden xl:grid xl:grid-cols-[1.2fr_0.8fr] gap-4 items-stretch">
+      <div className="hidden lg:grid lg:grid-cols-1 2xl:grid-cols-[1.2fr_0.8fr] gap-4 items-stretch min-w-0">
         <div className="flex flex-col gap-4 min-w-0">
-          <div className="grid grid-cols-2 gap-4">
-          <div className={`${CARD_STYLE} min-h-[200px] flex flex-col`} style={CARD_BG}>
-            <div className="flex items-center justify-between gap-3 mb-3">
-              <div className="flex items-center gap-2">
+          <div className="grid grid-cols-2 gap-3 xl:gap-4 items-stretch min-w-0">
+          <div className={`${CARD_STYLE} min-h-[200px] flex flex-col min-w-0 overflow-hidden h-full`} style={CARD_BG}>
+            <div className="flex flex-col gap-2 mb-3 min-w-0">
+              <div className="flex items-center gap-2 min-w-0">
                 {RISK_ICON}
-                <h2 className="text-lg font-medium text-slate-200 whitespace-nowrap">Overall Risk</h2>
+                <h2 className="text-base xl:text-lg font-medium text-slate-200 truncate">Overall Risk</h2>
               </div>
-              <span className="rounded-lg px-3 py-1.5 text-sm font-medium text-orange-400 shrink-0 whitespace-nowrap bg-slate-700/70 border border-slate-600/50">{securityOverviewLoading ? "—" : (securityOverview?.overall_risk?.risk_level ?? "—")}</span>
+              <span className="rounded-lg px-3 py-1.5 text-xs xl:text-sm font-medium text-orange-400 w-fit max-w-full truncate bg-slate-700/70 border border-slate-600/50">{securityOverviewLoading ? "—" : (securityOverview?.overall_risk?.risk_level ?? "—")}</span>
             </div>
             <div className="mt-auto">
               <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-4xl font-normal text-slate-200">{securityOverviewLoading ? "—" : `${securityOverview?.overall_risk?.risk_score ?? "—"}/`}<span className="text-2xl">100</span></span>
-                  <p className="text-sm text-slate-500 self-end pb-1">Risk Score</p>
+                <div className="flex items-center gap-2 flex-wrap min-w-0">
+                  <span className="text-3xl xl:text-4xl font-normal text-slate-200">{securityOverviewLoading ? "—" : `${securityOverview?.overall_risk?.risk_score ?? "—"}/`}<span className="text-xl xl:text-2xl">100</span></span>
+                  <p className="text-xs xl:text-sm text-slate-500 self-end pb-1">Risk Score</p>
                 </div>
-                <div className="w-[28%] min-w-[70px] h-11 shrink-0 self-center">
+                <div className="w-[32%] max-w-[88px] min-w-[56px] h-9 xl:h-11 shrink-0 self-center">
                   {MINI_CHART}
                 </div>
               </div>
             </div>
           </div>
 
-          <div className={`${CARD_STYLE} min-h-[200px] flex flex-col`} style={CARD_BG}>
-            <div className="flex items-center justify-between gap-3 mb-3">
-              <div className="flex items-center gap-2">
+          <div className={`${CARD_STYLE} min-h-[200px] flex flex-col min-w-0 overflow-hidden h-full`} style={CARD_BG}>
+            <div className="flex flex-col gap-2 mb-3 min-w-0">
+              <div className="flex items-center gap-2 min-w-0">
                 {ALERT_ICON}
-                <h2 className="text-lg font-medium text-slate-200 whitespace-nowrap">Active Threats</h2>
+                <h2 className="text-base xl:text-lg font-medium text-slate-200 truncate">Active Threats</h2>
               </div>
-              <span className="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-300 bg-slate-700/70 border border-slate-600/50 shrink-0 whitespace-nowrap">Networks Affected: {securityOverviewLoading ? "—" : (securityOverview?.active_threats?.networks_affected ?? "—")}</span>
+              <span className="rounded-lg px-3 py-1.5 text-xs xl:text-sm font-medium text-slate-300 bg-slate-700/70 border border-slate-600/50 w-fit max-w-full truncate">Networks Affected: {securityOverviewLoading ? "—" : (securityOverview?.active_threats?.networks_affected ?? "—")}</span>
             </div>
             <div className="mt-auto">
               <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-4xl font-normal text-slate-200">{securityOverviewLoading ? "—" : (securityOverview?.active_threats?.count ?? "—")}</span>
-                  <p className="text-sm text-slate-500 self-end pb-1">Currently Detected</p>
+                <div className="flex items-center gap-2 flex-wrap min-w-0">
+                  <span className="text-3xl xl:text-4xl font-normal text-slate-200">{securityOverviewLoading ? "—" : (securityOverview?.active_threats?.count ?? "—")}</span>
+                  <p className="text-xs xl:text-sm text-slate-500 self-end pb-1">Currently Detected</p>
                 </div>
-                <div className="w-[28%] min-w-[70px] h-11 shrink-0 self-center">
+                <div className="w-[32%] max-w-[88px] min-w-[56px] h-9 xl:h-11 shrink-0 self-center">
                   {MINI_CHART}
                 </div>
               </div>
             </div>
           </div>
 
-          <div className={`${CARD_STYLE} min-h-[200px] flex flex-col`} style={CARD_BG}>
-            <div className="flex items-center justify-between gap-3 mb-3">
-              <div className="flex items-center gap-2">
+          <div className={`${CARD_STYLE} min-h-[200px] flex flex-col min-w-0 overflow-hidden h-full`} style={CARD_BG}>
+            <div className="flex flex-col gap-2 mb-3 min-w-0">
+              <div className="flex items-center gap-2 min-w-0">
                 {SCAM_PATTERN_ICON}
-                <h2 className="text-lg font-medium text-slate-200 whitespace-nowrap">Scam Patterns</h2>
+                <h2 className="text-base xl:text-lg font-medium text-slate-200 truncate">Scam Patterns</h2>
               </div>
-              <span className="rounded-lg px-3 py-1.5 text-sm font-medium shrink-0 whitespace-nowrap bg-slate-700/70 border border-slate-600/50" style={{ color: "#32BB1D" }}>{securityOverviewLoading ? "—" : (securityOverview?.scam_patterns?.status ?? "—")}</span>
+              <span className="rounded-lg px-3 py-1.5 text-xs xl:text-sm font-medium w-fit max-w-full truncate bg-slate-700/70 border border-slate-600/50" style={{ color: "#32BB1D" }}>{securityOverviewLoading ? "—" : (securityOverview?.scam_patterns?.status ?? "—")}</span>
             </div>
             <div className="mt-auto">
               <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-4xl font-normal text-slate-200">{securityOverviewLoading ? "—" : (securityOverview?.scam_patterns?.detected_count ?? "—")}</span>
-                  <p className="text-sm text-slate-500 self-end pb-1">Detected Patterns</p>
+                <div className="flex items-center gap-2 flex-wrap min-w-0">
+                  <span className="text-3xl xl:text-4xl font-normal text-slate-200">{securityOverviewLoading ? "—" : (securityOverview?.scam_patterns?.detected_count ?? "—")}</span>
+                  <p className="text-xs xl:text-sm text-slate-500 self-end pb-1">Detected Patterns</p>
                 </div>
-                <div className="w-[28%] min-w-[70px] h-11 shrink-0 self-center">
+                <div className="w-[32%] max-w-[88px] min-w-[56px] h-9 xl:h-11 shrink-0 self-center">
                   {MINI_CHART}
                 </div>
               </div>
             </div>
           </div>
 
-          <div className={`${CARD_STYLE} min-h-[200px] flex flex-col`} style={CARD_BG}>
-            <div className="flex items-center justify-between gap-3 mb-3">
-              <div className="flex items-center gap-2">
+          <div className={`${CARD_STYLE} min-h-[200px] flex flex-col min-w-0 overflow-hidden h-full`} style={CARD_BG}>
+            <div className="flex flex-col gap-2 mb-3 min-w-0">
+              <div className="flex items-center gap-2 min-w-0">
                 {REPORTED_ICON}
-                <h2 className="text-lg font-medium text-slate-200 whitespace-nowrap">Reported Threats</h2>
+                <h2 className="text-base xl:text-lg font-medium text-slate-200 truncate">Reported Threats</h2>
               </div>
-              <span className="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-300 bg-slate-700/70 border border-slate-600/50 shrink-0 whitespace-nowrap">{securityOverviewLoading ? "—" : `${securityOverview?.reported_threats?.verified ?? "—"} Verified`}</span>
+              <span className="rounded-lg px-3 py-1.5 text-xs xl:text-sm font-medium text-slate-300 bg-slate-700/70 border border-slate-600/50 w-fit max-w-full truncate">{securityOverviewLoading ? "—" : `${securityOverview?.reported_threats?.verified ?? "—"} Verified`}</span>
             </div>
             <div className="mt-auto">
               <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-4xl font-normal text-slate-200">{securityOverviewLoading ? "—" : ((securityOverview?.reported_threats?.verified ?? 0) + (securityOverview?.reported_threats?.detected ?? 0))}</span>
-                  <p className="text-sm text-slate-500 self-end pb-1">Currently Detected</p>
+                <div className="flex items-center gap-2 flex-wrap min-w-0">
+                  <span className="text-3xl xl:text-4xl font-normal text-slate-200">{securityOverviewLoading ? "—" : ((securityOverview?.reported_threats?.verified ?? 0) + (securityOverview?.reported_threats?.detected ?? 0))}</span>
+                  <p className="text-xs xl:text-sm text-slate-500 self-end pb-1">Currently Detected</p>
                 </div>
-                <div className="w-[28%] min-w-[70px] h-11 shrink-0 self-center">
+                <div className="w-[32%] max-w-[88px] min-w-[56px] h-9 xl:h-11 shrink-0 self-center">
                   {MINI_CHART}
                 </div>
               </div>
@@ -1048,27 +1048,27 @@ export default function ThreatIntelligencePage() {
           </div>
 
           {/* AI Threat Explanation */}
-          <div className={`${CARD_STYLE} flex flex-col max-w-4xl w-full`} style={CARD_BG}>
+          <div className={`${CARD_STYLE} flex flex-col min-w-0 w-full`} style={CARD_BG}>
             <AiThreatExplanationPanel {...aiThreatPanelProps} />
           </div>
         </div>
 
-        <div className={`${CARD_STYLE} flex flex-col min-h-[320px] xl:h-full xl:min-h-0`} style={CARD_BG}>
+        <div className={`${CARD_STYLE} flex flex-col min-h-[320px] min-w-0 overflow-hidden 2xl:h-full 2xl:min-h-0`} style={CARD_BG}>
           <ScamFrequencyChartPanel {...chartPanelProps} />
           <LiveScamSignalsPanel {...liveSignalsPanelProps} />
           <ThreatCampaignsPanel mounted={mounted} loading={threatCampaignsLoading} campaigns={threatCampaigns} />
         </div>
       </div>
 
-      {/* Domain threat feed — desktop only during mobile redesign */}
-      <div className={`hidden xl:flex ${CARD_STYLE} flex-col`} style={CARD_BG}>
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-          <div className="flex items-center gap-2">
+      {/* Domain threat feed */}
+      <div className={`hidden lg:flex ${CARD_STYLE} flex-col min-w-0`} style={CARD_BG}>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
+          <div className="flex items-center gap-2 min-w-0">
             {ENVELOPE_ICON}
-            <h2 className="text-lg font-medium text-slate-200">Domain threat feed</h2>
+            <h2 className="text-lg font-medium text-slate-200 truncate">Domain threat feed</h2>
           </div>
-          <div className="flex items-center gap-2 flex-1 min-w-0 justify-end">
-            <div className="relative w-full max-w-[200px] min-w-[120px]">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto sm:min-w-0 sm:flex-1 sm:justify-end">
+            <div className="relative w-full sm:max-w-[200px] sm:min-w-[120px]">
               <input
                 type="search"
                 placeholder="Search"
@@ -1125,7 +1125,7 @@ export default function ThreatIntelligencePage() {
               ) : (
                 pagedCommunityRows.map((row, i) => (
                   <tr key={`${row.domain}-${i}`} className="text-slate-300 hover:bg-slate-700/20 transition-colors bg-[#25283D]/50 [&>td:first-child]:rounded-l-lg [&>td:last-child]:rounded-r-lg">
-                    <td className="py-3 px-4 font-medium text-white whitespace-nowrap">{row.domain}</td>
+                    <td className="py-3 px-4 font-medium text-white max-w-[12rem] truncate">{row.domain}</td>
                     <td className="py-3 px-4 whitespace-nowrap text-slate-300">{row.listType}</td>
                     <td className="py-3 px-4 whitespace-nowrap"><span className={`font-medium ${RISK_CLASS[row.siteSafety]}`}>{row.siteSafety}</span></td>
                     <td className="py-3 px-4 text-slate-300 max-w-[260px] truncate">{row.sourceMetadata}</td>

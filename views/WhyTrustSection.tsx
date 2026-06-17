@@ -245,10 +245,10 @@ export default function WhyTrustSection({ showPricing = true }: WhyTrustSectionP
         ) : (
           <>
             <button className="hidden md:inline-block px-8 py-3 bg-[#0026FF] hover:bg-blue-700 text-white text-lg rounded-md shadow-lg transition-colors duration-200">
-              <span className="font-normal">Get Started</span>
+              <span className="font-normal">Connect Wallet</span>
             </button>
             <button className="inline-block md:hidden px-8 py-3 bg-[#0026FF] hover:bg-blue-700 text-white text-lg rounded-md shadow-lg transition-colors duration-200">
-              <span className="font-normal">Get Started</span>
+              <span className="font-normal">Connect Wallet</span>
             </button>
           </>
         )}

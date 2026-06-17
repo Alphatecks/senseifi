@@ -1,6 +1,6 @@
 const SUBSCRIPTIONS_API_BASE_URL = (
   process.env.NEXT_PUBLIC_SUBSCRIPTIONS_API_URL ||
-  process.env.NEXT_PUBLIC_API_URL ||
+  process.env.NEXT_PUBLIC_WALLET_API_URL ||
   "https://senseifi-backend.onrender.com/api"
 ).replace(/\/$/, "");
 

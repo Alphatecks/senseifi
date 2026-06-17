@@ -311,7 +311,7 @@ export default function GuardLayout({ children }: { children: React.ReactNode })
     <div className="h-screen flex overflow-hidden bg-[#0a0a1a] text-white relative">
       <div className="dashboard-hack-bg fixed inset-0 pointer-events-none z-0" aria-hidden />
       {/* Mobile only: visible blockchain / crypto background animation */}
-      <div className="lg:hidden fixed inset-0 pointer-events-none z-0 overflow-hidden" aria-hidden>
+      <div className="xl:hidden fixed inset-0 pointer-events-none z-0 overflow-hidden" aria-hidden>
         <svg className="absolute inset-0 w-full h-full blockchain-bg-svg" viewBox="0 0 400 800" preserveAspectRatio="xMidYMid slice">
           <defs>
             <linearGradient id="blockchain-line-grad" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -349,7 +349,7 @@ export default function GuardLayout({ children }: { children: React.ReactNode })
         </svg>
       </div>
       {/* Desktop sidebar - hidden on mobile */}
-      <aside className="hidden lg:flex relative z-10 w-64 shrink-0 bg-[#080a12] border-r border-slate-800/60 flex-col">
+      <aside className="hidden xl:flex relative z-10 w-64 shrink-0 bg-[#080a12] border-r border-slate-800/60 flex-col">
         <div className="pt-10 pb-4 px-4 flex items-center gap-2">
           <Image src="/images/scaled_logo.png" alt="SenseiFi" width={32} height={32} className="h-8 w-auto" />
           <span className="font-semibold text-white text-3xl">SenseiFi</span>
@@ -403,7 +403,7 @@ export default function GuardLayout({ children }: { children: React.ReactNode })
         </div>
       </aside>
       {/* Mobile nav drawer - visible only below lg */}
-      <div className={`lg:hidden fixed inset-y-0 left-0 z-50 ${mobileNavView === "settings" ? "w-full" : "w-[280px]"} bg-[#080a12] border-r border-slate-800/60 flex flex-col transform transition-transform duration-150 ease-out will-change-transform ${mobileNavOpen ? "translate-x-0" : "-translate-x-full"}`}>
+      <div className={`xl:hidden fixed inset-y-0 left-0 z-50 ${mobileNavView === "settings" ? "w-full" : "w-[280px]"} bg-[#080a12] border-r border-slate-800/60 flex flex-col transform transition-transform duration-150 ease-out will-change-transform ${mobileNavOpen ? "translate-x-0" : "-translate-x-full"}`}>
         {mobileNavView === "settings" ? (
           <div className="pt-10 pb-4 flex flex-col flex-1 min-h-0">
             <GuardSettingsSubmenu
@@ -469,7 +469,7 @@ export default function GuardLayout({ children }: { children: React.ReactNode })
           </>
         )}
       </div>
-      <div className={`lg:hidden fixed inset-0 z-40 bg-black/60 transition-opacity duration-150 ${mobileNavOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`} onClick={() => setMobileNavOpen(false)} aria-hidden={!mobileNavOpen} />
+      <div className={`xl:hidden fixed inset-0 z-40 bg-black/60 transition-opacity duration-150 ${mobileNavOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`} onClick={() => setMobileNavOpen(false)} aria-hidden={!mobileNavOpen} />
       {/* Route change loading bar - instant feedback so one tap feels responsive */}
       {isNavigating && (
         <div className="fixed top-0 left-0 right-0 z-[100] h-0.5 bg-slate-800/90 overflow-hidden" aria-hidden>
@@ -478,7 +478,7 @@ export default function GuardLayout({ children }: { children: React.ReactNode })
       )}
       <main className="relative z-10 flex-1 flex flex-col min-w-0 min-h-0">
         {/* Mobile header - visible only below lg */}
-        <header className="lg:hidden h-16 shrink-0 flex items-center justify-between px-4 bg-[#0a0a1a]">
+        <header className="xl:hidden h-16 shrink-0 flex items-center justify-between px-4 bg-[#0a0a1a]">
           <div className="flex items-center gap-2">
             <Image src="/images/scaled_logo.png" alt="SenseiFi" width={28} height={28} className="h-7 w-auto" />
             <span className="font-semibold text-white text-xl">SenseiFi</span>
@@ -502,7 +502,7 @@ export default function GuardLayout({ children }: { children: React.ReactNode })
         {/* Mobile full-screen notifications panel – when bell is tapped (always mounted to avoid open delay) */}
         <div
           ref={mobileNotificationsPanelRef}
-          className={`lg:hidden fixed inset-0 z-[60] flex flex-col bg-[#0a0a1a] transition-opacity duration-150 ${notificationsOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
+          className={`xl:hidden fixed inset-0 z-[60] flex flex-col bg-[#0a0a1a] transition-opacity duration-150 ${notificationsOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
           aria-modal="true"
           role="dialog"
           aria-label="Notifications"
@@ -534,7 +534,7 @@ export default function GuardLayout({ children }: { children: React.ReactNode })
         </div>
 
         {/* Desktop header - hidden on mobile */}
-        <header className="hidden lg:flex h-20 shrink-0 border-b border-slate-800/60 items-center px-4 sm:px-6 gap-4 bg-[#0f1115] w-full">
+        <header className="hidden xl:flex h-20 shrink-0 border-b border-slate-800/60 items-center px-4 sm:px-6 gap-2 xl:gap-4 bg-[#0f1115] w-full min-w-0">
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <div className="emboss-raised flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-[#1a1d24]">
               <Image src="/images/icons/dashboard-icon.png" alt="" width={20} height={20} className="w-5 h-5 sm:w-6 sm:h-6 opacity-90" />
@@ -542,7 +542,7 @@ export default function GuardLayout({ children }: { children: React.ReactNode })
             <Image src="/images/icons/sign.png" alt="" width={12} height={12} className="hidden sm:block w-3 h-3 opacity-70" />
             <span className="text-white font-semibold text-sm sm:text-base">{title}</span>
           </div>
-          <div className="hidden md:flex flex-1 min-w-0">
+          <div className="hidden lg:flex flex-1 min-w-0 max-w-md xl:max-w-none">
             <GuardHeaderSearch />
           </div>
           <div className="flex items-center gap-2 sm:gap-3 shrink-0 ml-auto">
@@ -578,7 +578,7 @@ export default function GuardLayout({ children }: { children: React.ReactNode })
             </button>
           </div>
         </header>
-        <div className={`flex-1 min-h-0 overflow-auto p-6 ${["/guard", "/guard/wallet-security", "/guard/activity-monitor", "/guard/threat-intelligence", "/guard/contract-scanner", "/guard/settings"].includes(pathname) ? "hide-scrollbar" : ""}`}>{children}</div>
+        <div className={`flex-1 min-h-0 overflow-auto p-4 xl:p-6 ${["/guard", "/guard/wallet-security", "/guard/activity-monitor", "/guard/threat-intelligence", "/guard/contract-scanner", "/guard/settings"].includes(pathname) ? "hide-scrollbar" : ""}`}>{children}</div>
       </main>
       <ClaimXpModal open={xpModalOpen} onClose={() => setXpModalOpen(false)} />
       <ClaimXpSuccessModal

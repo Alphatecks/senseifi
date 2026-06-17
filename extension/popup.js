@@ -7,6 +7,16 @@ function scrollShellTop() {
   if (shell) shell.scrollTop = 0;
 }
 
+function walletAddressesEqual(a, b) {
+  const left = String(a || '').trim();
+  const right = String(b || '').trim();
+  if (!left || !right) return false;
+  if (left.startsWith('0x') && right.startsWith('0x')) {
+    return left.toLowerCase() === right.toLowerCase();
+  }
+  return left === right;
+}
+
 document.addEventListener('DOMContentLoaded', function () {
   const viewWelcome = document.getElementById('view-welcome');
   const viewActivate = document.getElementById('view-activate');
@@ -101,6 +111,8 @@ document.addEventListener('DOMContentLoaded', function () {
   let walletHealthScoreSource = 'wallet';
   let analysisEngineSource = 'wallet';
   let selectedChainId = 1;
+  let selectedScanFamily = 'evm';
+  let selectedSolanaNetwork = 'mainnet-beta';
   let lastContractScanPayload = null;
   let lastAnalysisPayload = null;
   let lastRiskPanelPayload = null;
@@ -108,7 +120,9 @@ document.addEventListener('DOMContentLoaded', function () {
   let connectedWalletCount = 1;
   let dashboardUserId = '';
   const POPUP_STATE_STORAGE_KEY = 'senseiguard_popup_ui_state';
+  const DASHBOARD_CACHE_STORAGE_KEY = 'senseiguard_dashboard_cache';
   let popupUiState = null;
+  let walletConnectScriptPromise = null;
   const extensionTradeInsightsFilters = {
     page: 1,
     per_page: 10,
@@ -148,25 +162,65 @@ document.addEventListener('DOMContentLoaded', function () {
     { title: 'Card payment', id: 'TX53426G253', status: 'Completed', time: '2mins ago' },
   ];
 
-  /** Main CTA uses last row chosen, else MetaMask */
-  let lastWalletType = 'metamask';
+  /** Main CTA always uses WalletConnect */
+  let lastWalletType = 'walletconnect';
 
   function canUseChromeStorage() {
     return typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local;
   }
 
-  async function loadPopupUiState() {
+  async function loadBootstrapState() {
     if (!canUseChromeStorage()) {
-      return null;
+      return { popupUi: null, security: null, dashboardCache: null };
     }
     try {
-      const stored = await chrome.storage.local.get([POPUP_STATE_STORAGE_KEY]);
+      const stored = await chrome.storage.local.get([
+        POPUP_STATE_STORAGE_KEY,
+        DASHBOARD_CACHE_STORAGE_KEY,
+        'senseiguard_session',
+        'senseiguard_settings',
+        'senseiguard_alerts',
+        'senseiguard_wallet_connect',
+      ]);
       const state = stored && stored[POPUP_STATE_STORAGE_KEY] ? stored[POPUP_STATE_STORAGE_KEY] : null;
       popupUiState = state && typeof state === 'object' ? state : null;
-      return popupUiState;
+      return {
+        popupUi: popupUiState,
+        security: buildSecurityStateFromStorage(stored),
+        dashboardCache:
+          stored && stored[DASHBOARD_CACHE_STORAGE_KEY] && typeof stored[DASHBOARD_CACHE_STORAGE_KEY] === 'object'
+            ? stored[DASHBOARD_CACHE_STORAGE_KEY]
+            : null,
+      };
     } catch (_err) {
-      return null;
+      return { popupUi: null, security: null, dashboardCache: null };
     }
+  }
+
+  function buildSecurityStateFromStorage(stored) {
+    const settings = {
+      enabled: true,
+      ...(stored && stored.senseiguard_settings && typeof stored.senseiguard_settings === 'object'
+        ? stored.senseiguard_settings
+        : {}),
+    };
+    let session = stored && stored.senseiguard_session ? stored.senseiguard_session : null;
+    const legacy = stored && stored.senseiguard_wallet_connect ? stored.senseiguard_wallet_connect : null;
+    if (!session && legacy && legacy.wallet) {
+      session = {
+        connectedWallets: [legacy.wallet],
+        dashboardUser: legacy.dashboard_user || null,
+        updatedAt: null,
+      };
+    }
+    const alerts =
+      stored && Array.isArray(stored.senseiguard_alerts) ? stored.senseiguard_alerts : [];
+    return {
+      ok: true,
+      settings,
+      session: session || { connectedWallets: [], dashboardUser: null, updatedAt: null },
+      alerts,
+    };
   }
 
   function savePopupUiStatePatch(patch) {
@@ -197,9 +251,11 @@ document.addEventListener('DOMContentLoaded', function () {
       connectedWalletCount: connectedWalletCount || 1,
       dashboardUserId: dashboardUserId || '',
       selectedChainId: selectedChainId || 1,
+      selectedScanFamily: selectedScanFamily || 'evm',
+      selectedSolanaNetwork: selectedSolanaNetwork || 'mainnet-beta',
       walletHealthScoreSource: walletHealthScoreSource || 'wallet',
       analysisEngineSource: analysisEngineSource || 'wallet',
-      lastWalletType: lastWalletType || 'metamask',
+      lastWalletType: 'walletconnect',
       lastContractScanPayload: lastContractScanPayload || null,
       lastAnalysisPayload: lastAnalysisPayload || null,
       lastRiskPanelPayload: lastRiskPanelPayload || null,
@@ -235,10 +291,39 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  initSiteAccessBanner();
-  const popupUiStateReady = loadPopupUiState().then(function () {
+  const popupUiStateReady = loadBootstrapState().then(function (boot) {
     restorePersistedRuntimeState();
+    return boot;
   });
+
+  function finishPopupBoot() {
+    if (document.documentElement) {
+      document.documentElement.classList.remove('sg-booting');
+    }
+  }
+
+  function ensureWalletConnectModule() {
+    if (window.SenseiGuardWallet && typeof window.SenseiGuardWallet.connectAndRegister === 'function') {
+      return Promise.resolve();
+    }
+    if (walletConnectScriptPromise) return walletConnectScriptPromise;
+    walletConnectScriptPromise = new Promise(function (resolve, reject) {
+      const script = document.createElement('script');
+      script.src = 'wallet-connect.js';
+      script.onload = function () {
+        if (window.SenseiGuardWallet && typeof window.SenseiGuardWallet.connectAndRegister === 'function') {
+          resolve();
+          return;
+        }
+        reject(new Error('Wallet module failed to load.'));
+      };
+      script.onerror = function () {
+        reject(new Error('Wallet module failed to load.'));
+      };
+      document.head.appendChild(script);
+    });
+    return walletConnectScriptPromise;
+  }
 
   function setCwStatus(text, kind) {
     if (!cwStatus) return;
@@ -316,22 +401,24 @@ document.addEventListener('DOMContentLoaded', function () {
     return null;
   }
 
-  function extractContractAddressFromLink(link) {
-    const input = String(link || '').trim();
-    const pathMatch = input.match(/\/(?:address|token)\/(0x[a-fA-F0-9]{40})/i);
-    if (pathMatch) return pathMatch[1];
-    const hexMatch = input.match(/(0x[a-fA-F0-9]{40})/i);
-    return hexMatch ? hexMatch[1] : '';
+  function getContractScanHelpers() {
+    return window.SenseiGuardContractScan || null;
   }
 
-  function inferChainIdFromExplorerLink(link) {
-    const host = String(link || '').toLowerCase();
-    if (host.includes('bscscan')) return 56;
-    if (host.includes('polygonscan')) return 137;
-    if (host.includes('basescan')) return 8453;
-    if (host.includes('arbiscan')) return 42161;
-    if (host.includes('optimistic.etherscan') || host.includes('optimism')) return 10;
-    return 1;
+  function isContractAddress(value) {
+    var helpers = getContractScanHelpers();
+    if (!helpers) return /^0x[a-fA-F0-9]{40}$/.test(String(value || '').trim());
+    return (
+      helpers.isEvmContractAddress(value) || helpers.isSolanaProgramAddress(value)
+    );
+  }
+
+  function parseContractScanTarget(raw) {
+    var helpers = getContractScanHelpers();
+    if (helpers && typeof helpers.parseContractScanInput === 'function') {
+      return helpers.parseContractScanInput(raw);
+    }
+    return null;
   }
 
   function mapTrustScoreToRiskFields(trustScore) {
@@ -345,16 +432,21 @@ document.addEventListener('DOMContentLoaded', function () {
     };
   }
 
-  async function runDashboardContractScan(contractAddress, walletAddress, chainId) {
-    if (!contractAddress?.trim()) {
-      return { ok: false, message: 'Invalid contract address.' };
+  async function runDashboardContractScan(rawInput, walletAddress, scanOptions) {
+    var target = parseContractScanTarget(rawInput);
+    if (!target) {
+      return { ok: false, message: 'Invalid contract or program address.' };
     }
-    const body = {
-      contract_address: contractAddress.trim(),
-      chain_id: chainId,
-    };
-    if (walletAddress?.trim()) {
-      body.for_address = walletAddress.trim();
+    var helpers = getContractScanHelpers();
+    var body =
+      helpers && typeof helpers.buildScanContractRequestBody === 'function'
+        ? helpers.buildScanContractRequestBody(target, walletAddress, scanOptions || {})
+        : {
+            contract_address: target.contractAddress,
+            chain_id: scanOptions && scanOptions.chainId ? scanOptions.chainId : target.chainId || 1,
+          };
+    if (!body.for_address && walletAddress && String(walletAddress).trim()) {
+      body.for_address = String(walletAddress).trim();
     }
     try {
       const res = await fetch(getWalletApiBase() + '/scan-contract', {
@@ -389,7 +481,7 @@ document.addEventListener('DOMContentLoaded', function () {
         ok: true,
         data: {
           ...data,
-          contract_address: data.contract_address || contractAddress.trim(),
+          contract_address: data.contract_address || target.contractAddress,
           ...riskFields,
         },
       };
@@ -401,27 +493,49 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
-  function isContractAddress(value) {
-    return /^0x[a-fA-F0-9]{40}$/.test(String(value || '').trim());
-  }
-
   function syncChainDropdownVisibility() {
     const raw = contractLinkInput ? contractLinkInput.value.trim() : '';
     if (!chainSelectWrap) return;
-    const show = isContractAddress(raw);
-    chainSelectWrap.classList.toggle('view-hidden', !show);
-    if (!show && chainSelectMenu) {
+    const target = parseContractScanTarget(raw);
+    const showDirectAddress =
+      target &&
+      (target.rawInput === raw ||
+        getContractScanHelpers()?.isEvmContractAddress(raw) ||
+        getContractScanHelpers()?.isSolanaProgramAddress(raw));
+    chainSelectWrap.classList.toggle('view-hidden', !showDirectAddress);
+    if (showDirectAddress && target) {
+      if (target.chainFamily === 'solana') {
+        selectedScanFamily = 'solana';
+        selectedSolanaNetwork = target.network || selectedSolanaNetwork || 'mainnet-beta';
+      } else {
+        selectedScanFamily = 'evm';
+        selectedChainId = target.chainId || selectedChainId || 1;
+      }
+      applySelectedChainUi();
+    }
+    if (!showDirectAddress && chainSelectMenu) {
       chainSelectMenu.classList.add('view-hidden');
       if (chainSelectToggle) chainSelectToggle.setAttribute('aria-expanded', 'false');
     }
   }
 
-  function applySelectedChainUi(chainId) {
+  function applySelectedChainUi() {
     if (!chainOptionButtons || !chainOptionButtons.length) return;
     let selectedBtn = null;
     chainOptionButtons.forEach(function (btn) {
-      const btnChainId = Number(btn.getAttribute('data-chain-id'));
-      const isSelected = Number.isFinite(btnChainId) && btnChainId === chainId;
+      const family = btn.getAttribute('data-chain-family') || 'evm';
+      let isSelected = false;
+      if (family === 'solana') {
+        isSelected =
+          selectedScanFamily === 'solana' &&
+          btn.getAttribute('data-network') === selectedSolanaNetwork;
+      } else {
+        const btnChainId = Number(btn.getAttribute('data-chain-id'));
+        isSelected =
+          selectedScanFamily !== 'solana' &&
+          Number.isFinite(btnChainId) &&
+          btnChainId === selectedChainId;
+      }
       btn.classList.toggle('is-selected', isSelected);
       if (isSelected) selectedBtn = btn;
     });
@@ -954,11 +1068,31 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
-  async function refreshExtensionDashboard() {
+  async function refreshExtensionDashboard(options) {
     if (!currentWalletAddress) return;
-    const overview = await fetchExtensionOverview(currentWalletAddress);
-    const tradeRows = await fetchExtensionTradeInsights(currentWalletAddress);
+    const useCacheOnly = !!(options && options.useCacheOnly);
+    if (useCacheOnly) return;
+
+    const [overview, tradeRows] = await Promise.all([
+      fetchExtensionOverview(currentWalletAddress),
+      fetchExtensionTradeInsights(currentWalletAddress),
+    ]);
     renderExtensionDashboard(overview, tradeRows);
+
+    if (canUseChromeStorage()) {
+      chrome.storage.local
+        .set({
+          [DASHBOARD_CACHE_STORAGE_KEY]: {
+            walletAddress: currentWalletAddress,
+            overview: overview || null,
+            tradeRows: tradeRows || null,
+            updatedAt: Date.now(),
+          },
+        })
+        .catch(function () {
+          // Ignore cache write errors.
+        });
+    }
   }
 
   function setDashboardHeaderMode(isDashboard) {
@@ -981,7 +1115,13 @@ document.addEventListener('DOMContentLoaded', function () {
     scrollShellTop();
   }
 
-  function setConnectedDashboardMode(isConnected) {
+  /** Hide the pre-connect wallet picker when showing a connected sub-view. */
+  function hideConnectWalletFlow() {
+    if (connectFlow) connectFlow.classList.add('view-hidden');
+  }
+
+  function setConnectedDashboardMode(isConnected, options) {
+    const skipDashboardRefresh = !!(options && options.skipDashboardRefresh);
     setDashboardHeaderMode(!!isConnected);
     if (connectFlow) connectFlow.classList.toggle('view-hidden', !!isConnected);
     if (connectedDashboard) connectedDashboard.classList.toggle('view-hidden', !isConnected);
@@ -1000,7 +1140,9 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     if (connectFooter) connectFooter.classList.toggle('view-hidden', !!isConnected);
     if (isConnected) {
-      refreshExtensionDashboard();
+      if (!skipDashboardRefresh) {
+        refreshExtensionDashboard();
+      }
       setActivePopupView('connected-dashboard');
     } else {
       setActivePopupView('connect');
@@ -1018,6 +1160,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   function showWalletScanResultView() {
     if (!walletScanResultView) return;
+    hideConnectWalletFlow();
     setDashboardHeaderMode(false);
     if (walletScanView) walletScanView.classList.add('view-hidden');
     if (connectedDashboard) connectedDashboard.classList.add('view-hidden');
@@ -1039,6 +1182,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   function showRiskPanelView() {
     if (!riskPanelView) return;
+    hideConnectWalletFlow();
     setDashboardHeaderMode(false);
     if (walletScanView) walletScanView.classList.add('view-hidden');
     if (walletScanResultView) walletScanResultView.classList.add('view-hidden');
@@ -1064,6 +1208,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   function showAnalysisEngineView(source) {
     if (!analysisEngineView) return;
+    hideConnectWalletFlow();
     setDashboardHeaderMode(false);
     analysisEngineSource = source === 'contract' ? 'contract' : 'wallet';
     if (walletScanView) walletScanView.classList.add('view-hidden');
@@ -1089,6 +1234,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   function showMaliciousContractView() {
     if (!maliciousContractView) return;
+    hideConnectWalletFlow();
     setDashboardHeaderMode(false);
     if (walletScanView) walletScanView.classList.add('view-hidden');
     if (walletScanResultView) walletScanResultView.classList.add('view-hidden');
@@ -1112,6 +1258,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   function showScamTokenView() {
     if (!scamTokenView) return;
+    hideConnectWalletFlow();
     setDashboardHeaderMode(false);
     if (walletScanView) walletScanView.classList.add('view-hidden');
     if (walletScanResultView) walletScanResultView.classList.add('view-hidden');
@@ -1144,6 +1291,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   function showContractScanView() {
     if (!contractScanView) return;
+    hideConnectWalletFlow();
     setDashboardHeaderMode(false);
     walletHealthScoreSource = 'contract';
     if (walletScanView) walletScanView.classList.add('view-hidden');
@@ -1177,6 +1325,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   function showAutoBlockView() {
     if (!autoBlockView) return;
+    hideConnectWalletFlow();
     setDashboardHeaderMode(false);
     if (walletScanView) walletScanView.classList.add('view-hidden');
     if (walletScanResultView) walletScanResultView.classList.add('view-hidden');
@@ -1202,6 +1351,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   function showWalletScanView() {
     if (!walletScanView) return;
+    hideConnectWalletFlow();
     setDashboardHeaderMode(false);
     if (walletScanTimerId) clearTimeout(walletScanTimerId);
     if (walletScanResultView) walletScanResultView.classList.add('view-hidden');
@@ -1393,6 +1543,18 @@ document.addEventListener('DOMContentLoaded', function () {
     showWalletScanResultView();
   }
 
+  function scheduleConnectAssetsHydration() {
+    if (connectAssetsHydrated) return;
+    const run = function () {
+      hydrateConnectAssets();
+    };
+    if (typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(run);
+    } else {
+      setTimeout(run, 0);
+    }
+  }
+
   function hydrateConnectAssets() {
     if (connectAssetsHydrated) return;
     const fallbackSrc = 'assets/scaled_logo.png';
@@ -1411,6 +1573,24 @@ document.addEventListener('DOMContentLoaded', function () {
     connectAssetsHydrated = true;
   }
 
+  function quickRestoreCachedView(options) {
+    const activeView =
+      popupUiState && typeof popupUiState.activeView === 'string' ? popupUiState.activeView : 'welcome';
+    const hasWallet = !!(popupUiState && popupUiState.currentWalletAddress);
+    const restoreOptions = options || { skipDashboardRefresh: true };
+
+    if (
+      hasWallet &&
+      activeView !== 'welcome' &&
+      activeView !== 'activate' &&
+      activeView !== 'connect'
+    ) {
+      restoreConnectedView(restoreOptions);
+      return;
+    }
+    restoreDisconnectedView(restoreOptions);
+  }
+
   function restorePersistedRuntimeState() {
     if (!popupUiState || typeof popupUiState !== 'object') return;
     if (popupUiState.currentWalletAddress) {
@@ -1419,14 +1599,20 @@ document.addEventListener('DOMContentLoaded', function () {
     if (popupUiState.dashboardUserId) {
       dashboardUserId = String(popupUiState.dashboardUserId);
     }
-    if (popupUiState.lastWalletType) {
-      lastWalletType = String(popupUiState.lastWalletType);
+    if (popupUiState.lastWalletType && String(popupUiState.lastWalletType) === 'walletconnect') {
+      lastWalletType = 'walletconnect';
     }
     if (Number.isFinite(Number(popupUiState.connectedWalletCount))) {
       connectedWalletCount = Math.max(1, Number(popupUiState.connectedWalletCount));
     }
     if (Number.isFinite(Number(popupUiState.selectedChainId))) {
       selectedChainId = Number(popupUiState.selectedChainId);
+    }
+    if (popupUiState.selectedScanFamily === 'solana' || popupUiState.selectedScanFamily === 'evm') {
+      selectedScanFamily = popupUiState.selectedScanFamily;
+    }
+    if (typeof popupUiState.selectedSolanaNetwork === 'string' && popupUiState.selectedSolanaNetwork) {
+      selectedSolanaNetwork = popupUiState.selectedSolanaNetwork;
     }
     if (popupUiState.walletHealthScoreSource === 'contract') {
       walletHealthScoreSource = 'contract';
@@ -1449,11 +1635,11 @@ document.addEventListener('DOMContentLoaded', function () {
     if (contractLinkInput && typeof popupUiState.contractLinkValue === 'string') {
       contractLinkInput.value = popupUiState.contractLinkValue;
     }
-    applySelectedChainUi(selectedChainId);
+    applySelectedChainUi();
     syncChainDropdownVisibility();
   }
 
-  function restoreDisconnectedView() {
+  function restoreDisconnectedView(options) {
     const view = popupUiState && popupUiState.activeView ? String(popupUiState.activeView) : '';
     if (view === 'activate') {
       if (viewWelcome) viewWelcome.classList.add('view-hidden');
@@ -1464,9 +1650,9 @@ document.addEventListener('DOMContentLoaded', function () {
       return;
     }
     if (view === 'connect') {
-      hydrateConnectAssets();
+      scheduleConnectAssetsHydration();
       showConnectOnlyView();
-      setConnectedDashboardMode(false);
+      setConnectedDashboardMode(false, options);
       return;
     }
     if (viewWelcome) viewWelcome.classList.remove('view-hidden');
@@ -1476,9 +1662,9 @@ document.addEventListener('DOMContentLoaded', function () {
     setActivePopupView('welcome');
   }
 
-  function restoreConnectedView() {
+  function restoreConnectedView(options) {
     const view = popupUiState && popupUiState.activeView ? String(popupUiState.activeView) : '';
-    hydrateConnectAssets();
+    scheduleConnectAssetsHydration();
     showConnectOnlyView();
     if (lastAnalysisPayload) renderAnalysisEngine(lastAnalysisPayload);
     if (lastRiskPanelPayload) renderRiskPanel(lastRiskPanelPayload);
@@ -1518,16 +1704,177 @@ document.addEventListener('DOMContentLoaded', function () {
       showAutoBlockView();
       return;
     }
-    setConnectedDashboardMode(true);
+    setConnectedDashboardMode(true, options);
   }
 
-  async function getSecurityState() {
+  function reconcileSecurityState(state, options) {
+    const skipViewRestore = !!(options && options.skipViewRestore);
+    if (state === null) {
+      return;
+    }
+    if (state && state.ok) {
+      if (activateToggle && state.settings) {
+        activateToggle.checked = !!state.settings.enabled;
+      }
+      const isConnected =
+        state.session &&
+        Array.isArray(state.session.connectedWallets) &&
+        state.session.connectedWallets.length > 0;
+      if (isConnected) {
+        const firstWallet = state.session.connectedWallets[0];
+        const nextAddress = firstWallet && firstWallet.address ? String(firstWallet.address) : '';
+        const walletChanged = !walletAddressesEqual(nextAddress, currentWalletAddress);
+        currentWalletAddress = nextAddress;
+        dashboardUserId =
+          state.session.dashboardUser && state.session.dashboardUser.user_id
+            ? String(state.session.dashboardUser.user_id)
+            : '';
+        connectedWalletCount =
+          state.session.connectedWallets && state.session.connectedWallets.length
+            ? state.session.connectedWallets.length
+            : 1;
+        persistRuntimeState();
+        if (skipViewRestore && !walletChanged) {
+          setCwStatus('Connected: ' + getConnectedWalletLabel(state.session), 'success');
+          if (state.alerts) {
+            renderLatestAlert(state.alerts);
+          }
+          return;
+        }
+        restoreConnectedView({ skipDashboardRefresh: true });
+        setCwStatus('Connected: ' + getConnectedWalletLabel(state.session), 'success');
+      } else if (skipViewRestore && !currentWalletAddress) {
+        if (state.alerts) {
+          renderLatestAlert(state.alerts);
+        }
+        return;
+      } else {
+        currentWalletAddress = '';
+        restoreDisconnectedView({ skipDashboardRefresh: true });
+      }
+      if (state.alerts) {
+        renderLatestAlert(state.alerts);
+      }
+      return;
+    }
+
+    getLegacyConnectedSession().then(function (legacySession) {
+      if (!legacySession) {
+        if (!skipViewRestore) {
+          restoreDisconnectedView({ skipDashboardRefresh: true });
+        }
+        return;
+      }
+      const firstWallet = legacySession.connectedWallets && legacySession.connectedWallets[0];
+      const nextAddress = firstWallet && firstWallet.address ? String(firstWallet.address) : '';
+      const walletChanged = !walletAddressesEqual(nextAddress, currentWalletAddress);
+      currentWalletAddress = nextAddress;
+      dashboardUserId =
+        legacySession.dashboardUser && legacySession.dashboardUser.user_id
+          ? String(legacySession.dashboardUser.user_id)
+          : '';
+      connectedWalletCount =
+        legacySession.connectedWallets && legacySession.connectedWallets.length
+          ? legacySession.connectedWallets.length
+          : 1;
+      persistRuntimeState();
+      if (skipViewRestore && !walletChanged) {
+        setCwStatus('Connected: ' + getConnectedWalletLabel(legacySession), 'success');
+        return;
+      }
+      restoreConnectedView({ skipDashboardRefresh: true });
+      setCwStatus('Connected: ' + getConnectedWalletLabel(legacySession), 'success');
+    });
+  }
+
+  async function resumePendingWalletConnectBridge() {
+    if (!(typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local)) return false;
+    try {
+      var stored = await chrome.storage.local.get([
+        'senseiguard_wc_bridge_pending',
+        'senseiguard_wc_bridge_result',
+      ]);
+      if (!stored.senseiguard_wc_bridge_pending) return false;
+      var result = stored.senseiguard_wc_bridge_result;
+      if (!result || !result.ok || !result.response) return false;
+
+      await chrome.storage.local.remove([
+        'senseiguard_wc_bridge_pending',
+        'senseiguard_wc_bridge_result',
+      ]);
+
+      var json = result.response;
+      currentWalletAddress =
+        json && json.data && json.data.address ? String(json.data.address) : currentWalletAddress;
+      dashboardUserId =
+        json && json.dashboard_user && json.dashboard_user.user_id
+          ? String(json.dashboard_user.user_id)
+          : dashboardUserId;
+      connectedWalletCount = 1;
+      persistRuntimeState({ connectInProgress: false, lastWalletType: 'walletconnect' });
+      setCwStatus('Connected via WalletConnect', 'success');
+      showConnectOnlyView();
+      setConnectedDashboardMode(true);
+      return true;
+    } catch (_err) {
+      return false;
+    }
+  }
+
+  async function requestWebWalletSync() {
+    if (!(typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage)) return;
+    try {
+      await chrome.runtime.sendMessage({ type: 'SENSEIGUARD_REQUEST_WEB_WALLET_SYNC' });
+    } catch (_err) {
+      // Active tab may not be SenseiFi — ignore.
+    }
+  }
+
+  async function refreshSecurityStateFromBackground(options) {
     if (!(typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage)) return null;
     try {
-      return await chrome.runtime.sendMessage({ type: 'SENSEIGUARD_GET_STATE' });
+      const state = await chrome.runtime.sendMessage({ type: 'SENSEIGUARD_GET_STATE' });
+      reconcileSecurityState(state, options || { skipViewRestore: false });
+      return state;
     } catch (_err) {
       return null;
     }
+  }
+
+  function bootstrapPopup() {
+    popupUiStateReady
+      .then(async function (boot) {
+        var resumedWalletConnect = await resumePendingWalletConnectBridge();
+        await requestWebWalletSync();
+        await new Promise(function (resolve) {
+          setTimeout(resolve, 400);
+        });
+        const cache = boot && boot.dashboardCache;
+        if (
+          cache &&
+          cache.walletAddress &&
+          String(cache.walletAddress).toLowerCase() === String(currentWalletAddress || '').toLowerCase()
+        ) {
+          renderExtensionDashboard(cache.overview, cache.tradeRows);
+        }
+        quickRestoreCachedView({ skipDashboardRefresh: true });
+        finishPopupBoot();
+        const freshSecurity =
+          (await refreshSecurityStateFromBackground({ skipViewRestore: false })) ||
+          (boot && boot.security ? boot.security : null);
+        if (!freshSecurity) {
+          reconcileSecurityState(boot && boot.security ? boot.security : null, { skipViewRestore: false });
+        }
+        if (currentWalletAddress && !resumedWalletConnect) {
+          refreshExtensionDashboard();
+        }
+        setTimeout(initSiteAccessBanner, 0);
+      })
+      .catch(function () {
+        restoreDisconnectedView({ skipDashboardRefresh: true });
+        finishPopupBoot();
+        setTimeout(initSiteAccessBanner, 0);
+      });
   }
 
   async function getDebugStatus() {
@@ -1596,20 +1943,24 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   async function runBackendConnect(walletType) {
-    const api = window.SenseiGuardWallet;
-    if (!api || typeof api.connectAndRegister !== 'function') {
-      setCwStatus('Wallet module failed to load. Reload the extension.', 'error');
-      return;
-    }
-    setCwStatus('Connecting… Approve the request in your wallet if prompted.', '');
+    setCwStatus(
+      'Opening SenseiFi… pick your wallet or scan QR in the WalletConnect picker.',
+      ''
+    );
     persistRuntimeState({
       activeView: 'connect',
-      lastWalletType: walletType || lastWalletType,
+      lastWalletType: 'walletconnect',
       connectInProgress: true,
     });
     setConnectBusy(true);
     try {
-      const json = await api.connectAndRegister(walletType);
+      await ensureWalletConnectModule();
+      const api = window.SenseiGuardWallet;
+      if (!api || typeof api.connectAndRegister !== 'function') {
+        setCwStatus('Wallet module failed to load. Reload the extension.', 'error');
+        return;
+      }
+      const json = await api.connectAndRegister('walletconnect');
       const label =
         json && json.dashboard_user && json.dashboard_user.user_label
           ? json.dashboard_user.user_label
@@ -1639,11 +1990,23 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
+  function closeSidePanelUi() {
+    if (typeof chrome !== 'undefined' && chrome.windows && chrome.sidePanel) {
+      chrome.windows.getCurrent(function (win) {
+        if (!win || win.id == null) return;
+        chrome.sidePanel.setOptions({ windowId: win.id, enabled: false }).catch(function () {});
+      });
+      return;
+    }
+    window.close();
+  }
+
   document.querySelectorAll('.welcome-close').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      window.close();
-    });
+    btn.addEventListener('click', closeSidePanelUi);
   });
+  if (headerCloseBtn) {
+    headerCloseBtn.addEventListener('click', closeSidePanelUi);
+  }
 
   if (ctaWelcome && viewWelcome && viewActivate) {
     ctaWelcome.addEventListener('click', function () {
@@ -1668,7 +2031,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   if (ctaConnectMain) {
     ctaConnectMain.addEventListener('click', function () {
-      runBackendConnect(lastWalletType);
+      runBackendConnect('walletconnect');
     });
   }
 
@@ -1686,25 +2049,23 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  document.querySelectorAll('[data-action="connect-metamask"]').forEach(function (btn) {
+  document.querySelectorAll('[data-action="connect-walletconnect"]').forEach(function (btn) {
     btn.addEventListener('click', function () {
-      lastWalletType = 'metamask';
+      lastWalletType = 'walletconnect';
       persistRuntimeState({
-        lastWalletType: 'metamask',
+        lastWalletType: 'walletconnect',
       });
-      runBackendConnect('metamask');
+      runBackendConnect('walletconnect');
     });
   });
 
-  document.querySelectorAll('[data-action="connect-coinbase"]').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      lastWalletType = 'coinbase';
-      persistRuntimeState({
-        lastWalletType: 'coinbase',
-      });
-      runBackendConnect('coinbase');
-    });
-  });
+  const COMING_SOON_ACTION_LABELS = {
+    'card-chart': 'Analyse Chart',
+    'card-hacked-wallet': 'Retrieve Hacked wallet',
+    'card-airdrop-hunter': 'Airdrop Hunter',
+    'card-secure-transfer': 'Secure Asset transfer layer',
+    'card-oracle': 'Decentralized oracle networks',
+  };
 
   document.querySelectorAll('[data-action^="card-"]').forEach(function (btn) {
     btn.addEventListener('click', function () {
@@ -1722,7 +2083,10 @@ document.addEventListener('DOMContentLoaded', function () {
         showAutoBlockView();
         return;
       }
-      setCwStatus('Analyse Chart coming soon.', '');
+      if (COMING_SOON_ACTION_LABELS[action]) {
+        setCwStatus(COMING_SOON_ACTION_LABELS[action] + ' coming soon.', '');
+        return;
+      }
     });
   });
 
@@ -1933,13 +2297,22 @@ document.addEventListener('DOMContentLoaded', function () {
 
   chainOptionButtons.forEach(function (btn) {
     btn.addEventListener('click', function () {
-      const chainId = Number(btn.getAttribute('data-chain-id'));
-      if (Number.isFinite(chainId)) selectedChainId = chainId;
-      applySelectedChainUi(selectedChainId);
+      const family = btn.getAttribute('data-chain-family') || 'evm';
+      if (family === 'solana') {
+        selectedScanFamily = 'solana';
+        selectedSolanaNetwork = btn.getAttribute('data-network') || 'mainnet-beta';
+      } else {
+        selectedScanFamily = 'evm';
+        const chainId = Number(btn.getAttribute('data-chain-id'));
+        if (Number.isFinite(chainId)) selectedChainId = chainId;
+      }
+      applySelectedChainUi();
       if (chainSelectMenu) chainSelectMenu.classList.add('view-hidden');
       if (chainSelectToggle) chainSelectToggle.setAttribute('aria-expanded', 'false');
       persistRuntimeState({
         selectedChainId: selectedChainId,
+        selectedScanFamily: selectedScanFamily,
+        selectedSolanaNetwork: selectedSolanaNetwork,
       });
     });
   });
@@ -1956,37 +2329,28 @@ document.addEventListener('DOMContentLoaded', function () {
         return;
       }
 
-      const isAddressInput = isContractAddress(raw);
-      let parsed = null;
-      if (!isAddressInput) {
-        try {
-          parsed = new URL(raw);
-        } catch (_err) {
-          parsed = null;
-        }
-      }
-      if (!isAddressInput && (!parsed || (parsed.protocol !== 'https:' && parsed.protocol !== 'http:'))) {
-        setContractScanFeedback('Enter a valid smart contract URL or contract address.', 'error');
-        return;
-      }
-
-      const contractAddress = isAddressInput ? raw : extractContractAddressFromLink(raw);
-      if (!contractAddress) {
+      const target = parseContractScanTarget(raw);
+      if (!target) {
         setContractScanFeedback(
-          'Could not find a contract address in that link. Paste a 0x address or an explorer /address/… URL.',
+          'Enter a valid EVM or Solana contract address, or an explorer link (Etherscan, Solscan, etc.).',
           'error'
         );
         return;
       }
 
-      const chainId = isAddressInput ? selectedChainId : inferChainIdFromExplorerLink(parsed.hostname);
-      selectedChainId = chainId;
-      applySelectedChainUi(selectedChainId);
+      if (target.chainFamily === 'solana') {
+        selectedScanFamily = 'solana';
+        selectedSolanaNetwork = selectedSolanaNetwork || target.network || 'mainnet-beta';
+      } else {
+        selectedScanFamily = 'evm';
+        selectedChainId = target.chainId || selectedChainId || 1;
+      }
+      applySelectedChainUi();
 
       setContractScanFeedback(
-        isAddressInput
-          ? 'Analysis started for contract address'
-          : 'Analysis started for ' + parsed.hostname,
+        target.rawInput.indexOf('://') !== -1
+          ? 'Analysis started for ' + target.rawInput
+          : 'Analysis started for contract address',
         'success'
       );
       contractScanStartBtn.disabled = true;
@@ -1994,19 +2358,20 @@ document.addEventListener('DOMContentLoaded', function () {
       contractScanStartBtn.style.opacity = '0.78';
 
       let scanResult = null;
-      const dashboardScan = await runDashboardContractScan(
-        contractAddress,
-        currentWalletAddress,
-        chainId
-      );
+      const dashboardScan = await runDashboardContractScan(raw, currentWalletAddress, {
+        chainId: selectedScanFamily === 'evm' ? selectedChainId : undefined,
+        network: selectedScanFamily === 'solana' ? selectedSolanaNetwork : undefined,
+      });
       if (dashboardScan.ok) {
         scanResult = dashboardScan.data;
       } else {
         const scanContractPayload = {
           wallet_address: currentWalletAddress,
           contract_link: raw,
-          contract_address: contractAddress,
-          chain_id: chainId,
+          contract_address: target.contractAddress,
+          chain_id: selectedScanFamily === 'evm' ? selectedChainId : undefined,
+          chain_family: target.chainFamily,
+          network: selectedScanFamily === 'solana' ? selectedSolanaNetwork : undefined,
         };
         scanResult = await callExtensionApi(
           '/protection/extension/scan-smart-contract',
@@ -2026,13 +2391,16 @@ document.addEventListener('DOMContentLoaded', function () {
       }
       lastContractScanPayload = {
         ...scanResult,
-        contract_address: scanResult.contract_address || contractAddress,
-        domain: parsed ? parsed.hostname : '',
+        contract_address: scanResult.contract_address || target.contractAddress,
+        domain: target.rawInput.indexOf('://') !== -1 ? target.rawInput : '',
         contract_link: raw,
+        chain_family: target.chainFamily,
       };
       persistRuntimeState({
         lastContractScanPayload: lastContractScanPayload,
-        selectedChainId: chainId,
+        selectedChainId: selectedChainId,
+        selectedScanFamily: selectedScanFamily,
+        selectedSolanaNetwork: selectedSolanaNetwork,
         contractLinkValue: raw,
       });
       await sendScreenAction('analyze_contract', {
@@ -2040,11 +2408,12 @@ document.addEventListener('DOMContentLoaded', function () {
       });
       const analyzePayload = {
         wallet_address: currentWalletAddress,
-        method: 'eth_sendTransaction',
-        to: lastContractScanPayload.contract_address || contractAddress,
+        method: target.chainFamily === 'solana' ? 'connect' : 'eth_sendTransaction',
+        to: lastContractScanPayload.contract_address || target.contractAddress,
         value: '0x0',
         data: '0x',
-        chain_id: chainId,
+        chain_id: selectedScanFamily === 'evm' ? selectedChainId : 101,
+        chain_family: target.chainFamily,
       };
       const analyzeResult = await callExtensionApi(
         '/protection/extension/analyze-transaction-screen',
@@ -2117,64 +2486,20 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  getSecurityState().then(function (state) {
-    if (state && state.ok) {
-      if (activateToggle && state.settings) {
-        activateToggle.checked = !!state.settings.enabled;
-      }
-      const isConnected =
-        state.session &&
-        Array.isArray(state.session.connectedWallets) &&
-        state.session.connectedWallets.length > 0;
-      if (isConnected) {
-        const firstWallet = state.session.connectedWallets[0];
-        currentWalletAddress = firstWallet && firstWallet.address ? String(firstWallet.address) : '';
-        dashboardUserId =
-          state.session.dashboardUser && state.session.dashboardUser.user_id
-            ? String(state.session.dashboardUser.user_id)
-            : '';
-        connectedWalletCount =
-          state.session.connectedWallets && state.session.connectedWallets.length
-            ? state.session.connectedWallets.length
-            : 1;
-        popupUiStateReady.then(function () {
-          persistRuntimeState();
-          restoreConnectedView();
-        });
-        setCwStatus('Connected: ' + getConnectedWalletLabel(state.session), 'success');
-      } else {
-        popupUiStateReady.then(function () {
-          restoreDisconnectedView();
-        });
-      }
-      if (state.alerts) {
-        renderLatestAlert(state.alerts);
-      }
-      return;
-    }
+  bootstrapPopup();
 
-    getLegacyConnectedSession().then(function (legacySession) {
-      popupUiStateReady.then(function () {
-        if (!legacySession) {
-          restoreDisconnectedView();
-          return;
-        }
-        const firstWallet = legacySession.connectedWallets && legacySession.connectedWallets[0];
-        currentWalletAddress = firstWallet && firstWallet.address ? String(firstWallet.address) : '';
-        dashboardUserId =
-          legacySession.dashboardUser && legacySession.dashboardUser.user_id
-            ? String(legacySession.dashboardUser.user_id)
-            : '';
-        connectedWalletCount =
-          legacySession.connectedWallets && legacySession.connectedWallets.length
-            ? legacySession.connectedWallets.length
-            : 1;
-        persistRuntimeState();
-        restoreConnectedView();
-        setCwStatus('Connected: ' + getConnectedWalletLabel(legacySession), 'success');
-      });
+  if (canUseChromeStorage() && chrome.storage.onChanged) {
+    chrome.storage.onChanged.addListener(function (changes, area) {
+      if (area !== 'local') return;
+      if (
+        changes.senseiguard_session ||
+        changes.senseiguard_wallet_connect ||
+        changes.senseiguard_wallet_address
+      ) {
+        refreshSecurityStateFromBackground({ skipViewRestore: false });
+      }
     });
-  });
+  }
 
   setTimeout(function () {
     getDebugStatus().then(function (debugState) {

@@ -1,3 +1,5 @@
+import { getOnchainBillingEnvironment } from "@/config/onchainBilling";
+
 const ONCHAIN_PAYMENTS_API_BASE_URL = (
   process.env.NEXT_PUBLIC_SUBSCRIPTIONS_API_URL ||
   process.env.NEXT_PUBLIC_API_URL ||
@@ -46,9 +48,13 @@ async function onchainPaymentsFetch<T>(
 export async function onchainSubscribe(
   payload: OnchainSubscribePayload
 ): Promise<{ success: true; data: unknown } | { success: false; error: string }> {
+  const billingEnvironment = getOnchainBillingEnvironment();
   const { ok, data } = await onchainPaymentsFetch<unknown>("/payments/onchain-subscribe", {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      ...payload,
+      billing_environment: billingEnvironment === "test" ? "testnet" : "production",
+    }),
   });
   if (!ok) {
     return { success: false, error: extractErrorMessage(data) ?? "Failed to create onchain subscription." };

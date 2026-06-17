@@ -2,6 +2,10 @@
  * Real-time security orchestrator for tx risk, domain risk, policy enforcement, and telemetry.
  */
 
+importScripts('lib/chain-families.js');
+
+const chainFamilies = self.SenseiGuardChainFamilies;
+
 const STORAGE_KEYS = {
   session: 'senseiguard_session',
   walletAddress: 'senseiguard_wallet_address',
@@ -20,6 +24,7 @@ const MESSAGE_TYPES = {
   setSettings: 'SENSEIGUARD_SET_SETTINGS',
   registerWallet: 'SENSEIGUARD_REGISTER_WALLET',
   clearWalletSession: 'SENSEIGUARD_CLEAR_WALLET_SESSION',
+  requestWebWalletSync: 'SENSEIGUARD_REQUEST_WEB_WALLET_SYNC',
   markAlertRead: 'SENSEIGUARD_MARK_ALERT_READ',
   userDecision: 'SENSEIGUARD_USER_DECISION',
   debugEvent: 'SENSEIGUARD_DEBUG_EVENT',
@@ -86,12 +91,12 @@ const STRICT_METHODS = new Set([
   'wallet_sendCalls',
 ]);
 
-const CONNECT_METHODS = new Set(['eth_requestAccounts', 'wallet_requestPermissions']);
 /** Out of 10 — at or below is "safe to proceed"; above requires block/review modal. */
 const RISK_LEVEL10_REVIEW_THRESHOLD = 3;
 
 const INJECTION_DEBOUNCE_MS = 1500;
 const BACKEND_RISK_TIMEOUT_MS = 1200;
+const DAPP_CONNECTION_CHECK_TIMEOUT_MS = 15000;
 const CONNECT_APPROVAL_TTL_MS = 30 * 60 * 1000;
 const injectionAttempts = new Map();
 const runtimeDiagnostics = {
@@ -144,7 +149,7 @@ async function injectProtectionHook(tabId, url) {
     await chrome.scripting.executeScript({
       target: { tabId, allFrames: true },
       world: 'MAIN',
-      files: ['inpage-hook.js'],
+      files: chainFamilies.HOOK_SCRIPTS,
     });
     runtimeDiagnostics.hookInjected += 1;
     runtimeDiagnostics.lastInjectionAt = nowIso();
@@ -172,11 +177,8 @@ async function storageRemove(keys) {
   return chrome.storage.local.remove(keys);
 }
 
-function normalizeWalletAddress(value) {
-  if (typeof value !== 'string') return null;
-  const trimmed = value.trim();
-  if (!/^0x[a-fA-F0-9]{40}$/.test(trimmed)) return null;
-  return trimmed;
+function normalizeWalletAddress(value, chainFamily) {
+  return chainFamilies.normalizeWalletAddress(value, chainFamily || 'evm');
 }
 
 function clampRisk(score) {
@@ -254,6 +256,133 @@ function computeHeuristicRisk(payload, settings) {
     findings,
     source: 'local_heuristics',
   };
+}
+
+function computeSolanaHeuristicRisk(payload, settings) {
+  const findings = [];
+  let score = chainFamilies.getMethodWeight('solana', payload.method);
+  const params = Array.isArray(payload?.params) ? payload.params : [];
+
+  if (
+    payload.method === 'signTransaction' ||
+    payload.method === 'signAllTransactions' ||
+    payload.method === 'signAndSendTransaction' ||
+    payload.method === 'wallet_standard_signTransaction'
+  ) {
+    score += 15;
+    findings.push('Solana transaction signing can move funds or change account authorities');
+    if (params.length > 1) {
+      findings.push('Batch Solana signing request detected');
+      score += 10;
+    }
+  }
+
+  if (payload.method === 'signMessage' || payload.method === 'wallet_standard_signMessage') {
+    score += 10;
+    findings.push('Solana message signing can authorize off-chain actions');
+  }
+
+  if (payload.method === 'connect' || payload.method === 'wallet_standard_connect') {
+    findings.push('Solana wallet connection request');
+  }
+
+  params.forEach((item) => {
+    if (!item || typeof item !== 'object') return;
+    if (item.kind === 'serialized_tx' && typeof item.data === 'string' && item.data.length > 4096) {
+      score += 10;
+      findings.push('Large Solana transaction payload');
+    }
+    if (Array.isArray(item.keys) && item.keys.length > 8) {
+      score += 5;
+      findings.push('Complex Solana request object');
+    }
+  });
+
+  if (settings.strictMode && score < settings.warningThreshold) {
+    score = Math.max(score, settings.warningThreshold - 10);
+  }
+
+  return {
+    score: clampRisk(score),
+    findings,
+    source: 'local_heuristics_solana',
+  };
+}
+
+function computeFamilyHeuristicRisk(payload, settings, familyId) {
+  const findings = [];
+  let score = chainFamilies.getMethodWeight(familyId, payload.method);
+  const params = Array.isArray(payload?.params) ? payload.params : [];
+  const connectMethods = chainFamilies.getFamily(familyId)?.connectMethods || [];
+
+  if (connectMethods.includes(payload.method)) {
+    findings.push(`${chainFamilies.getFamily(familyId).label} wallet connection request`);
+  }
+
+  if (familyId === 'cosmos') {
+    if (payload.method === 'signDirect' || payload.method === 'signAmino' || payload.method === 'sendTx') {
+      score += 15;
+      findings.push('Cosmos signing can move funds or delegate dangerous permissions');
+    }
+    if (payload.method === 'signArbitrary' || payload.method === 'signICNSAdr36') {
+      score += 10;
+      findings.push('Cosmos arbitrary signing can authorize off-chain actions');
+    }
+    if (payload.method === 'experimentalSuggestChain') {
+      score += 12;
+      findings.push('Cosmos chain suggestion can redirect you to an unknown network');
+    }
+  }
+
+  if (familyId === 'bitcoin') {
+    if (
+      payload.method === 'signPsbt' ||
+      payload.method === 'signPsbts' ||
+      payload.method === 'sendBitcoin' ||
+      payload.method === 'pushTx' ||
+      payload.method === 'signTransaction'
+    ) {
+      score += 15;
+      findings.push('Bitcoin signing or broadcast can move funds');
+    }
+    if (payload.method === 'signPsbts' || (Array.isArray(params) && params.length > 1)) {
+      score += 10;
+      findings.push('Batch Bitcoin signing request detected');
+    }
+    if (payload.method === 'signMessage') {
+      score += 10;
+      findings.push('Bitcoin message signing can authorize off-chain actions');
+    }
+  }
+
+  params.forEach((item) => {
+    if (!item || typeof item !== 'object') return;
+    if (Array.isArray(item.keys) && item.keys.length > 10) {
+      score += 5;
+      findings.push(`Complex ${chainFamilies.getFamily(familyId).label} request object`);
+    }
+  });
+
+  if (settings.strictMode && score < settings.warningThreshold) {
+    score = Math.max(score, settings.warningThreshold - 10);
+  }
+
+  return {
+    score: clampRisk(score),
+    findings,
+    source: `local_heuristics_${familyId}`,
+  };
+}
+
+function computeHeuristicRiskForFamily(payload, settings, chainFamily) {
+  const familyId = chainFamilies.resolveChainFamily(chainFamily);
+  if (familyId === 'solana') {
+    return computeSolanaHeuristicRisk(payload, settings);
+  }
+  if (familyId === 'cosmos' || familyId === 'bitcoin') {
+    return computeFamilyHeuristicRisk(payload, settings, familyId);
+  }
+  return computeHeuristicRisk(payload, settings);
 }
 
 function txValueToUsd(payload) {
@@ -398,20 +527,26 @@ async function callRiskBackend(payload, context) {
 }
 
 async function callDappConnectionCheck(context) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), DAPP_CONNECTION_CHECK_TIMEOUT_MS);
   try {
     const url = context.url || '';
     const domain = context.domain || '';
-    const walletAddress = normalizeWalletAddress(context.walletAddress) || null;
+    const chainFamily = chainFamilies.resolveChainFamily(context.chainFamily);
+    const walletAddress = normalizeWalletAddress(context.walletAddress, chainFamily) || null;
     const res = await fetch(`${getApiBase()}/protection/dapp/connection-check`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
       body: JSON.stringify({
         url,
         domain,
         wallet_address: walletAddress,
+        chain_family: chainFamily,
         max_pages: 2,
       }),
     });
+    clearTimeout(timeoutId);
     const json = await res.json();
     if (!res.ok || !json) {
       throw new Error(`Dapp connection check failed: ${res.status}`);
@@ -466,14 +601,19 @@ async function callDappConnectionCheck(context) {
       correlation,
       raw: json,
     };
-  } catch (_error) {
+  } catch (error) {
+    clearTimeout(timeoutId);
+    const isAbort = error && (error.name === 'AbortError' || String(error.message || '').includes('aborted'));
+    const checkErrorMessage = isAbort
+      ? `Connection check timeout after ${DAPP_CONNECTION_CHECK_TIMEOUT_MS}ms`
+      : `Connection check unavailable: ${String(error && error.message ? error.message : error)}`;
     return {
       ok: false,
       siteSafety: null,
       siteSafe: null,
       riskScore: 0,
       riskLevel10: null,
-      findings: [],
+      findings: [checkErrorMessage],
       websiteScanSummary: null,
       websiteScanFindings: [],
       correlation: null,
@@ -601,34 +741,38 @@ async function loadConnectApprovals() {
   return next;
 }
 
-async function setConnectApproval(domain, method) {
+async function setConnectApproval(chainFamily, domain, method) {
   const normalizedDomain = normalizeDomain(domain);
   if (!normalizedDomain) return;
+  const approvalKey = chainFamilies.connectApprovalKey(chainFamily, normalizedDomain);
   const approvals = await loadConnectApprovals();
   const now = Date.now();
-  approvals[normalizedDomain] = {
+  approvals[approvalKey] = {
     domain: normalizedDomain,
-    method: method || 'eth_requestAccounts',
+    chainFamily: chainFamilies.resolveChainFamily(chainFamily),
+    method: method || 'connect',
     approvedAt: now,
     expiresAt: now + CONNECT_APPROVAL_TTL_MS,
   };
   await storageSet({ [STORAGE_KEYS.connectApprovals]: approvals });
 }
 
-async function clearConnectApproval(domain) {
+async function clearConnectApproval(chainFamily, domain) {
   const normalizedDomain = normalizeDomain(domain);
   if (!normalizedDomain) return;
+  const approvalKey = chainFamilies.connectApprovalKey(chainFamily, normalizedDomain);
   const approvals = await loadConnectApprovals();
-  if (!approvals[normalizedDomain]) return;
-  delete approvals[normalizedDomain];
+  if (!approvals[approvalKey]) return;
+  delete approvals[approvalKey];
   await storageSet({ [STORAGE_KEYS.connectApprovals]: approvals });
 }
 
-async function hasActiveConnectApproval(domain) {
+async function hasActiveConnectApproval(chainFamily, domain) {
   const normalizedDomain = normalizeDomain(domain);
   if (!normalizedDomain) return false;
+  const approvalKey = chainFamilies.connectApprovalKey(chainFamily, normalizedDomain);
   const approvals = await loadConnectApprovals();
-  return !!approvals[normalizedDomain];
+  return !!approvals[approvalKey];
 }
 
 function domainRisk(domain, riskCache) {
@@ -656,22 +800,23 @@ function domainRisk(domain, riskCache) {
 
 async function evaluateTransaction(payload, sender) {
   runtimeDiagnostics.txIntercepted += 1;
-  runtimeDiagnostics.lastMethod = payload && payload.method ? payload.method : null;
+  const chainFamily = chainFamilies.resolveChainFamily(payload?.chainFamily);
+  runtimeDiagnostics.lastMethod = payload && payload.method ? `${chainFamily}:${payload.method}` : null;
   const settings = await loadSettings();
   const session = await loadSession();
   const riskCache = await loadRiskCache();
   const connectedWallet = session?.connectedWallets?.[0] || null;
-  const sessionWalletAddress = normalizeWalletAddress(connectedWallet?.address);
-  const persistedWalletAddress = await loadPersistedWalletAddress();
+  const sessionWalletAddress = normalizeWalletAddress(connectedWallet?.address, chainFamily);
+  const persistedWalletAddress = normalizeWalletAddress(await loadPersistedWalletAddress(), chainFamily);
   const walletAddress = sessionWalletAddress || persistedWalletAddress;
-  const chainId = connectedWallet?.chain_id || null;
+  const chainId = chainFamily === 'evm' ? connectedWallet?.chain_id || null : null;
   const url = sender?.tab?.url || '';
   const domain = domainFromUrl(url);
   runtimeDiagnostics.lastDomain = domain || null;
   const currentDomainRisk = domainRisk(domain, riskCache);
 
-  const local = computeHeuristicRisk(payload, settings);
-  const tx = extractTxObject(payload);
+  const local = computeHeuristicRiskForFamily(payload, settings, chainFamily);
+  const tx = chainFamily === 'evm' ? extractTxObject(payload) : null;
   if (tx && tx.to) {
     const to = String(tx.to).toLowerCase();
     if (riskCache.maliciousContracts.includes(to)) {
@@ -679,8 +824,8 @@ async function evaluateTransaction(payload, sender) {
       local.findings.push('Backend threat feed flagged destination contract');
     }
   }
-  const isConnectMethod = CONNECT_METHODS.has(payload.method);
-  if (isConnectMethod && (await hasActiveConnectApproval(domain))) {
+  const isConnectMethod = chainFamilies.isConnectMethod(chainFamily, payload.method);
+  if (isConnectMethod && (await hasActiveConnectApproval(chainFamily, domain))) {
     const findings = ['Using previously approved Safe to proceed decision for this site'];
     return {
       ok: true,
@@ -702,6 +847,7 @@ async function evaluateTransaction(payload, sender) {
 
   if (isConnectMethod) {
     console.info('[SenseiGuard][scan][connect]', {
+      chainFamily,
       method: payload.method,
       domain,
       sessionWalletAddress: sessionWalletAddress || null,
@@ -712,8 +858,8 @@ async function evaluateTransaction(payload, sender) {
   let backend = null;
   let dappCheck = null;
   if (isConnectMethod) {
-    dappCheck = await callDappConnectionCheck({ url, domain, walletAddress });
-  } else {
+    dappCheck = await callDappConnectionCheck({ url, domain, walletAddress, chainFamily });
+  } else if (chainFamily === 'evm') {
     backend = await callRiskBackend(payload, { url, domain, walletAddress, chainId });
   }
 
@@ -739,9 +885,13 @@ async function evaluateTransaction(payload, sender) {
       findings.push(`Connection scan: ${dappCheck.websiteScanSummary}`);
     }
   }
-  const txUsd = txValueToUsd(payload);
+  const txUsd = chainFamily === 'evm' ? txValueToUsd(payload) : 0;
 
-  if ((payload.method === 'eth_sendTransaction' || payload.method === 'eth_signTypedData' || payload.method === 'eth_signTypedData_v4') && settings.approvalRequiresConfirmation) {
+  if (
+    chainFamily === 'evm' &&
+    (payload.method === 'eth_sendTransaction' || payload.method === 'eth_signTypedData' || payload.method === 'eth_signTypedData_v4') &&
+    settings.approvalRequiresConfirmation
+  ) {
     const tx = extractTxObject(payload);
     if (tx && tx.data && tx.data.slice(0, 10).toLowerCase() === '0x095ea7b3') {
       findings.push('Approval requires explicit confirmation');
@@ -805,7 +955,7 @@ async function evaluateTransaction(payload, sender) {
       (isConnectMethod && dappCheck && dappCheck.ok) ||
       (!isConnectMethod && backend && backend.ok)
     ) &&
-    STRICT_METHODS.has(payload.method)
+    chainFamilies.isStrictMethod(chainFamily, payload.method)
   ) {
     decision = {
       action: 'warn',
@@ -813,6 +963,21 @@ async function evaluateTransaction(payload, sender) {
       reason: 'Backend risk check unavailable. Review carefully before proceeding.',
     };
     findings.push('Backend unavailable: proceeding with caution using local checks only');
+  }
+
+  if (
+    chainFamily !== 'evm' &&
+    !isConnectMethod &&
+    chainFamilies.isStrictMethod(chainFamily, payload.method) &&
+    decision.action === 'allow' &&
+    settings.strictMode
+  ) {
+    decision = {
+      action: 'warn',
+      riskScore: Math.max(decision.riskScore, settings.warningThreshold),
+      reason: 'Strict mode: non-EVM signing request requires review',
+    };
+    findings.push(`${chainFamilies.getFamily(chainFamily).label} signing request reviewed by SenseiGuard`);
   }
 
   if (isConnectMethod) {
@@ -862,6 +1027,7 @@ async function evaluateTransaction(payload, sender) {
   const event = {
     id: crypto.randomUUID(),
     type: 'transaction_risk',
+    chainFamily,
     domain,
     method: payload.method,
     decision: decision.action,
@@ -901,6 +1067,7 @@ async function evaluateTransaction(payload, sender) {
           ? TELEMETRY_EVENT_TYPES.txWarned
           : TELEMETRY_EVENT_TYPES.txEvaluated,
     riskScore: decision.riskScore,
+    chainFamily,
     domain,
     method: payload.method,
     findings,
@@ -1064,6 +1231,21 @@ async function monitorDomain(url, tabId) {
   }
 }
 
+function isSenseifiAppUrl(url) {
+  try {
+    const host = new URL(String(url || '')).hostname.toLowerCase();
+    return (
+      host === 'localhost' ||
+      host === '127.0.0.1' ||
+      host === 'senseifi.io' ||
+      host === 'www.senseifi.io' ||
+      host.endsWith('.senseifi.io')
+    );
+  } catch (_error) {
+    return false;
+  }
+}
+
 async function handleMessage(message, sender) {
   switch (message?.type) {
     case MESSAGE_TYPES.evaluateTx:
@@ -1093,10 +1275,17 @@ async function handleMessage(message, sender) {
     case MESSAGE_TYPES.registerWallet: {
       const current = (await loadSession()) || { connectedWallets: [], dashboardUser: null, updatedAt: null };
       const wallet = message.wallet || null;
-      const walletAddress = normalizeWalletAddress(wallet && wallet.address);
+      const chainFamily = chainFamilies.resolveChainFamily(
+        (wallet && wallet.chain_family) || (wallet && wallet.chain_id === 101 ? 'solana' : 'evm')
+      );
+      const walletAddress = normalizeWalletAddress(wallet && wallet.address, chainFamily);
       if (walletAddress) {
-        const sanitizedWallet = { ...wallet, address: walletAddress };
-        const withoutCurrent = current.connectedWallets.filter((w) => w.address !== walletAddress);
+        const sanitizedWallet = { ...wallet, address: walletAddress, chain_family: wallet.chain_family || chainFamily };
+        const withoutCurrent = current.connectedWallets.filter(function (w) {
+          if (!w || !w.address) return true;
+          if (chainFamily === 'solana') return w.address !== walletAddress;
+          return String(w.address).toLowerCase() !== walletAddress.toLowerCase();
+        });
         const updated = {
           connectedWallets: [sanitizedWallet, ...withoutCurrent].slice(0, 5),
           dashboardUser: message.dashboardUser || current.dashboardUser || null,
@@ -1116,6 +1305,23 @@ async function handleMessage(message, sender) {
       return { ok: true };
     }
 
+    case MESSAGE_TYPES.requestWebWalletSync: {
+      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+      const tab = tabs && tabs[0] ? tabs[0] : null;
+      if (!tab || !tab.id || !isSenseifiAppUrl(tab.url)) {
+        return { ok: false, error: 'Active tab is not a SenseiFi page' };
+      }
+      try {
+        await chrome.tabs.sendMessage(tab.id, { type: MESSAGE_TYPES.requestWebWalletSync });
+        return { ok: true };
+      } catch (error) {
+        return {
+          ok: false,
+          error: String(error && error.message ? error.message : error),
+        };
+      }
+    }
+
     case MESSAGE_TYPES.markAlertRead: {
       const id = message.id;
       if (!id) return { ok: false, error: 'Missing alert id' };
@@ -1129,7 +1335,10 @@ async function handleMessage(message, sender) {
     case MESSAGE_TYPES.userDecision: {
       const context = message.context || null;
       const method = context && typeof context.method === 'string' ? context.method : '';
-      const isConnectMethod = CONNECT_METHODS.has(method);
+      const chainFamily = chainFamilies.resolveChainFamily(
+        context && typeof context.chainFamily === 'string' ? context.chainFamily : 'evm'
+      );
+      const isConnectMethod = chainFamilies.isConnectMethod(chainFamily, method);
       const contextDomain = normalizeDomain(context && typeof context.domain === 'string' ? context.domain : '');
       const senderDomain = domainFromUrl((sender && sender.tab && sender.tab.url) || '');
       const domain = contextDomain || senderDomain;
@@ -1137,9 +1346,9 @@ async function handleMessage(message, sender) {
       const choseProceed = String(message.decision || '').toLowerCase() === 'proceed';
       if (isConnectMethod) {
         if (choseProceed && safeProceedOnly) {
-          await setConnectApproval(domain, method);
+          await setConnectApproval(chainFamily, domain, method);
         } else if (!choseProceed) {
-          await clearConnectApproval(domain);
+          await clearConnectApproval(chainFamily, domain);
         }
       }
       await queueTelemetry({
@@ -1174,6 +1383,16 @@ async function handleMessage(message, sender) {
   }
 }
 
+async function configureSidePanel() {
+  if (!chrome.sidePanel) return;
+  try {
+    await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+    await chrome.sidePanel.setOptions({ path: 'popup.html', enabled: true });
+  } catch (_error) {
+    // Side Panel API unavailable on older Chrome builds.
+  }
+}
+
 chrome.runtime.onInstalled.addListener(async () => {
   const stored = await storageGet([STORAGE_KEYS.settings, STORAGE_KEYS.alerts, STORAGE_KEYS.riskCache]);
   if (!stored[STORAGE_KEYS.settings]) {
@@ -1185,6 +1404,7 @@ chrome.runtime.onInstalled.addListener(async () => {
   if (!stored[STORAGE_KEYS.riskCache]) {
     await storageSet({ [STORAGE_KEYS.riskCache]: {} });
   }
+  await configureSidePanel();
   chrome.alarms.create('senseiguard_sync_loop', { periodInMinutes: 3 });
   chrome.alarms.create('senseiguard_telemetry_flush', { periodInMinutes: 2 });
   const tabs = await chrome.tabs.query({});
@@ -1194,6 +1414,7 @@ chrome.runtime.onInstalled.addListener(async () => {
 });
 
 chrome.runtime.onStartup.addListener(() => {
+  configureSidePanel();
   chrome.alarms.create('senseiguard_sync_loop', { periodInMinutes: 3 });
   chrome.alarms.create('senseiguard_telemetry_flush', { periodInMinutes: 2 });
   chrome.tabs.query({}).then((tabs) => {

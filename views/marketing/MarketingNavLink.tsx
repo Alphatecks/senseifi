@@ -15,7 +15,7 @@ export default function MarketingNavLink({
   prefetch = true,
   ...props
 }: MarketingNavLinkProps) {
-  const { navigate, isRouteReady } = useMarketingNav();
+  const { navigate } = useMarketingNav();
 
   const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
     onClick?.(event);
@@ -23,10 +23,8 @@ export default function MarketingNavLink({
     if (!isMarketingRoute(href)) return;
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
 
-    if (isRouteReady(href)) {
-      event.preventDefault();
-      navigate(href);
-    }
+    event.preventDefault();
+    navigate(href);
   };
 
   return <Link href={href} prefetch={prefetch} onClick={handleClick} {...props} />;

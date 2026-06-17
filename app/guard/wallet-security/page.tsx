@@ -15,6 +15,7 @@ import alertIcon from "@/assets/icons/alert.png";
 import scanIcon from "@/assets/icons/scan.png";
 import vectorIcon from "@/assets/icons/Vector.png";
 import shieldIcon from "@/assets/icons/Shield.png";
+import { getWalletProviderLogoUrl, WALLET_ICON_FALLBACK } from "@/config/walletProviderLogos";
 
 const CHECK_ICON = (
   <svg className="w-5 h-5 shrink-0" style={{ color: "#32BB1D" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -46,26 +47,11 @@ const APPROVAL_HEADER_ICON = (
   </span>
 );
 
-const WALLET_ICON = "/images/icons/wallet-header.png";
-
-/** Known provider logo URLs (used when API does not return logo_url). */
-const PROVIDER_LOGOS: Record<string, string> = {
-  metamask: "https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Fox.svg",
-  "meta mask": "https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Fox.svg",
-  coinbase: "https://images.ctfassets.net/q5ulk4bp65r7/3TBS4oVkD1ghowTqVQJlqj/2dfd4ea3b623a7c0d8deb2ff445dee9e/Consumer_Product_Wallet.svg",
-  "coinbase wallet": "https://images.ctfassets.net/q5ulk4bp65r7/3TBS4oVkD1ghowTqVQJlqj/2dfd4ea3b623a7c0d8deb2ff445dee9e/Consumer_Product_Wallet.svg",
-  walletconnect: "https://raw.githubusercontent.com/WalletConnect/walletconnect-assets/master/Logo/Blue%20(Default)/Logo.svg",
-  "wallet connect": "https://raw.githubusercontent.com/WalletConnect/walletconnect-assets/master/Logo/Blue%20(Default)/Logo.svg",
-  rabby: "https://rabby.io/assets/images/logo-128.png",
-  phantom: "https://phantom.imgix.net/logo.png",
-  trust: "https://trustwallet.com/assets/images/media/assets/TWT.png",
-  "trust wallet": "https://trustwallet.com/assets/images/media/assets/TWT.png",
-};
+const WALLET_ICON = WALLET_ICON_FALLBACK;
 
 function getWalletLogoUrl(w: WalletListItem): string {
   if (w.logo_url) return w.logo_url;
-  const key = (w.provider || "").toLowerCase().trim();
-  return PROVIDER_LOGOS[key] ?? WALLET_ICON;
+  return getWalletProviderLogoUrl(w.provider);
 }
 
 const PROTECTION_CONTROLS = [
@@ -877,11 +863,11 @@ export default function WalletSecurityPage() {
   };
 
   return (
-    <div className="rounded-none lg:rounded-2xl bg-transparent lg:bg-blue-950/25 border-0 lg:border border-blue-900/40 p-6 space-y-6">
+    <div className="rounded-none lg:rounded-2xl bg-transparent lg:bg-blue-950/25 border-0 lg:border border-blue-900/40 p-4 sm:p-6 space-y-6 min-w-0">
       {/* Top row: Security Status + 4 metric cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-[auto_1fr] gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Security Status - mobile: match dashboard UI */}
-        <div className="lg:hidden -mx-6 w-[calc(100%+3rem)] rounded-2xl bg-gradient-to-br from-blue-950 to-slate-900 border border-slate-700/80 p-5 flex flex-col shadow-[inset_1px_1px_0_0_rgba(255,255,255,0.06)]">
+        <div className="lg:hidden -mx-4 sm:-mx-6 w-[calc(100%+2rem)] sm:w-[calc(100%+3rem)] rounded-2xl bg-gradient-to-br from-blue-950 to-slate-900 border border-slate-700/80 p-5 flex flex-col shadow-[inset_1px_1px_0_0_rgba(255,255,255,0.06)]">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <Image src={vectorIcon} alt="" width={20} height={20} className="w-5 h-5 opacity-90" />
@@ -921,15 +907,15 @@ export default function WalletSecurityPage() {
         </div>
 
         {/* Security Status - desktop */}
-        <div className="hidden lg:flex rounded-2xl bg-gradient-to-br from-blue-950 to-slate-900 border border-slate-700/80 p-5 flex-col shadow-[inset_1px_1px_0_0_rgba(255,255,255,0.06)] max-w-lg">
+        <div className="hidden lg:flex rounded-2xl bg-gradient-to-br from-blue-950 to-slate-900 border border-slate-700/80 p-5 flex-col shadow-[inset_1px_1px_0_0_rgba(255,255,255,0.06)] min-w-0 w-full">
           <div className="flex items-center gap-2 mb-4">
             {SECURITY_STATUS_ICON}
             <h2 className="text-lg font-semibold text-white">Security Status</h2>
           </div>
-          <div className="flex flex-col sm:flex-row sm:items-start gap-4 flex-1">
+          <div className="flex flex-col sm:flex-row sm:items-start gap-4 flex-1 min-w-0">
             <div className="flex flex-col items-center sm:items-start shrink-0">
               <div
-                className="relative w-44 h-44 sm:w-52 sm:h-52 rounded-full overflow-hidden"
+                className="relative w-32 h-32 sm:w-36 sm:h-36 xl:w-40 xl:h-40 2xl:w-48 2xl:h-48 rounded-full overflow-hidden"
                 style={{
                   background: "radial-gradient(ellipse 75% 75% at 50% 50%, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.98) 50%, rgba(12, 20, 45, 1) 100%)",
                 }}
@@ -971,8 +957,8 @@ export default function WalletSecurityPage() {
                 </svg>
                 <span className="absolute inset-0 flex items-center justify-center font-semibold text-slate-300">
                   <span className="inline-flex items-baseline justify-center gap-0.5">
-                    <span className="text-4xl sm:text-5xl tracking-tight">{summaryLoading || summary?.security_status?.score == null ? "—" : summary.security_status.score}</span>
-                    <span className="text-2xl sm:text-3xl">%</span>
+                    <span className="text-3xl sm:text-4xl 2xl:text-5xl tracking-tight">{summaryLoading || summary?.security_status?.score == null ? "—" : summary.security_status.score}</span>
+                    <span className="text-xl sm:text-2xl 2xl:text-3xl">%</span>
                   </span>
                 </span>
               </div>
@@ -997,14 +983,14 @@ export default function WalletSecurityPage() {
         </div>
 
         {/* Four metric cards - mobile: same alignment as dashboard 4-card grid */}
-        <div className="lg:hidden grid grid-cols-2 gap-3 -mx-6 w-[calc(100%+3rem)]">
+        <div className="lg:hidden grid grid-cols-2 gap-3 -mx-4 sm:-mx-6 w-[calc(100%+2rem)] sm:w-[calc(100%+3rem)]">
           <MetricCard mobile icon={<Image src={alertIcon} alt="" width={28} height={28} className="w-7 h-7 shrink-0 object-contain" />} title="Malicious Transaction" value={metricsLoading ? "—" : (metrics ? String(metrics.malicious_transaction.value) : "0")} change={metrics ? formatMetricChange(metrics.malicious_transaction.change_percent) : "—"} titleClassName="text-lg font-semibold" action={<button type="button" onClick={openAnalyzeTxModal} className="rounded bg-gradient-to-b from-[#4066FF] to-[#0026FF] text-white font-medium transition text-[10px] px-2 py-1 leading-tight max-w-[4.75rem]">Analyze</button>} />
           <MetricCard mobile icon={<Image src={scanIcon} alt="" width={28} height={28} className="w-7 h-7 shrink-0 object-contain" />} title="Phishing Indicators" value={metricsLoading ? "—" : (metrics ? String(metrics.phishing_indicators.value) : "0")} change={metrics ? formatMetricChange(metrics.phishing_indicators.change_percent) : "—"} titleClassName="text-lg font-semibold" />
           <MetricCard mobile icon={WARN_ICON} title="Risky Tokens" value={metricsLoading ? "—" : (metrics ? String(metrics.risky_tokens.value) : "0")} change={metrics ? formatMetricChange(metrics.risky_tokens.change_percent) : "—"} titleClassName="text-lg font-semibold" action={<button type="button" onClick={openRiskyTokensModal} className="rounded bg-gradient-to-b from-[#4066FF] to-[#0026FF] text-white font-medium transition text-[10px] px-2 py-1 leading-tight max-w-[4.75rem]">View</button>} />
           <MetricCard mobile icon={SHIELD_ICON} title="Active Threat level" value={metricsLoading ? "—" : (metrics ? String(metrics.active_threat_level.value) : "Low")} change={metrics ? formatMetricChange(metrics.active_threat_level.change_percent) : "—"} titleClassName="text-lg font-semibold" />
         </div>
         {/* Four metric cards - desktop */}
-        <div className="hidden lg:grid grid-cols-2 gap-4">
+        <div className="hidden lg:grid grid-cols-2 gap-3 xl:gap-4 min-w-0 items-stretch">
           <MetricCard icon={<Image src={alertIcon} alt="" width={28} height={28} className="w-7 h-7 shrink-0 object-contain" />} title="Malicious Transaction" value={metricsLoading ? "—" : (metrics ? String(metrics.malicious_transaction.value) : "0")} change={metrics ? formatMetricChange(metrics.malicious_transaction.change_percent) : "—"} titleClassName="text-lg font-semibold" action={<button type="button" onClick={openAnalyzeTxModal} className="rounded bg-gradient-to-b from-[#4066FF] to-[#0026FF] text-white font-medium transition text-sm px-4 py-2.5">Analyze transaction</button>} />
           <MetricCard icon={<Image src={scanIcon} alt="" width={28} height={28} className="w-7 h-7 shrink-0 object-contain" />} title="Phishing Indicators" value={metricsLoading ? "—" : (metrics ? String(metrics.phishing_indicators.value) : "0")} change={metrics ? formatMetricChange(metrics.phishing_indicators.change_percent) : "—"} titleClassName="text-lg font-semibold" />
           <MetricCard icon={WARN_ICON} title="Risky Tokens" value={metricsLoading ? "—" : (metrics ? String(metrics.risky_tokens.value) : "0")} change={metrics ? formatMetricChange(metrics.risky_tokens.change_percent) : "—"} titleClassName="text-lg font-semibold" action={<button type="button" onClick={openRiskyTokensModal} className="rounded bg-gradient-to-b from-[#4066FF] to-[#0026FF] text-white font-medium transition text-sm px-4 py-2.5">View risky tokens</button>} />
@@ -1013,9 +999,9 @@ export default function WalletSecurityPage() {
       </div>
 
       {/* Bottom row: Approval & Permission, Connected networks, Transaction monitoring */}
-      <div className="grid grid-cols-1 xl:grid-cols-[1.4fr_1fr_1fr] gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-[1.2fr_1fr_1fr] gap-4">
         {/* Approval & Permission - mobile: list layout matching reference */}
-        <div className="xl:hidden -mx-6 w-[calc(100%+3rem)] rounded-2xl border border-transparent flex flex-col min-h-[200px] p-5" style={{ backgroundColor: "#191D35" }}>
+        <div className="lg:hidden -mx-4 sm:-mx-6 w-[calc(100%+2rem)] sm:w-[calc(100%+3rem)] rounded-2xl border border-transparent flex flex-col min-h-[200px] p-5" style={{ backgroundColor: "#191D35" }}>
           <div className="flex items-center justify-between gap-2 mb-4">
             <div className="flex items-center gap-1.5 min-w-0">
               <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-slate-700/80 border border-slate-600/60 shrink-0 overflow-hidden p-1">
@@ -1065,13 +1051,13 @@ export default function WalletSecurityPage() {
         </div>
 
         {/* Approval & Permission - desktop: table */}
-        <div className="hidden xl:flex rounded-2xl border p-5 flex-col min-h-[320px] shadow-sm" style={{ backgroundColor: "#191D35", borderColor: "#191D35" }}>
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
+        <div className="hidden lg:flex lg:col-span-2 2xl:col-span-1 rounded-2xl border p-5 flex-col min-h-[280px] 2xl:min-h-[320px] shadow-sm min-w-0" style={{ backgroundColor: "#191D35", borderColor: "#191D35" }}>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
+            <div className="flex items-center gap-2 min-w-0">
               {APPROVAL_HEADER_ICON}
-              <h2 className="text-lg font-normal text-white">Approval & Permission</h2>
+              <h2 className="text-lg font-normal text-white truncate">Approval & Permission</h2>
             </div>
-            <div className="relative flex items-center">
+            <div className="relative flex items-center shrink-0">
               <select value={approvalPeriod} onChange={(e) => setApprovalPeriod(e.target.value)} className="rounded-lg border text-white text-sm font-medium pl-3 pr-8 py-2.5 appearance-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-slate-500 min-w-[10rem]" style={{ backgroundColor: "#25283D", borderColor: "#25283D" }}>
                 <option value="this_month">This month</option>
                 <option value="last_month">Last month</option>
@@ -1083,14 +1069,14 @@ export default function WalletSecurityPage() {
             </div>
           </div>
           <div className="overflow-x-auto flex-1 min-h-0 overflow-y-auto rounded-lg">
-            <table className="w-full text-base border-separate" style={{ borderSpacing: "0 10px" }}>
+            <table className="w-full text-sm xl:text-base border-separate" style={{ borderSpacing: "0 10px" }}>
               <thead style={{ backgroundColor: "#25283D" }} className="sticky top-0 z-10">
                 <tr className="text-slate-300">
-                  <th className="text-left py-4 px-5 font-medium rounded-tl-lg rounded-bl-lg whitespace-nowrap">Contract Address</th>
-                  <th className="text-left py-4 px-5 font-medium whitespace-nowrap">Approval type</th>
-                  <th className="text-left py-4 px-5 font-medium whitespace-nowrap">Risk level</th>
-                  <th className="text-left py-4 px-5 font-medium whitespace-nowrap">Date</th>
-                  <th className="w-12 py-4 px-5 rounded-tr-lg rounded-br-lg" />
+                  <th className="text-left py-3 xl:py-4 px-3 xl:px-5 font-medium rounded-tl-lg rounded-bl-lg whitespace-nowrap">Contract Address</th>
+                  <th className="text-left py-3 xl:py-4 px-3 xl:px-5 font-medium whitespace-nowrap">Approval type</th>
+                  <th className="text-left py-3 xl:py-4 px-3 xl:px-5 font-medium whitespace-nowrap">Risk level</th>
+                  <th className="text-left py-3 xl:py-4 px-3 xl:px-5 font-medium whitespace-nowrap">Date</th>
+                  <th className="w-12 py-3 xl:py-4 px-3 xl:px-5 rounded-tr-lg rounded-br-lg" />
                 </tr>
               </thead>
               <tbody>
@@ -1122,7 +1108,7 @@ export default function WalletSecurityPage() {
                       onKeyDown={(e) => e.key === "Enter" && setSelectedApprovalIndex(i)}
                       className="text-slate-300 hover:bg-slate-700/30 transition-colors bg-[#25283D]/50 [&>td:first-child]:rounded-l-lg [&>td:last-child]:rounded-r-lg cursor-pointer"
                     >
-                      <td className="py-4 px-5 font-mono text-slate-200 whitespace-nowrap min-w-[7rem]">{row.contract_address}</td>
+                      <td className="py-4 px-3 xl:px-5 font-mono text-slate-200 max-w-[10rem] 2xl:max-w-none truncate">{truncateAddress(row.contract_address, 8, 6)}</td>
                       <td className="py-4 px-5 whitespace-nowrap">{capitalize(row.approval_type)}</td>
                       <td className="py-4 px-5 whitespace-nowrap">
                         <span className={`font-medium ${capitalize(row.risk_level) === "Low" ? "text-[#32BB1D]" : capitalize(row.risk_level) === "Medium" ? "text-amber-500" : "text-[#F00500]"}`}>{capitalize(row.risk_level)}</span>
@@ -1142,7 +1128,7 @@ export default function WalletSecurityPage() {
         </div>
 
         {/* Connected networks - mobile: card list + pagination */}
-        <div className="xl:hidden -mx-6 w-[calc(100%+3rem)] rounded-2xl flex flex-col min-h-[200px] p-5" style={{ backgroundColor: "#191D35" }}>
+        <div className="lg:hidden -mx-4 sm:-mx-6 w-[calc(100%+2rem)] sm:w-[calc(100%+3rem)] rounded-2xl flex flex-col min-h-[200px] p-5" style={{ backgroundColor: "#191D35" }}>
           <div className="flex items-center gap-1.5 mb-4">
             <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-slate-700/80 border border-slate-600/60 shrink-0 overflow-hidden p-1">
               <Image src={vectorIcon} alt="" width={14} height={14} className="w-3.5 h-3.5 object-contain" />
@@ -1198,7 +1184,7 @@ export default function WalletSecurityPage() {
         </div>
 
         {/* Connected networks - desktop */}
-        <div className="hidden xl:flex rounded-2xl border p-5 flex-col min-h-[320px] shadow-sm" style={{ backgroundColor: "#191D35", borderColor: "#191D35" }}>
+        <div className="hidden lg:flex rounded-2xl border p-5 flex-col min-h-[280px] 2xl:min-h-[320px] shadow-sm min-w-0" style={{ backgroundColor: "#191D35", borderColor: "#191D35" }}>
           <div className="flex items-center gap-2 mb-4">
             {APPROVAL_HEADER_ICON}
             <h2 className="text-lg font-normal text-white">Connected networks</h2>
@@ -1243,7 +1229,7 @@ export default function WalletSecurityPage() {
         </div>
 
         {/* Transaction monitoring - mobile: card list + pagination */}
-        <div className="xl:hidden -mx-6 w-[calc(100%+3rem)] rounded-2xl flex flex-col min-h-[200px] p-5" style={{ backgroundColor: "#191D35" }}>
+        <div className="lg:hidden -mx-4 sm:-mx-6 w-[calc(100%+2rem)] sm:w-[calc(100%+3rem)] rounded-2xl flex flex-col min-h-[200px] p-5" style={{ backgroundColor: "#191D35" }}>
           <div className="flex items-center gap-1.5 mb-4">
             <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-slate-700/80 border border-slate-600/60 shrink-0 overflow-hidden p-1">
               <Image src={vectorIcon} alt="" width={14} height={14} className="w-3.5 h-3.5 object-contain" />
@@ -1292,7 +1278,7 @@ export default function WalletSecurityPage() {
         </div>
 
         {/* Transaction monitoring - desktop */}
-        <div className="hidden xl:flex rounded-2xl border p-5 flex-col min-h-[320px] shadow-sm" style={{ backgroundColor: "#191D35", borderColor: "#191D35" }}>
+        <div className="hidden lg:flex rounded-2xl border p-5 flex-col min-h-[280px] 2xl:min-h-[320px] shadow-sm min-w-0" style={{ backgroundColor: "#191D35", borderColor: "#191D35" }}>
           <div className="flex items-center gap-2 mb-4">
             {APPROVAL_HEADER_ICON}
             <h2 className="text-lg font-normal text-white">Transaction monitoring</h2>
@@ -1343,9 +1329,9 @@ export default function WalletSecurityPage() {
       </div>
 
       {/* New section: Smart Wallet Scanner, Protection Control, Security Alerts + Address Safety */}
-      <div className="grid grid-cols-1 xl:grid-cols-[1.4fr_1fr_1fr] gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-[1.2fr_1fr_1fr] gap-4">
         {/* Smart Wallet Scanner - mobile */}
-        <div className="xl:hidden -mx-6 w-[calc(100%+3rem)] rounded-2xl flex flex-col p-5" style={{ backgroundColor: "#191D35" }}>
+        <div className="lg:hidden -mx-4 sm:-mx-6 w-[calc(100%+2rem)] sm:w-[calc(100%+3rem)] rounded-2xl flex flex-col p-5" style={{ backgroundColor: "#191D35" }}>
           <div className="flex items-center gap-1.5 mb-4">
             <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-slate-700/80 border border-slate-600/60 shrink-0 overflow-hidden p-1">
               <Image src={vectorIcon} alt="" width={14} height={14} className="w-3.5 h-3.5 object-contain" />
@@ -1416,10 +1402,10 @@ export default function WalletSecurityPage() {
         </div>
 
         {/* Smart Wallet Scanner - desktop */}
-        <div className="hidden xl:flex rounded-2xl border p-5 flex-col min-h-[320px] shadow-sm" style={{ backgroundColor: "#191D35", borderColor: "#191D35" }}>
+        <div className="hidden lg:flex lg:col-span-2 2xl:col-span-1 rounded-2xl border p-5 flex-col min-h-[280px] 2xl:min-h-[320px] shadow-sm min-w-0" style={{ backgroundColor: "#191D35", borderColor: "#191D35" }}>
           <div className="flex items-center gap-2 mb-4">
             {SECURITY_STATUS_ICON}
-            <h2 className="text-lg font-normal text-white">Contract scanner <span className="text-sm italic text-slate-400">(Only supports Ethereum and BSC)</span></h2>
+            <h2 className="text-lg font-normal text-white">Contract scanner <span className="block sm:inline text-sm italic text-slate-400">(Only supports Ethereum and BSC)</span></h2>
           </div>
           <div className="emboss-inset-3d-input flex gap-2 rounded-lg border mb-4" style={{ backgroundColor: "#25283D", borderColor: "#25283D" }}>
             <input
@@ -1481,7 +1467,7 @@ export default function WalletSecurityPage() {
         </div>
 
         {/* Protection Control - mobile */}
-        <div className="xl:hidden -mx-6 w-[calc(100%+3rem)] rounded-2xl flex flex-col p-5" style={{ backgroundColor: "#191D35" }}>
+        <div className="lg:hidden -mx-4 sm:-mx-6 w-[calc(100%+2rem)] sm:w-[calc(100%+3rem)] rounded-2xl flex flex-col p-5" style={{ backgroundColor: "#191D35" }}>
           <div className="flex items-center gap-1.5 mb-4">
             <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-slate-700/80 border border-slate-600/60 shrink-0 overflow-hidden p-1">
               <Image src={vectorIcon} alt="" width={14} height={14} className="w-3.5 h-3.5 object-contain" />
@@ -1533,7 +1519,7 @@ export default function WalletSecurityPage() {
         </div>
 
         {/* Protection Control - desktop */}
-        <div className="hidden xl:flex rounded-2xl border p-5 flex-col min-h-[320px] shadow-sm" style={{ backgroundColor: "#191D35", borderColor: "#191D35" }}>
+        <div className="hidden lg:flex rounded-2xl border p-5 flex-col min-h-[280px] 2xl:min-h-[320px] shadow-sm min-w-0" style={{ backgroundColor: "#191D35", borderColor: "#191D35" }}>
           <div className="flex items-center gap-2 mb-4">
             {SECURITY_STATUS_ICON}
             <h2 className="text-lg font-normal text-white">Protection Control</h2>
@@ -1576,9 +1562,9 @@ export default function WalletSecurityPage() {
           </div>
 
         {/* Security Alerts + Address Safety */}
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-4 min-w-0">
           {/* Security Alerts - mobile */}
-          <div className="xl:hidden -mx-6 w-[calc(100%+3rem)] rounded-2xl flex flex-col p-5" style={{ backgroundColor: "#191D35" }}>
+          <div className="lg:hidden -mx-4 sm:-mx-6 w-[calc(100%+2rem)] sm:w-[calc(100%+3rem)] rounded-2xl flex flex-col p-5" style={{ backgroundColor: "#191D35" }}>
             <div className="flex items-center gap-1.5 mb-4">
               <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-slate-700/80 border border-slate-600/60 shrink-0 overflow-hidden p-1">
                 <Image src={vectorIcon} alt="" width={14} height={14} className="w-3.5 h-3.5 object-contain" />
@@ -1628,7 +1614,7 @@ export default function WalletSecurityPage() {
           </div>
 
           {/* Security Alerts - desktop */}
-          <div className="hidden xl:flex rounded-2xl border p-5 flex-col shadow-sm flex-1 min-h-[320px]" style={{ backgroundColor: "#191D35", borderColor: "#191D35" }}>
+          <div className="hidden lg:flex rounded-2xl border p-5 flex-col shadow-sm flex-1 min-h-[280px] 2xl:min-h-[320px] min-w-0" style={{ backgroundColor: "#191D35", borderColor: "#191D35" }}>
             <div className="flex items-center gap-2 mb-4">
               {SECURITY_STATUS_ICON}
               <h2 className="text-lg font-normal text-white">Security Alerts</h2>
@@ -1673,7 +1659,7 @@ export default function WalletSecurityPage() {
             )}
           </div>
           {/* Address Safety - mobile */}
-          <div className="xl:hidden -mx-6 w-[calc(100%+3rem)] rounded-2xl flex flex-col p-5" style={{ backgroundColor: "#191D35" }}>
+          <div className="lg:hidden -mx-4 sm:-mx-6 w-[calc(100%+2rem)] sm:w-[calc(100%+3rem)] rounded-2xl flex flex-col p-5" style={{ backgroundColor: "#191D35" }}>
             <div className="flex items-center gap-1.5 mb-4">
               <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-slate-700/80 border border-slate-600/60 shrink-0 overflow-hidden p-1">
                 <Image src={vectorIcon} alt="" width={14} height={14} className="w-3.5 h-3.5 object-contain" />
@@ -1701,7 +1687,7 @@ export default function WalletSecurityPage() {
           </div>
 
           {/* Address Safety - desktop */}
-          <div className="hidden xl:flex rounded-2xl border p-5 flex-col shadow-sm flex-1 min-h-[320px]" style={{ backgroundColor: "#191D35", borderColor: "#191D35" }}>
+          <div className="hidden lg:flex rounded-2xl border p-5 flex-col shadow-sm flex-1 min-h-[280px] 2xl:min-h-[320px] min-w-0" style={{ backgroundColor: "#191D35", borderColor: "#191D35" }}>
             <div className="flex items-center gap-2 mb-4">
               {SECURITY_STATUS_ICON}
               <h2 className="text-lg font-normal text-white">Address Safety</h2>
@@ -2805,13 +2791,21 @@ function MetricCard({
   mobile?: boolean;
 }) {
   return (
-    <div className={`rounded-xl flex flex-col bg-gradient-to-br from-blue-950 to-slate-900 ${mobile ? "p-2.5 min-h-[115px]" : "p-5 min-h-[160px] border border-slate-700/80 shadow-[inset_1px_1px_0_0_rgba(255,255,255,0.06)]"}`}>
-      <div className="flex items-center gap-2">
+    <div
+      className={`rounded-xl flex h-full flex-col overflow-hidden bg-gradient-to-br from-blue-950 to-slate-900 min-w-0 ${
+        mobile
+          ? "p-2.5 min-h-[115px]"
+          : `p-4 xl:p-5 border border-slate-700/80 shadow-[inset_1px_1px_0_0_rgba(255,255,255,0.06)] ${
+              action ? "min-h-[200px] xl:min-h-[210px]" : "min-h-[170px] xl:min-h-[180px]"
+            }`
+      }`}
+    >
+      <div className="flex items-center gap-2 min-w-0">
         <span className={mobile ? "w-4 h-4 flex items-center justify-center shrink-0 [&>svg]:w-4 [&>svg]:h-4 [&>img]:w-4 [&>img]:h-4" : "shrink-0"}>{icon}</span>
-        <p className={mobile ? "text-white font-medium text-xs" : titleClassName ? `text-white ${titleClassName}` : "text-white font-medium text-sm"}>{title}</p>
+        <p className={mobile ? "text-white font-medium text-xs" : titleClassName ? `text-white ${titleClassName} text-sm xl:text-lg leading-snug` : "text-white font-medium text-sm xl:text-base leading-snug"}>{title}</p>
       </div>
-      <div className={`flex items-baseline gap-2 ${mobile ? "mt-1" : "mt-3"}`}>
-        <span className={`text-white font-normal ${mobile ? "text-xl" : "text-3xl"}`}>{value}</span>
+      <div className={`flex items-baseline gap-2 flex-wrap ${mobile ? "mt-1" : "mt-2 xl:mt-3"}`}>
+        <span className={`text-white font-normal ${mobile ? "text-xl" : "text-2xl xl:text-3xl"}`}>{value}</span>
         <span className={`inline-flex items-center gap-0.5 rounded font-medium bg-[#2F4F2F] text-[#A0E0A0] ${mobile ? "px-1.5 py-0.5 text-[10px]" : "px-2 py-0.5 text-sm"}`}>
           <svg className={mobile ? "w-2.5 h-2.5" : "w-3 h-3"} fill="currentColor" viewBox="0 0 24 24">
             <path d="M7 14l5-5 5 5z" />
@@ -2820,12 +2814,14 @@ function MetricCard({
         </span>
       </div>
       {action ? (
-        <div className={`flex items-center justify-between gap-2 mt-auto ${mobile ? "pt-2" : "pt-4"}`}>
-          <p className={`text-slate-400 shrink-0 ${mobile ? "text-[10px] whitespace-nowrap" : "text-base"}`}>This month</p>
-          <span className={mobile ? "shrink-0 [&>button]:text-[10px] [&>button]:px-2.5 [&>button]:py-1.5 [&>button]:whitespace-nowrap" : ""}>{action}</span>
+        <div className={`mt-auto ${mobile ? "pt-2 space-y-1.5" : "pt-3 xl:pt-4 space-y-2"}`}>
+          <p className={`text-slate-400 ${mobile ? "text-[10px]" : "text-sm xl:text-base"}`}>This month</p>
+          <div className={mobile ? "flex justify-end [&>button]:text-[10px] [&>button]:px-2.5 [&>button]:py-1.5 [&>button]:whitespace-nowrap" : "w-full [&>button]:w-full [&>button]:text-xs [&>button]:px-3 [&>button]:py-2 xl:[&>button]:text-sm xl:[&>button]:py-2.5 [&>button]:whitespace-nowrap [&>button]:text-center"}>
+            {action}
+          </div>
         </div>
       ) : (
-        <p className={`text-slate-400 mt-auto whitespace-nowrap ${mobile ? "pt-2 text-[10px]" : "pt-3 text-base"}`}>This month</p>
+        <p className={`text-slate-400 mt-auto ${mobile ? "pt-2 text-[10px]" : "pt-3 text-sm xl:text-base"}`}>This month</p>
       )}
     </div>
   );

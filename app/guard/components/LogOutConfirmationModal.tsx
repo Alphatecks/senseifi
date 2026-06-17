@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { createPortal } from "react-dom";
 import Image from "next/image";
 import deleteIcon from "@/assets/icons/delete-02.png";
 
@@ -19,9 +20,9 @@ export default function LogOutConfirmationModal({
 }: LogOutConfirmationModalProps) {
   if (!open) return null;
 
-  return (
+  const modal = (
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center p-4"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="logout-modal-title"
@@ -92,4 +93,6 @@ export default function LogOutConfirmationModal({
       </div>
     </div>
   );
+
+  return typeof document !== "undefined" ? createPortal(modal, document.body) : modal;
 }

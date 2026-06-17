@@ -12,6 +12,7 @@ import {
 import { usePathname, useRouter } from 'next/navigation';
 import {
   isMarketingRoute,
+  MARKETING_ROUTE_PATHS,
   normalizeMarketingPath,
   type MarketingRoutePath,
 } from '@/views/marketing/routes';
@@ -30,7 +31,9 @@ export function MarketingNavProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [activePath, setActivePath] = useState(() => normalizeMarketingPath(pathname));
-  const [readyRoutes, setReadyRoutes] = useState<Set<MarketingRoutePath>>(() => new Set());
+  const [readyRoutes, setReadyRoutes] = useState<Set<MarketingRoutePath>>(
+    () => new Set(MARKETING_ROUTE_PATHS),
+  );
 
   useEffect(() => {
     setActivePath(normalizeMarketingPath(pathname));

@@ -2,8 +2,17 @@
 
 import { useCallback, useState } from 'react';
 import { usePublicClient, useSwitchChain, useWalletClient } from 'wagmi';
+import { getPublicClient, getWalletClient } from 'wagmi/actions';
 import { isHex, keccak256, stringToHex } from 'viem';
 import { useDashboardUser } from '@/context/DashboardUserContext';
+import {
+  getOnchainBillingChainId,
+  getOnchainBillingNetworkLabel,
+  getOnchainPaymentContract,
+  getOnchainUsdcContract,
+  isTestnetOnchainBilling,
+} from '@/config/onchainBilling';
+import { getWagmiConfig } from '@/config/wagmi';
 import { useWallet } from '@/hooks/useWallet';
 import { onchainSubscribe } from '@/services/onchainPaymentService';
 import type { SubscriptionPlanKey } from '@/services/subscriptionService';
@@ -11,11 +20,14 @@ import type { SubscriptionPlanKey } from '@/services/subscriptionService';
 type UnknownRecord = Record<string, unknown>;
 type Hex32 = `0x${string}`;
 
-const ENV_ONCHAIN_USDC_CONTRACT = process.env.NEXT_PUBLIC_ONCHAIN_USDC_CONTRACT ?? '';
-const ENV_ONCHAIN_PAYMENT_CONTRACT = process.env.NEXT_PUBLIC_ONCHAIN_PAYMENT_CONTRACT ?? '';
-const ENV_ONCHAIN_CHAIN_ID = process.env.NEXT_PUBLIC_ONCHAIN_CHAIN_ID
-  ? Number(process.env.NEXT_PUBLIC_ONCHAIN_CHAIN_ID)
-  : null;
+type SubscribeExecutionData = {
+  subscriptionIdBytes32: Hex32;
+  amountUsdcPerPeriodBaseUnits: bigint;
+  maxChargeUsdcBaseUnits: bigint;
+  tokenContract: string;
+  paymentContract: string;
+  chainId: number | null;
+};
 
 const ERC20_APPROVE_ABI = [
   {
@@ -88,14 +100,7 @@ function isAddress(value: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(value.trim());
 }
 
-function readSubscribeExecutionData(payload: unknown): {
-  subscriptionIdBytes32: Hex32;
-  amountUsdcPerPeriodBaseUnits: bigint;
-  maxChargeUsdcBaseUnits: bigint;
-  tokenContract: string;
-  paymentContract: string;
-  chainId: number | null;
-} {
+function readSubscribeExecutionData(payload: unknown): SubscribeExecutionData {
   const root = isRecord(payload) && isRecord(payload.data) ? payload.data : payload;
   if (!isRecord(root)) {
     throw new Error('Invalid subscribe response payload.');
@@ -137,12 +142,12 @@ function readSubscribeExecutionData(payload: unknown): {
     readString(root.tokenContract) ??
     readString(root.usdc_contract) ??
     readString(root.usdcContract) ??
-    readString(ENV_ONCHAIN_USDC_CONTRACT) ??
+    getOnchainUsdcContract() ??
     '';
   const paymentContract =
     readString(root.payment_contract) ??
     readString(root.paymentContract) ??
-    readString(ENV_ONCHAIN_PAYMENT_CONTRACT) ??
+    getOnchainPaymentContract() ??
     '';
   if (!isAddress(tokenContract) || !isAddress(paymentContract)) {
     throw new Error('Missing token/payment contract addresses for onchain approval.');
@@ -151,7 +156,7 @@ function readSubscribeExecutionData(payload: unknown): {
   const chainId =
     readNumberish(root.chain_id) ??
     readNumberish(root.chainId) ??
-    (Number.isFinite(ENV_ONCHAIN_CHAIN_ID) ? ENV_ONCHAIN_CHAIN_ID : null);
+    getOnchainBillingChainId();
 
   return {
     subscriptionIdBytes32,
@@ -160,6 +165,19 @@ function readSubscribeExecutionData(payload: unknown): {
     tokenContract,
     paymentContract,
     chainId: chainId && chainId > 0 ? Math.trunc(chainId) : null,
+  };
+}
+
+function applyBillingEnvironmentOverrides(executionData: SubscribeExecutionData): SubscribeExecutionData {
+  const configuredChainId = getOnchainBillingChainId();
+  const configuredUsdc = getOnchainUsdcContract();
+  const configuredPayment = getOnchainPaymentContract();
+
+  return {
+    ...executionData,
+    chainId: configuredChainId,
+    tokenContract: isAddress(configuredUsdc) ? configuredUsdc : executionData.tokenContract,
+    paymentContract: isAddress(configuredPayment) ? configuredPayment : executionData.paymentContract,
   };
 }
 
@@ -223,8 +241,8 @@ export function usePlanCheckout() {
         let billingUserId = dashboardUser?.user_id?.trim() ?? '';
         if (!billingUserId) {
           billingStep = 'wallet registration';
-          const registeredUser = await registerWalletWithBackend();
-          billingUserId = registeredUser?.user_id?.trim() ?? '';
+          const registered = await registerWalletWithBackend();
+          billingUserId = registered.dashboard_user?.user_id?.trim() ?? '';
         }
         if (!billingUserId) {
           setBillingError(
@@ -247,39 +265,70 @@ export function usePlanCheckout() {
           return;
         }
 
-        const executionData = readSubscribeExecutionData(subscribeResult.data);
+        const executionData = applyBillingEnvironmentOverrides(
+          readSubscribeExecutionData(subscribeResult.data),
+        );
         const amountPerPeriodRaw = executionData.amountUsdcPerPeriodBaseUnits;
         const maxChargeRaw = executionData.maxChargeUsdcBaseUnits;
+        const targetChainId = executionData.chainId;
 
-        if (executionData.chainId && chainId !== executionData.chainId) {
+        if (!targetChainId) {
+          setBillingError('Billing network is not configured. Set NEXT_PUBLIC_ONCHAIN_CHAIN_ID and retry.');
+          return;
+        }
+
+        const wagmiConfig = getWagmiConfig();
+        if (!wagmiConfig) {
+          setBillingError('Wallet configuration is unavailable. Refresh the page and try again.');
+          return;
+        }
+
+        if (chainId !== targetChainId) {
           billingStep = 'network switch';
           if (!switchChainAsync) {
-            setBillingError(`Switch wallet network to chain ${executionData.chainId} and try again.`);
+            setBillingError(
+              `Switch wallet network to ${getOnchainBillingNetworkLabel()} (chain ${targetChainId}) and try again.`,
+            );
             return;
           }
-          await switchChainAsync({ chainId: executionData.chainId });
+          await switchChainAsync({ chainId: targetChainId });
+        }
+
+        const activeWalletClient =
+          (await getWalletClient(wagmiConfig, { chainId: targetChainId })) ?? walletClient;
+        const activePublicClient =
+          getPublicClient(wagmiConfig, { chainId: targetChainId }) ?? publicClient;
+
+        if (!activeWalletClient || !activePublicClient) {
+          setBillingError(
+            `Wallet client unavailable on ${getOnchainBillingNetworkLabel()}. Switch networks in MetaMask and retry.`,
+          );
+          return;
         }
 
         billingStep = 'token approval';
-        const approveHash = await walletClient.writeContract({
+        const approveHash = await activeWalletClient.writeContract({
           address: executionData.tokenContract as `0x${string}`,
           abi: ERC20_APPROVE_ABI,
           functionName: 'approve',
           args: [executionData.paymentContract as `0x${string}`, amountPerPeriodRaw],
         });
-        await publicClient.waitForTransactionReceipt({ hash: approveHash });
+        await activePublicClient.waitForTransactionReceipt({ hash: approveHash });
 
         billingStep = 'billing activation';
-        const upsertHash = await walletClient.writeContract({
+        const upsertHash = await activeWalletClient.writeContract({
           address: executionData.paymentContract as `0x${string}`,
           abi: PAYMENT_UPSERT_BILLING_ABI,
           functionName: 'upsertBilling',
           args: [executionData.subscriptionIdBytes32, maxChargeRaw],
         });
-        await publicClient.waitForTransactionReceipt({ hash: upsertHash });
+        await activePublicClient.waitForTransactionReceipt({ hash: upsertHash });
 
+        const networkLabel = getOnchainBillingNetworkLabel();
         setBillingSuccess(
-          `Payment method pending confirmation completed for ${plan.replace('_', ' ').toUpperCase()} (${billingCycle}). Charges occur only after onchain billing + backend processing.`,
+          isTestnetOnchainBilling()
+            ? `Testnet billing setup completed on ${networkLabel} for ${plan.replace('_', ' ').toUpperCase()} (${billingCycle}). No mainnet USDC was charged.`
+            : `Payment method pending confirmation completed for ${plan.replace('_', ' ').toUpperCase()} (${billingCycle}). Charges occur only after onchain billing + backend processing.`,
         );
       } catch (error) {
         console.error('[Billing] checkout failed', { billingStep, error });

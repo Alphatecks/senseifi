@@ -1,9 +1,29 @@
 import { ApiService } from './index';
 
+export type WalletProviderType = 'metamask' | 'coinbase' | 'walletconnect';
+export type SolanaWalletProviderType = 'phantom' | 'solflare' | 'backpack';
+export type ConnectWalletType = WalletProviderType | SolanaWalletProviderType;
+export type WalletChainFamily = 'evm' | 'solana';
+
+export interface ConnectWalletOptions {
+  chainFamily?: WalletChainFamily;
+  network?: string;
+  userId?: string;
+  linkWalletAddress?: string;
+  walletProvider?: string;
+  walletName?: string;
+}
+
 export interface ConnectWalletRequest {
   address: string;
   chain_id: number;
-  wallet_type: 'metamask' | 'coinbase';
+  wallet_type: ConnectWalletType;
+  chain_family?: WalletChainFamily;
+  network?: string;
+  user_id?: string;
+  link_wallet_address?: string;
+  wallet_provider?: string;
+  wallet_name?: string;
 }
 
 export interface WalletStatusResponse {
@@ -18,7 +38,13 @@ export interface WalletResponse {
   id: string;
   address: string;
   chain_id: number;
+  chain_family?: string;
   wallet_type: string;
+  wallet_provider?: string;
+  wallet_name?: string;
+  provider_display?: string;
+  network?: string | null;
+  network_label?: string;
   connected_at: string;
   is_active: boolean;
 }
@@ -33,7 +59,7 @@ export interface DashboardUser {
 export interface ConnectWalletResponse {
   success: boolean;
   data: WalletResponse;
-  dashboard_user: DashboardUser;
+  dashboard_user?: DashboardUser | null;
 }
 
 export interface ClaimWaitlistXpResult {
@@ -119,26 +145,71 @@ export interface WalletModalData {
 const WALLET_API_BASE_URL = process.env.NEXT_PUBLIC_WALLET_API_URL || 'https://senseifi-backend.onrender.com/api';
 const walletApiService = new ApiService(WALLET_API_BASE_URL);
 
+export type ConnectWalletResult = {
+  data: WalletResponse;
+  dashboard_user: DashboardUser | null;
+  alreadyConnected?: boolean;
+};
+
+function isAlreadyConnectedWalletError(status: number, message: string): boolean {
+  if (status === 409) return true;
+  return /already connected|already registered|duplicate/i.test(message);
+}
+
 export class WalletService {
   async connectWallet(
     address: string,
     chainId: number,
-    walletType: 'metamask' | 'coinbase'
-  ): Promise<{ data: WalletResponse; dashboard_user: DashboardUser }> {
-    const response = await walletApiService.post<ConnectWalletResponse>(
-      '/wallets/connect',
-      {
-        address,
-        chain_id: chainId,
-        wallet_type: walletType,
-      }
-    );
+    walletType: ConnectWalletType,
+    options?: ConnectWalletOptions
+  ): Promise<ConnectWalletResult> {
+    const body: ConnectWalletRequest = {
+      address,
+      chain_id: chainId,
+      wallet_type: walletType,
+    };
 
-    if (!response.success) {
-      throw new Error('Failed to connect wallet');
+    if (options?.chainFamily) body.chain_family = options.chainFamily;
+    if (options?.network) body.network = options.network;
+    if (options?.userId) body.user_id = options.userId;
+    if (options?.linkWalletAddress) body.link_wallet_address = options.linkWalletAddress;
+    if (options?.walletProvider) body.wallet_provider = options.walletProvider;
+    if (options?.walletName) body.wallet_name = options.walletName;
+
+    const response = await fetch(`${WALLET_API_BASE_URL}/wallets/connect`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    const json = (await response.json().catch(() => ({}))) as ConnectWalletResponse & {
+      message?: string;
+      error?: string;
+    };
+    const message =
+      (typeof json.message === 'string' && json.message) ||
+      (typeof json.error === 'string' && json.error) ||
+      'Failed to connect wallet';
+
+    if (isAlreadyConnectedWalletError(response.status, message)) {
+      if (json.success && json.data) {
+        return {
+          data: json.data,
+          dashboard_user: json.dashboard_user ?? null,
+          alreadyConnected: true,
+        };
+      }
+      throw new Error(message || 'Wallet already connected on this network');
     }
 
-    return { data: response.data, dashboard_user: response.dashboard_user };
+    if (!response.ok || !json.success || !json.data) {
+      throw new Error(message);
+    }
+
+    return { data: json.data, dashboard_user: json.dashboard_user ?? null };
   }
 
   async claimWaitlistXp(email: string, walletAddress: string): Promise<ClaimWaitlistXpResult> {

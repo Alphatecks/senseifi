@@ -1,10 +1,14 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="sg-side-panel">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=380, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>SenseiGuard</title>
+  <script>document.documentElement.classList.add('sg-booting');</script>
   <link rel="stylesheet" href="popup.css" />
+  <script src="config.js" defer></script>
+  <script src="lib/contract-scan.js" defer></script>
+  <script src="popup.js" defer></script>
 </head>
 <body class="welcome">
   <div class="welcome-scroll-shell">
@@ -138,12 +142,12 @@
       <div id="cw-connect-flow">
         <p class="cw-section-title">Connect Wallet</p>
 
-        <div class="cw-row cw-row--metamask" data-wallet="metamask">
+        <div class="cw-row cw-row--walletconnect" data-wallet="walletconnect">
           <div class="cw-row-main">
             <img
               class="cw-wallet-icon"
               src="assets/scaled_logo.png"
-              data-remote-src="https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Fox.svg"
+              data-remote-src="https://raw.githubusercontent.com/WalletConnect/walletconnect-assets/master/Logo/Blue%20(Default)/Logo.svg"
               alt=""
               width="28"
               height="28"
@@ -151,27 +155,10 @@
               decoding="async"
             />
             <span class="cw-row-label">
-              MetaMask <span class="cw-recommended">(Recommended)</span>
+              WalletConnect <span class="cw-recommended">Trust, Rabby, 300+</span>
             </span>
           </div>
-          <button type="button" class="cw-row-btn" data-action="connect-metamask">Connect</button>
-        </div>
-
-        <div class="cw-row cw-row--coinbase" data-wallet="coinbase">
-          <div class="cw-row-main">
-            <img
-              class="cw-wallet-icon"
-              src="assets/scaled_logo.png"
-              data-remote-src="https://pbs.twimg.com/media/G1y6H-1a0AAkGJ9.png"
-              alt=""
-              width="28"
-              height="28"
-              loading="lazy"
-              decoding="async"
-            />
-            <span class="cw-row-label">Coinbase Wallet</span>
-          </div>
-          <button type="button" class="cw-row-btn" data-action="connect-coinbase">Connect</button>
+          <button type="button" class="cw-row-btn" data-action="connect-walletconnect">Connect</button>
         </div>
 
         <div class="cw-or" role="separator" aria-label="Or">
@@ -181,14 +168,14 @@
         </div>
 
         <div class="cw-qr-block">
-          <div class="cw-qr-frame">
+          <div class="cw-qr-frame cw-qr-frame--walletconnect">
             <img
               class="cw-qr-img"
               src="assets/scaled_logo.png"
-              data-remote-src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&amp;data=SenseiGuard&amp;bgcolor=ffffff&amp;color=000000&amp;margin=8"
-              alt="QR code to connect wallet"
-              width="180"
-              height="180"
+              data-remote-src="https://raw.githubusercontent.com/WalletConnect/walletconnect-assets/master/Logo/Blue%20(Default)/Logo.svg"
+              alt=""
+              width="96"
+              height="96"
               loading="lazy"
               decoding="async"
             />
@@ -197,8 +184,11 @@
             <svg class="cw-scan-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405M19 13V7a2 2 0 00-2-2h-6M5 7V5a2 2 0 012-2h6m-6 0v2m0 0H7m0 0v2" />
             </svg>
-            Scan Code to connect
+            Trust Wallet &amp; mobile wallets via WalletConnect
           </p>
+          <button type="button" class="cw-row-btn cw-qr-connect-btn" data-action="connect-walletconnect">
+            Open WalletConnect
+          </button>
         </div>
 
         <button type="button" class="welcome-cta" id="cta-connect-wallet-main">Connect Wallet</button>
@@ -228,11 +218,44 @@
             <span class="cw-action-text">Enable Autoblock</span>
           </button>
 
-          <button type="button" class="cw-action-card cw-action-card--chart" data-action="card-chart">
+          <button type="button" class="cw-action-card cw-action-card--chart cw-action-card--coming-soon" data-action="card-chart">
+            <span class="cw-action-badge">Coming soon</span>
             <span class="cw-action-icon-shell" aria-hidden="true">
-              <img class="cw-action-icon" src="assets/icons/analyse.png" alt="" width="110" height="110" />
+              <img class="cw-action-icon" src="assets/icons/action_analyse_chart.svg" alt="" width="110" height="110" />
             </span>
             <span class="cw-action-text">Analyse Chart</span>
+          </button>
+
+          <button type="button" class="cw-action-card cw-action-card--hacked-wallet cw-action-card--coming-soon" data-action="card-hacked-wallet">
+            <span class="cw-action-badge">Coming soon</span>
+            <span class="cw-action-icon-shell" aria-hidden="true">
+              <img class="cw-action-icon" src="assets/icons/action_recover_wallet.svg" alt="" width="110" height="110" />
+            </span>
+            <span class="cw-action-text cw-action-text--compact">Retrieve Hacked wallet</span>
+          </button>
+
+          <button type="button" class="cw-action-card cw-action-card--airdrop-hunter cw-action-card--coming-soon" data-action="card-airdrop-hunter">
+            <span class="cw-action-badge">Coming soon</span>
+            <span class="cw-action-icon-shell" aria-hidden="true">
+              <img class="cw-action-icon" src="assets/icons/action_airdrop_hunter.svg" alt="" width="110" height="110" />
+            </span>
+            <span class="cw-action-text">Airdrop Hunter</span>
+          </button>
+
+          <button type="button" class="cw-action-card cw-action-card--secure-transfer cw-action-card--coming-soon" data-action="card-secure-transfer">
+            <span class="cw-action-badge">Coming soon</span>
+            <span class="cw-action-icon-shell" aria-hidden="true">
+              <img class="cw-action-icon" src="assets/icons/action_secure_transfer.svg" alt="" width="110" height="110" />
+            </span>
+            <span class="cw-action-text cw-action-text--compact">Secure Asset transfer layer</span>
+          </button>
+
+          <button type="button" class="cw-action-card cw-action-card--oracle cw-action-card--coming-soon" data-action="card-oracle">
+            <span class="cw-action-badge">Coming soon</span>
+            <span class="cw-action-icon-shell" aria-hidden="true">
+              <img class="cw-action-icon" src="assets/icons/action_oracle_network.svg" alt="" width="110" height="110" />
+            </span>
+            <span class="cw-action-text cw-action-text--compact">Decentralized oracle networks</span>
           </button>
         </div>
       </div>
@@ -418,17 +441,17 @@
       <div id="cw-contract-scan-view" class="cw-contract-scan view-hidden">
         <h2 class="cw-contract-scan-title">Scan Smart Contract</h2>
         <p class="cw-contract-scan-copy">
-          Paste a smart contract link to begin a full SenseiGuard security analysis.
+          Paste an EVM contract or Solana program link to begin a full SenseiGuard security analysis.
         </p>
 
-        <label for="cw-contract-link-input" class="cw-contract-scan-label">Smart contract link or Contract address</label>
+        <label for="cw-contract-link-input" class="cw-contract-scan-label">Contract / program link or address</label>
         <input
           id="cw-contract-link-input"
           class="cw-contract-scan-input"
           type="text"
           inputmode="text"
           autocomplete="off"
-          placeholder="https://etherscan.io/address/0x... or 0x..."
+          placeholder="https://etherscan.io/address/0x..., Solscan URL, or program id"
         />
         <div id="cw-chain-select-wrap" class="cw-chain-select-wrap view-hidden">
           <p class="cw-chain-select-label">Select network</p>
@@ -447,29 +470,41 @@
             <span class="cw-chain-select-caret" aria-hidden="true">▾</span>
           </button>
           <div id="cw-chain-select-menu" class="cw-chain-select-menu view-hidden">
-            <button type="button" class="cw-chain-option is-selected" data-chain-id="1" data-chain-name="Ethereum Mainnet">
+            <button type="button" class="cw-chain-option is-selected" data-chain-family="evm" data-chain-id="1" data-chain-name="Ethereum Mainnet">
               <img src="assets/scaled_logo.png" data-remote-src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ-lBuqDXSiFE_McY-voa9YFoRqRJYzFcOghQ&s" alt="" width="18" height="18" />
               <span>Ethereum Mainnet</span>
             </button>
-            <button type="button" class="cw-chain-option" data-chain-id="56" data-chain-name="BNB Smart Chain">
+            <button type="button" class="cw-chain-option" data-chain-family="evm" data-chain-id="56" data-chain-name="BNB Smart Chain">
               <img src="assets/scaled_logo.png" data-remote-src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSc7MXnxUw6yE_1BXax7T4RVb74vtaBeyw1qg&s" alt="" width="18" height="18" />
               <span>BNB Smart Chain</span>
             </button>
-            <button type="button" class="cw-chain-option" data-chain-id="137" data-chain-name="Polygon">
+            <button type="button" class="cw-chain-option" data-chain-family="evm" data-chain-id="137" data-chain-name="Polygon">
               <img src="assets/scaled_logo.png" data-remote-src="https://upload.wikimedia.org/wikipedia/commons/2/21/Polygon_Icon.svg" alt="" width="18" height="18" />
               <span>Polygon</span>
             </button>
-            <button type="button" class="cw-chain-option" data-chain-id="8453" data-chain-name="Base">
+            <button type="button" class="cw-chain-option" data-chain-family="evm" data-chain-id="8453" data-chain-name="Base">
               <img src="assets/scaled_logo.png" data-remote-src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRgJzE3esFDDQJwxXfIEQy-TlsXLnWvlEOyTQ&s" alt="" width="18" height="18" />
               <span>Base</span>
             </button>
-            <button type="button" class="cw-chain-option" data-chain-id="42161" data-chain-name="Arbitrum One">
+            <button type="button" class="cw-chain-option" data-chain-family="evm" data-chain-id="42161" data-chain-name="Arbitrum One">
               <img src="assets/scaled_logo.png" data-remote-src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6mQ1pwxVT3lqCTZWhuUZzKTOqT0ZmYh2oeg&s" alt="" width="18" height="18" />
               <span>Arbitrum One</span>
             </button>
-            <button type="button" class="cw-chain-option" data-chain-id="10" data-chain-name="Optimism">
+            <button type="button" class="cw-chain-option" data-chain-family="evm" data-chain-id="10" data-chain-name="Optimism">
               <img src="assets/scaled_logo.png" data-remote-src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTqidBq62tBzMjwxpb9WljM3BuKe6oEHzbJ6Q&s" alt="" width="18" height="18" />
               <span>Optimism</span>
+            </button>
+            <button type="button" class="cw-chain-option" data-chain-family="solana" data-network="mainnet-beta" data-chain-name="Solana Mainnet">
+              <img src="assets/scaled_logo.png" data-remote-src="https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/solana/info/logo.png" alt="" width="18" height="18" />
+              <span>Solana Mainnet</span>
+            </button>
+            <button type="button" class="cw-chain-option" data-chain-family="solana" data-network="devnet" data-chain-name="Solana Devnet">
+              <img src="assets/scaled_logo.png" data-remote-src="https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/solana/info/logo.png" alt="" width="18" height="18" />
+              <span>Solana Devnet</span>
+            </button>
+            <button type="button" class="cw-chain-option" data-chain-family="solana" data-network="testnet" data-chain-name="Solana Testnet">
+              <img src="assets/scaled_logo.png" data-remote-src="https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/solana/info/logo.png" alt="" width="18" height="18" />
+              <span>Solana Testnet</span>
             </button>
           </div>
         </div>
@@ -530,8 +565,5 @@
       </footer>
     </div>
   </div>
-  <script src="config.js"></script>
-  <script src="wallet-connect.js"></script>
-  <script src="popup.js"></script>
 </body>
 </html>

@@ -485,7 +485,11 @@ export interface WalletListItem {
   id: string;
   address: string;
   provider: string;
-  currency: string;
+  chain_family?: string;
+  chain_id?: number;
+  currency?: string;
+  network?: string | null;
+  network_label?: string;
   connected_at: string;
   /** Optional logo URL from the API (e.g. MetaMask, exchange logo). */
   logo_url?: string | null;
@@ -497,15 +501,45 @@ export interface WalletsPagination {
   total: number;
 }
 
-export async function getWalletsForAddress(forAddress: string): Promise<{ data: WalletListItem[]; pagination: WalletsPagination } | null> {
-  if (!forAddress) return null;
-  const params = new URLSearchParams({ for_address: forAddress });
-  const { ok, status, data } = await dashboardFetch<{ success: boolean; data: WalletListItem[]; pagination: WalletsPagination }>(
-    `/wallets?${params}`
-  );
+export async function getConnectedWallets(options: {
+  userId?: string;
+  forAddress?: string;
+  perPage?: number;
+}): Promise<{ data: WalletListItem[]; pagination: WalletsPagination } | null> {
+  const userId = options.userId?.trim();
+  const forAddress = options.forAddress?.trim();
+  if (!userId && !forAddress) return null;
+
+  const params = new URLSearchParams();
+  if (userId) params.set('user_id', userId);
+  else if (forAddress) params.set('for_address', forAddress);
+  if (options.perPage) params.set('per_page', String(options.perPage));
+
+  const { ok, status, data } = await dashboardFetch<{
+    success: boolean;
+    data: WalletListItem[];
+    pagination: WalletsPagination;
+  }>(`/wallets?${params}`);
+
   if (status === 404) return null;
   if (!ok || !data?.success) return null;
-  return { data: Array.isArray(data.data) ? data.data : [], pagination: data.pagination ?? { page: 1, per_page: 1, total: 0 } };
+  return {
+    data: Array.isArray(data.data) ? data.data : [],
+    pagination: data.pagination ?? { page: 1, per_page: options.perPage ?? 50, total: 0 },
+  };
+}
+
+/** @deprecated Prefer getConnectedWallets({ userId }) for the connected networks panel. */
+export async function getWalletsForAddress(
+  forAddress: string,
+  options?: { userId?: string; perPage?: number }
+): Promise<{ data: WalletListItem[]; pagination: WalletsPagination } | null> {
+  const userId = options?.userId?.trim();
+  if (userId) {
+    return getConnectedWallets({ userId, perPage: options?.perPage });
+  }
+  if (!forAddress) return null;
+  return getConnectedWallets({ forAddress, perPage: options?.perPage });
 }
 
 export interface TransactionMonitoringItem {
@@ -672,12 +706,22 @@ export async function checkDappConnection(body: DappConnectionCheckRequest): Pro
 
 // --- Scan Contract (Smart Wallet Scanner) ---
 
+import {
+  buildScanContractRequestBody,
+  isEvmContractAddress,
+  isSolanaProgramAddress,
+  parseContractScanInput,
+  type ScanContractOptions,
+} from "@/utils/contractScan";
+
+export type { ScanContractOptions } from "@/utils/contractScan";
+
 export interface ScanContractDetails {
   simulation?: {
     drains_full_balance?: boolean;
     hidden_internal_calls?: number;
     approval_scope?: string;
-    dangerous_functions?: string[];
+    dangerous_functions?: string[] | null;
   };
   owner_privileges?: {
     mint?: boolean;
@@ -690,6 +734,7 @@ export interface ScanContractDetails {
     reported_scam?: boolean;
     community_flags?: number;
     verified_source?: boolean;
+    local_report_count?: number;
   };
   trend?: {
     scans_today?: number;
@@ -701,13 +746,21 @@ export interface ScanContractDetails {
     owner_privileges?: number;
     reputation?: number;
     anomaly?: number;
+    user_anomaly?: number;
     token_control_scope?: number;
+    token_scope?: number;
     contract_age?: number;
   };
   user_anomaly_score?: number;
   rug_pull_probability?: string;
   ai_summary?: string;
   abi_source?: string;
+  chain_family?: string;
+  network?: string;
+  goplus_risk_flags?: string[];
+  locally_flagged?: boolean;
+  contract_name?: string | null;
+  detected_standards?: string[];
 }
 
 export interface ScanContractResult {
@@ -718,14 +771,54 @@ export interface ScanContractResult {
   token_controlled: string;
   owner_admin_count: number;
   scanned_at: string;
+  chain_id?: number;
+  network?: string;
+  contract_name?: string | null;
+  detected_standard?: string | null;
   details?: ScanContractDetails;
   ai_summary?: string;
 }
 
-export async function scanContract(contractAddress: string, forAddress?: string | null, chainId: number = 1): Promise<ScanContractResult | null> {
+export async function scanContract(
+  contractAddress: string,
+  forAddress?: string | null,
+  options: number | ScanContractOptions = 1
+): Promise<ScanContractResult | null> {
   if (!contractAddress?.trim()) return null;
-  const body: { contract_address: string; for_address?: string; chain_id?: number } = { contract_address: contractAddress.trim(), chain_id: chainId };
-  if (forAddress?.trim()) body.for_address = forAddress.trim();
+
+  const opts: ScanContractOptions =
+    typeof options === "number" ? { chainId: options } : options ?? {};
+
+  let target = parseContractScanInput(contractAddress);
+  if (!target) {
+    const trimmed = contractAddress.trim();
+    if (isEvmContractAddress(trimmed)) {
+      target = {
+        contractAddress: trimmed,
+        chainFamily: "evm",
+        chainId: opts.chainId ?? 1,
+        rawInput: trimmed,
+      };
+    } else if (isSolanaProgramAddress(trimmed)) {
+      target = {
+        contractAddress: trimmed,
+        chainFamily: "solana",
+        network: (opts.network as "mainnet-beta") ?? "mainnet-beta",
+        rawInput: trimmed,
+      };
+    } else {
+      return null;
+    }
+  }
+
+  if (target.chainFamily === "evm" && opts.chainId != null) {
+    target = { ...target, chainId: opts.chainId };
+  }
+  if (target.chainFamily === "solana" && opts.network) {
+    target = { ...target, network: opts.network as typeof target.network };
+  }
+
+  const body = buildScanContractRequestBody(target, forAddress, opts);
   const { ok, status, data } = await dashboardFetch<ScanContractResult | { success: boolean; data: ScanContractResult }>(
     '/scan-contract',
     { method: 'POST', body: JSON.stringify(body) }
@@ -744,6 +837,10 @@ export interface ScanContractDetailResponse {
   critical_risk_flags: number;
   token_controlled: string;
   owner_admin_count: number;
+  chain_id?: number;
+  network?: string;
+  contract_name?: string | null;
+  detected_standard?: string | null;
   details?: ScanContractDetails;
   scanned_at: string;
   created_at?: string;

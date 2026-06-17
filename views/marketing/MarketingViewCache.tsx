@@ -1,51 +1,38 @@
 'use client';
 
-import { useEffect, useState, type ComponentType, type ReactNode } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 import { useMarketingNav } from '@/views/marketing/MarketingNavContext';
 import {
-  MARKETING_ROUTE_LOADERS,
   MARKETING_ROUTE_PATHS,
   isMarketingRoute,
   normalizeMarketingPath,
   type MarketingRoutePath,
 } from '@/views/marketing/routes';
+import HomeScreen from '@/views/HomeScreen';
+import AboutScreen from '@/views/AboutScreen';
+import FeaturesPageContent from '@/views/marketing/FeaturesPageContent';
+import PricingPageContent from '@/views/marketing/PricingPageContent';
+import PrivacyPolicyScreen from '@/views/PrivacyPolicyScreen';
+import ContactScreen from '@/views/ContactScreen';
 
-type CachedViews = Partial<Record<MarketingRoutePath, ComponentType>>;
+const MARKETING_VIEWS: Record<MarketingRoutePath, ComponentType> = {
+  '/': HomeScreen,
+  '/about': AboutScreen,
+  '/features': FeaturesPageContent,
+  '/pricing': PricingPageContent,
+  '/privacy': PrivacyPolicyScreen,
+  '/contact': ContactScreen,
+};
 
 export default function MarketingViewCache({ fallback }: { fallback: ReactNode }) {
-  const { activePath, markRouteReady } = useMarketingNav();
-  const [cachedViews, setCachedViews] = useState<CachedViews>({});
-
-  useEffect(() => {
-    let cancelled = false;
-
-    void Promise.all(
-      MARKETING_ROUTE_PATHS.map(async (path) => {
-        const module = await MARKETING_ROUTE_LOADERS[path]();
-        if (cancelled) return;
-
-        setCachedViews((current) => ({
-          ...current,
-          [path]: module.default,
-        }));
-        markRouteReady(path);
-      }),
-    );
-
-    return () => {
-      cancelled = true;
-    };
-  }, [markRouteReady]);
-
+  const { activePath } = useMarketingNav();
   const displayPath = normalizeMarketingPath(activePath);
-  const showFallback = !isMarketingRoute(displayPath) || !cachedViews[displayPath];
+  const showFallback = !isMarketingRoute(displayPath);
 
   return (
     <>
       {MARKETING_ROUTE_PATHS.map((path) => {
-        const View = cachedViews[path];
-        if (!View) return null;
-
+        const View = MARKETING_VIEWS[path];
         const isActive = displayPath === path;
 
         return (
