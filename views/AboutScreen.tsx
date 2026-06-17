@@ -15,6 +15,12 @@ const IMPACT_STATS = [
   { value: "99.3%", label: "User Satisfaction" },
 ] as const;
 
+const ACTIVE_USER_FACES = [
+  { src: "/images/users/user-1.jpg", alt: "SenseiFi active user" },
+  { src: "/images/users/user-2.jpg", alt: "SenseiFi active user" },
+  { src: "/images/users/user-3.jpg", alt: "SenseiFi active user" },
+] as const;
+
 const CORE_VALUES = [
   {
     title: "Security First",
@@ -208,16 +214,12 @@ export default function AboutScreen() {
               <span className="inline-flex items-center rounded-full border border-[#0026FF] px-4 py-1 text-sm text-white mb-6">
                 About Us
               </span>
-              <h1 className="text-4xl md:text-5xl xl:text-6xl font-normal leading-tight">
-                DeFi Security
-                <br />
-                Built to Protect
-                <br />
-                Before You Sign
+              <h1 className="text-4xl md:text-5xl xl:text-6xl font-bold leading-tight">
+                All-in-one Powered Platform
               </h1>
               <p className="mt-6 text-white/75 text-base md:text-lg max-w-xl">
-                SenseiFi delivers DeFi security services that scan contracts, detect threats, and protect
-                wallets so you can use decentralized apps with confidence.
+                We built an AI-powered ecosystem that helps you protect your assets, make smarter trading
+                decisions, and spend crypto seamlessly.
               </p>
               <div className="mt-8 flex flex-wrap items-center gap-3">
                 <Link
@@ -266,9 +268,9 @@ export default function AboutScreen() {
         <div className="w-full max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-5">
           <div className="rounded-[26px] border border-white/10 bg-[#0e1630] p-6 md:p-8 min-h-[480px] md:min-h-[640px] flex flex-col justify-between">
             <h2 className="text-4xl md:text-5xl font-normal leading-tight max-w-md">
-              Built for Safer
+              Built for a Smarter,
               <br />
-              DeFi Participation
+              Safer Crypto Future
             </h2>
             <div className="mt-8 relative w-full h-[340px] md:h-[440px] lg:h-[520px] overflow-hidden">
               <video
@@ -285,11 +287,20 @@ export default function AboutScreen() {
 
           <div className="flex flex-col gap-5">
             <div className="rounded-[22px] border border-white/10 bg-[#01061c] p-5 md:p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="h-10 w-10 rounded-full border border-white/20 bg-white/20" />
-                <div className="h-10 w-10 rounded-full border border-white/20 bg-white/10" />
-                <div className="h-10 w-10 rounded-full border border-white/20 bg-white/20" />
-                <div className="h-10 w-10 rounded-full border border-white/20 bg-[#0026FF] flex items-center justify-center">
+              <div className="mb-4 flex items-center">
+                {ACTIVE_USER_FACES.map((user, index) => (
+                  <div
+                    key={user.src}
+                    className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full border-2 border-[#01061c] bg-[#01061c]"
+                    style={{ marginLeft: index === 0 ? 0 : "-0.5rem", zIndex: ACTIVE_USER_FACES.length - index }}
+                  >
+                    <Image src={user.src} alt={user.alt} fill className="object-cover" sizes="40px" />
+                  </div>
+                ))}
+                <div
+                  className="relative z-0 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-[#01061c] bg-[#0026FF]"
+                  style={{ marginLeft: "-0.5rem" }}
+                >
                   <Image src="/images/scaled_logo.png" alt="SenseiFi" width={18} height={18} />
                 </div>
               </div>
@@ -301,12 +312,13 @@ export default function AboutScreen() {
 
             <div className="rounded-[22px] border border-white/10 bg-[#0e1630] p-5 md:p-6">
               <h3 className="text-2xl md:text-4xl leading-tight font-medium">
-                SenseiFi is a DeFi security platform focused on protecting users before losses happen.
+                Your wallet deserves more than storage. It deserves protection. It deserves intelligence.
+                It deserves utility
               </h3>
               <p className="mt-4 text-white/75 text-sm md:text-base max-w-2xl">
-                Through SenseiGuard, our security dashboard, and the browser extension, we offer wallet
-                scans, contract analysis, threat intelligence, activity monitoring, and approval review
-                across supported chains.
+                The future of finance is onchain, but today&apos;s experience remains fragmented. You need
+                security tools to stay protected, market intelligence to make informed decisions, and
+                practical payment solutions to unlock the real-world value of your assets
               </p>
               <button className="mt-6 inline-flex items-center rounded-full border border-[#0026FF] px-5 py-2 text-white text-sm">
                 About Us
