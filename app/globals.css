@@ -112,6 +112,20 @@
   animation: logo-marquee 18s linear infinite;
 }
 
+@keyframes connect-wallet-beam-pulse {
+  0%,
+  100% {
+    opacity: 0.65;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.connect-wallet-beam {
+  animation: connect-wallet-beam-pulse 3.5s ease-in-out infinite;
+}
+
 /* Dashboard header emboss (neumorphic) – gray/dark-gray and gray-white, no black */
 .emboss-raised {
   box-shadow:

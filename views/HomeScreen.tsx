@@ -7,179 +7,203 @@ import HowItWorksSection from "./HowItWorksSection";
 import WhyTrustSection from "./WhyTrustSection";
 import CenteredAppDownload from "./CenteredAppDownload";
 import { useInView } from "../utils/useInView";
-import handImage from "@/assets/images/hand.png";
-import HomeAddressScanModal from "@/views/components/HomeAddressScanModal";
-import { normalizeEvmAddressInput } from "@/utils/evmAddress";
+import TransparentVideo from "./components/TransparentVideo";
+
+const HERO_VIDEO_SRC = "/videos/hero.mp4";
+
+const PARTNER_LOGOS = [
+  { src: "/images/Group.png", alt: "WalletConnect Pay", className: "h-5 sm:h-6 md:h-7" },
+  { src: "/images/MetaMask-logo-white 1.png", alt: "MetaMask", className: "h-6 sm:h-7 md:h-8" },
+  { src: "/images/idR3970tUM_1775665826564 1.png", alt: "Coinbase", className: "h-6 sm:h-7 md:h-8" },
+  { src: "/images/g18.png", alt: "Binance", className: "h-6 sm:h-7 md:h-8" },
+  { src: "/images/Trust Wallet Wordmark_White 1.png", alt: "Trust Wallet", className: "h-6 sm:h-7 md:h-8" },
+  { src: "/images/id9jl1arwx_logos 1.png", alt: "Phantom", className: "h-6 sm:h-7 md:h-8" },
+] as const;
 
 export default function HomeScreen() {
-  const [scanAddress, setScanAddress] = React.useState("");
-  const [inputValue, setInputValue] = React.useState("");
-  const [scanError, setScanError] = React.useState("");
-  const [scanModalOpen, setScanModalOpen] = React.useState(false);
-
-  const handleAddressScan = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const normalized = normalizeEvmAddressInput(inputValue);
-
-    if (!normalized) {
-      setScanError("Enter a valid wallet or contract address (0x…).");
-      return;
-    }
-
-    setScanError("");
-    setScanAddress(normalized);
-    setScanModalOpen(true);
-  };
-
-  const closeScanModal = () => {
-    setScanModalOpen(false);
-  };
-
   // Hero Section scroll animation
   const [heroRef, heroInView] = useInView({ threshold: 0.2 });
-  // Value Section scroll animation
+  // All-in-one hero scroll animation
   const [valueRef, valueInView] = useInView({ threshold: 0.2 });
   // Features Section scroll animation
   const [featuresRef, featuresInView] = useInView({ threshold: 0.2 });
   return (
-    <main className="min-h-screen bg-gradient-to-b from-[#0a0a1a] via-[#0a0a1a] to-[#181c2a] text-white flex flex-col">
-      {/* Header spacing */}
-      <div className="h-20" />
-      {/* Additional spacing */}
-      <div className="h-20" />
-      {/* Hero Section */}
+    <main className="min-h-screen bg-[#0a0a1a] text-white flex flex-col">
+      {/* Hero — headline, CTAs, video */}
       <section
         ref={heroRef}
-        className="w-full flex flex-col relative overflow-visible pl-4 pr-4 md:px-8 lg:px-12 xl:pl-40 xl:pr-0"
+        className="relative w-full overflow-visible px-4 sm:px-6 lg:px-8 pt-28 sm:pt-32 md:pt-36"
       >
-        {/* Starfield background scoped to hero only */}
+        <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+          <div className="absolute inset-0 starfield opacity-60" />
+          <div className="absolute top-0 right-0 h-64 w-64 bg-[radial-gradient(circle_at_center,_rgba(0,38,255,0.35),_transparent_70%)] blur-2xl" />
+          <div className="absolute inset-0 bg-gradient-to-b from-[#0a0a1a]/30 via-transparent to-[#0a0a1a]" />
+
+          {/* Slanted beam from header toward hero video — scrolls with hero */}
+          <div className="connect-wallet-beam absolute top-0 right-3 origin-top-right rotate-[40deg] sm:right-6 sm:rotate-[44deg] md:right-6 lg:right-8 lg:rotate-[50deg] xl:right-40">
+            <div className="relative h-[18rem] w-36 sm:h-[24rem] sm:w-44 lg:h-[32rem]">
+              <div className="absolute inset-0 bg-gradient-to-b from-[#4066FF]/80 via-[#0026FF]/30 to-transparent blur-3xl" />
+              <div className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-gradient-to-b from-white/90 via-[#4066FF]/90 to-transparent shadow-[0_0_20px_#4066FF]" />
+              <div className="absolute left-1/2 top-0 h-20 w-20 -translate-x-1/2 bg-gradient-to-b from-[#4066FF] to-transparent blur-2xl" />
+            </div>
+          </div>
+        </div>
+
         <div
-          className="absolute inset-0 -inset-x-8 -inset-y-12 pointer-events-none z-0 overflow-hidden"
+          className="pointer-events-none absolute left-1/2 z-0 w-screen max-w-[100vw] -translate-x-1/2 top-[10.5rem] sm:top-[15.5rem] md:top-[16.5rem] lg:top-[17.5rem] h-[min(52.1vw,520px)] overflow-hidden"
           aria-hidden
         >
-          <div className="absolute inset-0 starfield opacity-100" />
-          <div className="absolute -left-24 -top-12 h-[34rem] w-[34rem] bg-[radial-gradient(circle_at_center,_rgba(0,38,255,0.6),_rgba(0,38,255,0)_70%)] blur-3xl" />
-          <div className="absolute -right-16 -top-20 h-[32rem] w-[32rem] bg-[radial-gradient(circle_at_center,_rgba(0,38,255,0.65),_rgba(0,38,255,0)_72%)] blur-3xl" />
-          <div className="absolute inset-0 bg-gradient-to-b from-[#0a0a1a] via-transparent to-transparent" />
-        </div>
-        {/* Desktop rolling coin */}
-        <div className="hidden md:block absolute right-[-3rem] top-[-1rem] md:w-[20rem] md:h-[20rem] lg:right-[-6rem] lg:-top-16 lg:w-[32rem] lg:h-[32rem] xl:right-[-8rem] xl:-top-48 xl:w-[64rem] xl:h-[64rem] z-50 pointer-events-none">
-          <Image
-            src={handImage}
-            alt="SenseiFi hand"
-            width={1024}
-            height={1024}
-            className="w-full h-full object-contain opacity-70"
-            unoptimized
+          <TransparentVideo
+            src={HERO_VIDEO_SRC}
+            className="h-full w-full opacity-95"
+            threshold={40}
+            align="bottom"
           />
+          <div className="absolute inset-0 bg-[#0a0a1a]/55" />
         </div>
-        {/* ...no animated coins... */}
-        <div className="w-full flex flex-col items-center md:items-start text-center md:text-left mt-2 md:mt-20 lg:mt-28 xl:mt-36 md:max-w-2xl lg:max-w-3xl xl:max-w-none">
-          <h1 className={`text-4xl md:text-5xl lg:text-6xl font-normal leading-tight mb-4 text-white drop-shadow-xl z-10 relative ${heroInView ? "animate-fade-slide-up" : "opacity-0"}`}>
-            Protect Wallets. Detect Threats.<br className="hidden md:inline" /> Trade Crypto With Confidence
+
+        <div className="relative z-10 mx-auto flex w-full max-w-4xl translate-y-0 sm:translate-y-16 md:translate-y-40 lg:translate-y-48 flex-col items-center text-center">
+          <h1
+            className={`text-[1.65rem] leading-tight sm:text-5xl md:text-6xl lg:text-[4.25rem] font-normal sm:leading-[1.15] tracking-tight text-white drop-shadow-lg ${
+              heroInView ? "animate-fade-slide-up" : "opacity-0"
+            }`}
+          >
+            Intelligent Crypto Insights,
+            <br />
+            Driven by Next-Level AI
           </h1>
-          <p className={`text-lg md:text-lg lg:text-xl text-white/80 mb-8 max-w-2xl z-10 relative ${heroInView ? "animate-fade-slide-up delay-200" : "opacity-0"}`}>
+          <p
+            className={`mt-3 sm:mt-4 md:mt-5 text-xs sm:text-base md:text-lg text-white/75 max-w-2xl px-1 ${
+              heroInView ? "animate-fade-slide-up delay-200" : "opacity-0"
+            }`}
+          >
             Where Artificial Intelligence Meets Financial Precision.
           </p>
-          <div className="flex flex-row flex-wrap gap-3 mb-12 z-10 relative w-full justify-center md:justify-start">
-            <Link href="/connect-wallet" className="flex-1 min-w-[120px] max-w-[180px] md:flex-none md:min-w-0 md:max-w-none flex justify-center md:block" scroll={true}>
-              <button className="w-full md:w-auto px-4 py-2 md:px-7 md:py-3 rounded-xl font-semibold text-sm md:text-base bg-gradient-to-r from-[#0026FF] to-[#0026FF] text-white shadow-lg border-2 border-white/20 hover:from-[#0026FF] hover:to-blue-500 transition">
+          <div
+            className={`mt-5 sm:mt-8 md:mt-10 flex w-full max-w-md flex-row items-stretch justify-center gap-2 px-1 sm:max-w-none sm:gap-4 sm:px-0 ${
+              heroInView ? "animate-fade-slide-up delay-300" : "opacity-0"
+            }`}
+          >
+            <Link href="/connect-wallet" scroll className="min-w-0 flex-1 sm:flex-none sm:w-auto">
+              <button
+                type="button"
+                className="w-full rounded-xl px-3 py-2.5 text-[11px] font-medium leading-tight bg-[#0026FF] text-white shadow-[0_12px_40px_rgba(0,38,255,0.35)] hover:brightness-110 transition sm:min-w-[180px] sm:px-8 sm:py-3 sm:text-sm md:text-base"
+              >
                 Connect Wallet
+              </button>
+            </Link>
+            <Link href="/features" scroll className="min-w-0 flex-1 sm:flex-none sm:w-auto">
+              <button
+                type="button"
+                className="inline-flex w-full items-center justify-center gap-1 rounded-xl px-3 py-2.5 text-[11px] font-medium leading-tight border border-white/25 bg-transparent text-white hover:bg-white/5 transition sm:min-w-[180px] sm:gap-1.5 sm:px-8 sm:py-3 sm:text-sm md:text-base"
+              >
+                Explore Products
+                <svg
+                  aria-hidden
+                  className="hidden h-4 w-4 shrink-0 sm:block"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M5 12h14" />
+                  <path d="m12 5 7 7-7 7" />
+                </svg>
               </button>
             </Link>
           </div>
         </div>
-        {/* Mobile rolling coin below hero content */}
-        <div className="block md:hidden relative pointer-events-none" style={{ height: '400px', overflow: 'visible' }}>
-          <Image
-            src={handImage}
-            alt="SenseiFi hand"
-            width={2000}
-            height={800}
-            style={{
-              position: 'absolute',
-              left: '50%',
-              top: '-100px',
-              transform: 'translateX(-50%)',
-              width: '200vw',
-              height: 'auto',
-              zIndex: 10,
-              opacity: 0.7,
-            }}
-            unoptimized
-          />
-        </div>
+
+        {/* Reserves space so the video stays inside this hero */}
+        <div
+          className="pointer-events-none h-[min(34vw,300px)] sm:h-[min(42vw,440px)] md:h-[min(46vw,480px)] lg:h-[min(50vw,520px)]"
+          aria-hidden
+        />
+
+        <div
+          aria-hidden
+          className="pointer-events-none absolute bottom-0 left-1/2 z-20 h-28 w-screen max-w-[100vw] -translate-x-1/2 backdrop-blur-2xl sm:h-32 md:h-40 [mask-image:linear-gradient(to_top,#000_45%,transparent_100%)] [-webkit-mask-image:linear-gradient(to_top,#000_45%,transparent_100%)]"
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute bottom-0 left-1/2 z-20 h-20 w-screen max-w-[100vw] -translate-x-1/2 bg-gradient-to-t from-[#0a0a1a] via-[#0a0a1a]/80 to-transparent sm:h-24 md:h-28"
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute bottom-0 left-1/2 z-20 h-12 w-screen max-w-[100vw] -translate-x-1/2 blur-md sm:h-14 md:h-16 [mask-image:linear-gradient(to_top,#000_60%,transparent_100%)] [-webkit-mask-image:linear-gradient(to_top,#000_60%,transparent_100%)] bg-[#0a0a1a]/40"
+        />
       </section>
-      {/* Value Section */}
-      <section ref={valueRef} className="w-full px-4 flex flex-col items-center -mt-6 md:mt-52">
-        <h2 className={`text-3xl md:text-6xl font-normal mb-3 text-white text-center ${valueInView ? "animate-fade-slide-up" : "opacity-0"}`}>All-in-one Platform</h2>
-        <p className={`text-base md:text-3xl text-white/80 mb-10 text-center max-w-4xl leading-tight ${valueInView ? "animate-fade-slide-up delay-200" : "opacity-0"}`}>
-          Detect phishing, malicious contracts, and risky approvals before you sign. Scan any wallet and stay protected with AI-powered security.
-        </p>
-        <div className={`w-full mt-6 md:mt-16 ${valueInView ? "animate-fade-slide-up delay-300" : "opacity-0"}`}>
-          <div className="block md:hidden w-full overflow-hidden">
-            <div className="logo-marquee-track flex items-center gap-x-10 whitespace-nowrap">
-              <img src="/images/id9jl1arwx_logos 1.png" alt="Phantom" className="h-7 w-auto object-contain" />
-              <img src="/images/idR3970tUM_1775665826564 1.png" alt="Coinbase" className="h-7 w-auto object-contain" />
-              <img src="/images/g18.png" alt="Binance" className="h-7 w-auto object-contain" />
-              <img src="/images/Group.png" alt="WalletConnect Pay" className="h-6 w-auto object-contain" />
-              <img src="/images/MetaMask-logo-white 1.png" alt="MetaMask" className="h-7 w-auto object-contain" />
 
-              <img src="/images/id9jl1arwx_logos 1.png" alt="" aria-hidden="true" className="h-7 w-auto object-contain" />
-              <img src="/images/idR3970tUM_1775665826564 1.png" alt="" aria-hidden="true" className="h-7 w-auto object-contain" />
-              <img src="/images/g18.png" alt="" aria-hidden="true" className="h-7 w-auto object-contain" />
-              <img src="/images/Group.png" alt="" aria-hidden="true" className="h-6 w-auto object-contain" />
-              <img src="/images/MetaMask-logo-white 1.png" alt="" aria-hidden="true" className="h-7 w-auto object-contain" />
-            </div>
-          </div>
-          <div className="hidden md:flex flex-nowrap items-center justify-center gap-x-10 text-white whitespace-nowrap">
-            <img src="/images/id9jl1arwx_logos 1.png" alt="Phantom" className="h-10 w-auto object-contain" />
-            <img src="/images/idR3970tUM_1775665826564 1.png" alt="Coinbase" className="h-10 w-auto object-contain" />
-            <img src="/images/g18.png" alt="Binance" className="h-10 w-auto object-contain" />
-            <img src="/images/Group.png" alt="WalletConnect Pay" className="h-9 w-auto object-contain" />
-            <img src="/images/MetaMask-logo-white 1.png" alt="MetaMask" className="h-10 w-auto object-contain" />
-          </div>
+      {/* Second hero — All-in-one platform (separate section below) */}
+      <section
+        ref={valueRef}
+        className="relative isolate w-full bg-[#0a0a1a] px-4 sm:px-6 lg:px-8 py-10 sm:py-12 md:py-14 flex flex-col items-center justify-center"
+      >
+        <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+          <div className="absolute inset-0 starfield opacity-60" />
+          <div className="absolute top-0 right-0 h-64 w-64 bg-[radial-gradient(circle_at_center,_rgba(0,38,255,0.35),_transparent_70%)] blur-2xl" />
+          <div className="absolute inset-0 bg-gradient-to-b from-[#0a0a1a]/30 via-transparent to-[#0a0a1a]" />
+        </div>
 
-          <form
-            onSubmit={handleAddressScan}
-            className="relative z-10 w-full max-w-4xl mx-auto mt-8 mb-10 md:mt-48 md:-mb-36 flex flex-col items-center gap-2"
+        <div className="relative z-10 mx-auto flex w-full max-w-4xl flex-col items-center text-center">
+          <span
+            className={`mb-4 px-4 py-1 rounded-full border border-[#0026FF] text-[#4066FF] text-sm font-medium bg-transparent ${
+              valueInView ? "animate-fade-slide-up" : "opacity-0"
+            }`}
           >
-            <div className="flex flex-row gap-2 sm:gap-3 w-full items-end">
-              <input
-                id="wallet-address-scan"
-                type="text"
-                value={inputValue}
-                onChange={(e) => {
-                  setInputValue(e.target.value);
-                  if (scanError) setScanError("");
-                }}
-                placeholder="Scan wallet or contract address (0x…)"
-                className="min-w-0 flex-1 rounded-none border-0 border-b border-white/20 bg-transparent text-white text-xs sm:text-sm md:text-base px-0 py-2.5 sm:py-3 focus:outline-none focus:ring-0 focus:border-[#4066FF] placeholder:text-white/40"
-                aria-invalid={Boolean(scanError)}
-                aria-describedby={scanError ? "wallet-address-error" : undefined}
-              />
-              <button
-                type="submit"
-                className="shrink-0 rounded-xl px-4 sm:px-6 py-2.5 sm:py-3 font-normal text-xs sm:text-sm md:text-base bg-gradient-to-r from-[#0026FF] to-[#4066FF] text-white hover:brightness-110 transition whitespace-nowrap"
-              >
-                Scan
-              </button>
+            Value
+          </span>
+          <h2
+            className={`text-3xl md:text-5xl lg:text-6xl font-normal text-white ${
+              valueInView ? "animate-fade-slide-up delay-100" : "opacity-0"
+            }`}
+          >
+            All-in-one Platform
+          </h2>
+          <p
+            className={`mt-4 md:mt-5 text-sm sm:text-base md:text-xl text-white/70 max-w-3xl leading-relaxed px-2 ${
+              valueInView ? "animate-fade-slide-up delay-200" : "opacity-0"
+            }`}
+          >
+            Manage, protect and grow your digital assets with AI-powered intelligence in one platform.
+          </p>
+        </div>
+
+        <div
+          className={`relative z-10 mt-8 w-full md:mt-10 ${valueInView ? "animate-fade-slide-up delay-300" : "opacity-0"}`}
+        >
+          <div className="block overflow-hidden md:hidden">
+            <div className="logo-marquee-track flex items-center gap-x-8 whitespace-nowrap">
+              {[...PARTNER_LOGOS, ...PARTNER_LOGOS].map((logo, index) => (
+                <img
+                  key={`${logo.alt}-${index}`}
+                  src={logo.src}
+                  alt={index < PARTNER_LOGOS.length ? logo.alt : ""}
+                  aria-hidden={index >= PARTNER_LOGOS.length}
+                  className={`${logo.className} w-auto shrink-0 object-contain`}
+                />
+              ))}
             </div>
-            {scanError ? (
-              <p id="wallet-address-error" className="text-red-300 text-xs md:text-sm w-full text-left">
-                {scanError}
-              </p>
-            ) : null}
-          </form>
+          </div>
+          <div className="hidden flex-nowrap items-center justify-center gap-x-8 overflow-x-auto px-2 md:flex sm:gap-x-10 lg:gap-x-14 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {PARTNER_LOGOS.map((logo) => (
+              <img
+                key={logo.alt}
+                src={logo.src}
+                alt={logo.alt}
+                className={`${logo.className} w-auto shrink-0 object-contain`}
+              />
+            ))}
+          </div>
         </div>
       </section>
+
       {/* Features Section */}
-      <section ref={featuresRef} className="w-full px-4 py-20 flex flex-col items-start bg-white md:mt-52 mt-16">
+      <section ref={featuresRef} className="w-full px-4 py-20 flex flex-col items-start bg-white mt-16 md:mt-24">
         {/* Mobile Features Section */}
-        <div className="block md:hidden w-full">
-          <span className="px-4 py-1 rounded-full border border-[#0026FF] text-black text-sm font-medium bg-transparent mb-6 inline-block">Features</span>
-          <h2 className={`text-4xl font-normal text-black mb-4 ${featuresInView ? "animate-fade-slide-up" : "opacity-0"}`}>Crypto Made Simple.<br/>Safe. Smart.</h2>
-          <p className={`text-base text-black mb-6 ${featuresInView ? "animate-fade-slide-up delay-200" : "opacity-0"}`}>Trade with AI-powered insights, protect your wallets with real-time security, and spend crypto seamlessly all in one platform.</p>
+        <div className="block md:hidden w-full text-center">
           <div className="grid grid-cols-1 gap-8 w-full max-w-6xl mx-auto">
             <div className="w-full flex justify-center items-center">
               <Image
@@ -212,19 +236,12 @@ export default function HomeScreen() {
               />
             </div>
           </div>
+          <span className="mt-10 inline-block px-4 py-1 rounded-full border border-[#0026FF] text-[#0026FF] text-sm font-medium bg-transparent mb-6">Features</span>
+          <h2 className={`text-3xl font-normal text-black mb-4 px-2 ${featuresInView ? "animate-fade-slide-up" : "opacity-0"}`}>We Are What Your<br/>Wallet Was Missing</h2>
+          <p className={`text-sm text-black px-4 leading-relaxed ${featuresInView ? "animate-fade-slide-up delay-200" : "opacity-0"}`}>Safer wallet, smarter trade &amp; frictionless spending with Senseifi Protocol. Your Wallet Deserves More Than A Seed Phrase.</p>
         </div>
         {/* Desktop Features Section */}
         <div className="hidden md:block w-full">
-          <div className="w-full flex justify-start px-6 lg:px-10 xl:pl-40">
-            <span className="px-4 py-1 rounded-full border border-[#0026FF] text-black text-sm font-medium bg-transparent mb-20 inline-block">Features</span>
-          </div>
-          <div className="w-full flex flex-col lg:flex-row lg:items-center gap-6 mb-8 -mt-6 px-6 lg:px-10 xl:px-0">
-            <h2 className={`text-3xl md:text-5xl font-medium text-black text-left max-w-2xl xl:ml-40 ${featuresInView ? "animate-fade-slide-up" : "opacity-0"}`}>Crypto Made Simple. Safe. Smart.</h2>
-            <div className="hidden lg:block flex-1" />
-            <p className={`text-lg md:text-2xl text-gray-600 text-left max-w-2xl lg:ml-auto xl:mr-10 ${featuresInView ? "animate-fade-slide-up delay-200" : "opacity-0"}`}>
-              Trade with AI-powered insights, protect your wallets with real-time security, and spend crypto seamlessly  all in one platform.
-            </p>
-          </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-6xl px-6 lg:px-10 mx-auto">
             <div className="w-full flex justify-center items-center">
               <Image
@@ -257,6 +274,16 @@ export default function HomeScreen() {
               />
             </div>
           </div>
+          <div className="w-full flex justify-start px-6 lg:px-10 xl:pl-40 mt-16 lg:mt-20">
+            <span className="px-4 py-1 rounded-full border border-[#0026FF] text-black text-sm font-medium bg-transparent mb-8 inline-block">Features</span>
+          </div>
+          <div className="w-full flex flex-col lg:flex-row lg:items-center gap-6 px-6 lg:px-10 xl:px-0">
+            <h2 className={`text-3xl md:text-5xl font-medium text-black text-left max-w-2xl xl:ml-40 ${featuresInView ? "animate-fade-slide-up" : "opacity-0"}`}>We Are What Your Wallet Was Missing</h2>
+            <div className="hidden lg:block flex-1" />
+            <p className={`text-lg md:text-2xl text-gray-600 text-left max-w-2xl lg:ml-auto xl:mr-10 ${featuresInView ? "animate-fade-slide-up delay-200" : "opacity-0"}`}>
+              Safer wallet, smarter trade &amp; frictionless spending with Senseifi Protocol. Your Wallet Deserves More Than A Seed Phrase.
+            </p>
+          </div>
         </div>
       </section>
       {/* How it works Section */}
@@ -266,7 +293,6 @@ export default function HomeScreen() {
       <WhyTrustSection />
       <FAQSection />
       <CenteredAppDownload />
-      <HomeAddressScanModal open={scanModalOpen} address={scanAddress} onClose={closeScanModal} />
     </main>
   );
 }

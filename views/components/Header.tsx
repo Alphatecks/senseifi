@@ -6,10 +6,19 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useWallet } from '@/hooks/useWallet';
 import MarketingNavLink from '@/views/marketing/MarketingNavLink';
+import { useMarketingNav } from '@/views/marketing/MarketingNavContext';
 
 type HeaderProps = { hideGetStarted?: boolean };
 
+function navItemClass(activePath: string, href: string, base = 'transition') {
+  const isActive = activePath === href;
+  return isActive
+    ? `${base} text-white border-b-2 border-[#4066FF] pb-0.5`
+    : `${base} text-gray-300 hover:text-white`;
+}
+
 export default function Header({ hideGetStarted }: HeaderProps) {
+  const { activePath } = useMarketingNav();
   const [open, setOpen] = useState(false);
   const [hasMounted, setHasMounted] = useState(false);
   const { connectedAddress, isConnectedOrRemembered, disconnectWallet, isDisconnecting } = useWallet();
@@ -25,7 +34,7 @@ export default function Header({ hideGetStarted }: HeaderProps) {
   return (
     <header className="fixed w-full top-0 z-50 bg-gradient-to-b from-[#0a0a1a] via-[#0a0a1a] to-transparent">
       <nav className="relative flex items-center justify-between w-full px-4 md:px-6 lg:px-8 xl:px-8 py-6">
-        <div className="flex items-center gap-2 ml-9 md:ml-2 lg:ml-6 xl:ml-40">
+        <div className="flex items-center gap-2 ml-0 md:ml-2 lg:ml-6 xl:ml-40">
           <Image
             src="/images/scaled_logo.png"
             alt="SenseiFi Logo"
@@ -38,32 +47,32 @@ export default function Header({ hideGetStarted }: HeaderProps) {
         
         <ul className="hidden md:flex flex-1 items-center justify-center gap-4 lg:gap-8 xl:gap-10 text-gray-300 text-sm lg:text-base">
           <li>
-            <MarketingNavLink href="/" className="hover:text-white transition">
+            <MarketingNavLink href="/" className={navItemClass(activePath, '/')}>
               Home
             </MarketingNavLink>
           </li>
           <li>
-            <MarketingNavLink href="/about" className="hover:text-white transition">
+            <MarketingNavLink href="/about" className={navItemClass(activePath, '/about')}>
               About
             </MarketingNavLink>
           </li>
           <li>
-            <MarketingNavLink href="/pricing" className="hover:text-white transition">
+            <MarketingNavLink href="/pricing" className={navItemClass(activePath, '/pricing')}>
               Pricing
             </MarketingNavLink>
           </li>
           <li>
-            <MarketingNavLink href="/features" className="hover:text-white transition">
+            <MarketingNavLink href="/features" className={navItemClass(activePath, '/features')}>
               Features
             </MarketingNavLink>
           </li>
           <li>
-            <MarketingNavLink href="/contact" className="hover:text-white transition">
+            <MarketingNavLink href="/contact" className={navItemClass(activePath, '/contact')}>
               Contact
             </MarketingNavLink>
           </li>
         </ul>
-        <div className="flex items-center gap-2 md:gap-3 lg:gap-4 ml-0 mr-6 md:ml-auto md:mr-0">
+        <div className="flex items-center gap-2 md:gap-3 lg:gap-4 ml-auto mr-0">
           {/* Mobile: menu icon in its own box */}
           <button
             className="md:hidden flex items-center justify-center w-10 h-10 rounded-xl border-2 border-white/25 bg-[#0f1220] text-white hover:bg-white/10 transition shadow-sm"
@@ -106,7 +115,7 @@ export default function Header({ hideGetStarted }: HeaderProps) {
               <Link
                 href="/connect-wallet"
                 prefetch
-                className="hidden md:inline-flex flex-none mr-0 md:mr-0 lg:mr-4 xl:mr-40 bg-gradient-radial from-[#0026FF] to-blue-400 hover:from-[#0026FF] hover:to-blue-500 text-white px-6 lg:px-8 py-2.5 lg:py-3 rounded-2xl font-medium transition shadow-lg border-2 border-white items-center justify-center"
+                className="hidden md:inline-flex flex-none mr-0 lg:mr-4 xl:mr-40 bg-gradient-radial from-[#0026FF] to-blue-400 hover:from-[#0026FF] hover:to-blue-500 text-white px-6 lg:px-8 py-2.5 lg:py-3 rounded-2xl font-medium transition shadow-[0_0_28px_rgba(64,102,255,0.5)] border-2 border-white items-center justify-center"
               >
                 Connect Wallet
               </Link>
