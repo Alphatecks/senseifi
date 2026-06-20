@@ -4,11 +4,13 @@ import { getWalletChains, WALLET_SAFE_RPC_URLS } from '@/config/walletChains';
 
 let clientConfig: Config | undefined;
 
+/** Keep module singleton aligned with the WagmiProvider config (including AppKit). */
+export function setWagmiConfig(config: Config) {
+  clientConfig = config;
+}
+
 export function getWagmiConfig() {
   if (typeof window === 'undefined') return undefined;
-  if (!clientConfig) {
-    clientConfig = createWagmiConfig();
-  }
   return clientConfig;
 }
 

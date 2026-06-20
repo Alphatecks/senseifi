@@ -67,13 +67,14 @@ export function useWallet() {
   }, []);
 
   useEffect(() => {
-    if (typeof window === 'undefined' || sessionRevoked) return;
+    if (typeof window === 'undefined') return;
     if (isConnected && address?.trim()) {
       activateWalletSessionStorage();
+      setSessionRevoked(false);
       window.localStorage.setItem(LAST_CONNECTED_WALLET_KEY, address.trim());
       setPersistedAddress(address.trim());
     }
-  }, [isConnected, address, sessionRevoked]);
+  }, [isConnected, address]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -172,9 +173,12 @@ export function useWallet() {
   };
 
   const registerWalletWithBackend = async (
-    walletTypeOverride?: WalletProviderType
+    walletTypeOverride?: WalletProviderType,
+    sessionOverride?: { address: string; chainId: number }
   ): Promise<{ data: import('../services/walletService').WalletResponse; dashboard_user: DashboardUser | null }> => {
-    if (!address || !chainId) {
+    const resolvedAddress = sessionOverride?.address ?? address;
+    const resolvedChainId = sessionOverride?.chainId ?? chainId;
+    if (!resolvedAddress || !resolvedChainId) {
       throw new Error('Wallet not connected');
     }
 
@@ -184,12 +188,13 @@ export function useWallet() {
     try {
       activateWalletSessionStorage();
       setSessionRevoked(false);
+      setPersistedAddress(resolvedAddress.trim());
       window.dispatchEvent(new CustomEvent('senseifi:wallet-session-activated'));
 
       const resolvedWalletType = walletTypeOverride ?? walletType;
       const { data, dashboard_user } = await walletService.connectWallet(
-        address,
-        chainId,
+        resolvedAddress,
+        resolvedChainId,
         resolvedWalletType,
         {
           chainFamily: 'evm',

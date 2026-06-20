@@ -3,7 +3,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useAccount } from 'wagmi';
 import { useWallet } from '../../hooks/useWallet';
 import { useWalletConnectModal } from '../../hooks/useWalletConnectModal';
 import { isWalletConnectConfigured } from '@/config/appkit';
@@ -12,6 +13,7 @@ import {
   isExtensionWalletBridge,
   notifyExtensionWalletConnected,
 } from '@/utils/extensionWalletBridge';
+import { persistEvmWalletSession } from '@/utils/walletConnectFlow';
 import SolanaWalletConnect from '@/views/components/SolanaWalletConnect';
 
 function WalletConnectSetupRequired() {
@@ -51,7 +53,10 @@ function ConnectWalletPageContent() {
   const [extensionBridgeComplete, setExtensionBridgeComplete] = useState(false);
   const isExtensionBridge = isExtensionWalletBridge();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectTarget = searchParams.get('redirect');
   const { openWalletConnectModal } = useWalletConnectModal();
+  const { status: accountStatus } = useAccount();
   const {
     address,
     isConnected,
@@ -63,35 +68,41 @@ function ConnectWalletPageContent() {
     isDisconnecting,
     registrationError,
   } = useWallet();
-  const registeredSessionKeyRef = useRef<string | null>(null);
+  const postConnectHandledRef = useRef<string | null>(null);
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
+  const redirectAfterConnect = useCallback(() => {
+    if (isExtensionBridge) return;
+    setIsRedirecting(true);
+    router.replace(redirectTarget?.startsWith('/') ? redirectTarget : '/guard');
+  }, [isExtensionBridge, redirectTarget, router]);
 
-  useEffect(() => {
-    if (!isConnected) {
-      registeredSessionKeyRef.current = null;
-    }
-  }, [isConnected]);
+  const completeWalletConnect = useCallback(
+    async (connectedAddress: string, connectedChainId: number | null) => {
+      const normalizedAddress = connectedAddress.trim().toLowerCase();
+      const sessionKey = `${normalizedAddress}:${connectedChainId ?? 'pending'}:${walletType}`;
+      if (postConnectHandledRef.current === sessionKey) {
+        if (selectedPath === 'guard' && !isExtensionBridge) redirectAfterConnect();
+        return;
+      }
+      postConnectHandledRef.current = sessionKey;
 
-  useEffect(() => {
-    if (!isConnected || !address || !chainId || isRegistering) return;
+      persistEvmWalletSession(connectedAddress);
 
-    const sessionKey = `${address.toLowerCase()}:${chainId}:${walletType}`;
-    if (registeredSessionKeyRef.current === sessionKey) return;
-    registeredSessionKeyRef.current = sessionKey;
-
-    registerWalletWithBackend(walletType)
-      .then((result) => {
-        if (isExtensionBridge && address && chainId) {
+      if (isExtensionBridge) {
+        if (!connectedChainId) return;
+        try {
+          const result = await registerWalletWithBackend(walletType, {
+            address: connectedAddress,
+            chainId: connectedChainId,
+          });
           notifyExtensionWalletConnected({
-            address,
-            chainId,
+            address: connectedAddress,
+            chainId: connectedChainId,
             walletType,
             wallet: {
-              address,
-              chain_id: chainId,
+              address: connectedAddress,
+              chain_id: connectedChainId,
               wallet_type: walletType,
               connected_at: new Date().toISOString(),
               is_active: true,
@@ -99,35 +110,60 @@ function ConnectWalletPageContent() {
             dashboard_user: result.dashboard_user,
           });
           setExtensionBridgeComplete(true);
-          return;
+        } catch (error) {
+          console.error('Failed to register wallet:', error);
+          postConnectHandledRef.current = null;
         }
-        if (selectedPath === 'guard') {
-          setTimeout(() => router.push('/guard'), 1000);
+        return;
+      }
+
+      if (selectedPath !== 'guard') return;
+
+      if (connectedChainId) {
+        try {
+          await registerWalletWithBackend(walletType, {
+            address: connectedAddress,
+            chainId: connectedChainId,
+          });
+        } catch (error) {
+          console.error('Failed to register wallet:', error);
         }
-      })
-      .catch((error) => {
-        console.error('Failed to register wallet:', error);
-        if (registeredSessionKeyRef.current === sessionKey) {
-          registeredSessionKeyRef.current = null;
-        }
-      });
-  }, [
-    isConnected,
-    address,
-    chainId,
-    walletType,
-    isRegistering,
-    isExtensionBridge,
-    selectedPath,
-    registerWalletWithBackend,
-    router,
-  ]);
+      }
+
+      redirectAfterConnect();
+    },
+    [
+      isExtensionBridge,
+      redirectAfterConnect,
+      registerWalletWithBackend,
+      selectedPath,
+      walletType,
+    ],
+  );
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isConnected || !address) {
+      postConnectHandledRef.current = null;
+      setIsRedirecting(false);
+    }
+  }, [isConnected, address]);
+
+  useEffect(() => {
+    if (!isMounted || accountStatus !== 'connected' || !address || isRedirecting) return;
+    void completeWalletConnect(address, chainId ?? null);
+  }, [accountStatus, address, chainId, completeWalletConnect, isMounted, isRedirecting]);
 
   const handleOpenWalletModal = useCallback(async () => {
     setConnectError(null);
     setIsOpeningWalletModal(true);
     try {
-      await openWalletConnectModal();
+      const connected = await openWalletConnectModal();
+      if (!connected?.address) return;
+      await completeWalletConnect(connected.address, connected.chainId);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not open wallet picker.';
       setConnectError(message);
@@ -135,7 +171,7 @@ function ConnectWalletPageContent() {
     } finally {
       setIsOpeningWalletModal(false);
     }
-  }, [openWalletConnectModal]);
+  }, [completeWalletConnect, openWalletConnectModal]);
 
   useEffect(() => {
     if (!isExtensionBridge || !isMounted) return;
@@ -143,14 +179,14 @@ function ConnectWalletPageContent() {
   }, [isExtensionBridge, isMounted, handleOpenWalletModal]);
 
   const handleContinue = () => {
-    if (isConnected && selectedPath === 'guard') {
-      router.push('/guard');
+    if (isConnected && address) {
+      void completeWalletConnect(address, chainId ?? null);
       return;
     }
     void handleOpenWalletModal();
   };
 
-  const isConnecting = isOpeningWalletModal || isRegistering;
+  const isConnecting = isOpeningWalletModal || isRegistering || isRedirecting;
   const displayError = connectError || registrationError;
 
   return (
@@ -373,6 +409,8 @@ function ConnectWalletPageContent() {
                 <p>Connected: {address.slice(0, 6)}...{address.slice(-4)}</p>
                 {isRegistering ? (
                   <p className="mt-1">Registering wallet with backend…</p>
+                ) : isRedirecting ? (
+                  <p className="mt-1">Opening SenseiGuard…</p>
                 ) : null}
                 {extensionBridgeComplete && (
                   <p className="mt-1">Wallet linked — return to the SenseiGuard extension.</p>
@@ -386,7 +424,11 @@ function ConnectWalletPageContent() {
               disabled={isConnecting}
               className="mt-6 w-full rounded-2xl bg-gradient-to-r from-[#2563EB] via-[#1D4ED8] to-[#0EA5E9] px-6 py-3 text-sm md:text-base font-medium text-white shadow-[0_18px_45px_rgba(37,99,235,0.65)] hover:shadow-[0_22px_55px_rgba(37,99,235,0.85)] hover:brightness-110 transition disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {isConnecting ? 'Connecting...' : isConnected ? 'Continue to SenseiGuard' : 'Connect Wallet'}
+              {isConnecting
+                ? 'Connecting...'
+                : isConnected
+                ? 'Continue to SenseiGuard'
+                : 'Connect Wallet'}
             </button>
 
             {!isConnected && (
@@ -399,7 +441,7 @@ function ConnectWalletPageContent() {
               <SolanaWalletConnect
                 onConnected={() => {
                   if (selectedPath === 'guard' && !isExtensionBridge) {
-                    setTimeout(() => router.push('/guard'), 1000);
+                    redirectAfterConnect();
                   }
                 }}
               />
@@ -412,13 +454,13 @@ function ConnectWalletPageContent() {
 }
 
 export default function ConnectWalletClient() {
-  const { ready, walletConnectEnabled } = useWalletStack();
+  const { ready } = useWalletStack();
 
   if (!isWalletConnectConfigured()) {
     return <WalletConnectSetupRequired />;
   }
 
-  if (!ready || !walletConnectEnabled) {
+  if (!ready) {
     return (
       <div
         className="min-h-screen w-full flex items-center justify-center bg-[#0a0a1a] text-blue-100/80"

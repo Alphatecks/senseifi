@@ -2,7 +2,7 @@ import { getOnchainBillingEnvironment } from "@/config/onchainBilling";
 
 const ONCHAIN_PAYMENTS_API_BASE_URL = (
   process.env.NEXT_PUBLIC_SUBSCRIPTIONS_API_URL ||
-  process.env.NEXT_PUBLIC_API_URL ||
+  process.env.NEXT_PUBLIC_WALLET_API_URL ||
   "https://senseifi-backend.onrender.com/api"
 ).replace(/\/$/, "");
 
@@ -37,11 +37,26 @@ async function onchainPaymentsFetch<T>(
   const res = await fetch(`${ONCHAIN_PAYMENTS_API_BASE_URL}${endpoint}`, {
     headers: {
       "Content-Type": "application/json",
+      Accept: "application/json",
       ...(options.headers as Record<string, string>),
     },
     ...options,
   });
-  const data = await res.json().catch(() => null);
+  const raw = await res.text();
+  const contentType = res.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) {
+    return {
+      ok: false,
+      status: res.status,
+      data: {
+        message:
+          res.status === 404
+            ? `Billing API not found at ${ONCHAIN_PAYMENTS_API_BASE_URL}${endpoint}. Check NEXT_PUBLIC_WALLET_API_URL.`
+            : "Billing API returned an invalid response.",
+      } as T,
+    };
+  }
+  const data = raw ? (JSON.parse(raw) as T) : null;
   return { ok: res.ok, status: res.status, data };
 }
 

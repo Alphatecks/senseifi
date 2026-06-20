@@ -3,7 +3,7 @@ export type OnchainBillingEnvironment = 'test' | 'testnet' | 'production' | 'mai
 const RAW_BILLING_ENV = (process.env.NEXT_PUBLIC_ONCHAIN_BILLING_ENV ?? 'test').toLowerCase();
 
 /** Circle USDC on Base / Base Sepolia (same canonical address). */
-export const BASE_USDC_CONTRACT = '0x036CbD53842c686983057b837BBaF642ea437901';
+export const BASE_USDC_CONTRACT = '0x036cbd53842c686983057b837BbAF642Ea437901';
 
 export const BASE_MAINNET_CHAIN_ID = 8453;
 export const BASE_SEPOLIA_CHAIN_ID = 84532;

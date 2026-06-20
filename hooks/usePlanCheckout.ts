@@ -1,9 +1,9 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { usePublicClient, useSwitchChain, useWalletClient } from 'wagmi';
-import { getPublicClient, getWalletClient } from 'wagmi/actions';
-import { isHex, keccak256, stringToHex } from 'viem';
+import { useAccount, useConfig, usePublicClient, useWalletClient } from 'wagmi';
+import { getPublicClient, getWalletClient, switchChain } from 'wagmi/actions';
+import { getAddress, isHex, keccak256, stringToHex } from 'viem';
 import { useDashboardUser } from '@/context/DashboardUserContext';
 import {
   getOnchainBillingChainId,
@@ -13,6 +13,7 @@ import {
   isTestnetOnchainBilling,
 } from '@/config/onchainBilling';
 import { getWagmiConfig } from '@/config/wagmi';
+import { getWalletChainLabel } from '@/config/walletChains';
 import { useWallet } from '@/hooks/useWallet';
 import { onchainSubscribe } from '@/services/onchainPaymentService';
 import type { SubscriptionPlanKey } from '@/services/subscriptionService';
@@ -100,6 +101,10 @@ function isAddress(value: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(value.trim());
 }
 
+function normalizeEvmAddress(value: string): `0x${string}` {
+  return getAddress(value.trim());
+}
+
 function readSubscribeExecutionData(payload: unknown): SubscribeExecutionData {
   const root = isRecord(payload) && isRecord(payload.data) ? payload.data : payload;
   if (!isRecord(root)) {
@@ -162,8 +167,8 @@ function readSubscribeExecutionData(payload: unknown): SubscribeExecutionData {
     subscriptionIdBytes32,
     amountUsdcPerPeriodBaseUnits,
     maxChargeUsdcBaseUnits,
-    tokenContract,
-    paymentContract,
+    tokenContract: normalizeEvmAddress(tokenContract),
+    paymentContract: normalizeEvmAddress(paymentContract),
     chainId: chainId && chainId > 0 ? Math.trunc(chainId) : null,
   };
 }
@@ -176,8 +181,12 @@ function applyBillingEnvironmentOverrides(executionData: SubscribeExecutionData)
   return {
     ...executionData,
     chainId: configuredChainId,
-    tokenContract: isAddress(configuredUsdc) ? configuredUsdc : executionData.tokenContract,
-    paymentContract: isAddress(configuredPayment) ? configuredPayment : executionData.paymentContract,
+    tokenContract: isAddress(configuredUsdc)
+      ? normalizeEvmAddress(configuredUsdc)
+      : executionData.tokenContract,
+    paymentContract: isAddress(configuredPayment)
+      ? normalizeEvmAddress(configuredPayment)
+      : executionData.paymentContract,
   };
 }
 
@@ -204,31 +213,70 @@ function buildBillingError(step: string, error: unknown): string {
   if (normalized.includes('chain') && normalized.includes('mismatch')) {
     return 'Wrong network selected in wallet. Switch to the required network and retry.';
   }
+  if (normalized.includes('connector not connected')) {
+    return 'Wallet connection was lost. Reconnect your wallet, then retry billing setup.';
+  }
   return `Billing setup failed during ${step}: ${rawMessage}`;
 }
 
+async function ensureBillingNetwork(
+  config: NonNullable<ReturnType<typeof getWagmiConfig>>,
+  walletClient: NonNullable<Awaited<ReturnType<typeof getWalletClient>>>,
+  targetChainId: number,
+): Promise<void> {
+  try {
+    await walletClient.switchChain({ id: targetChainId });
+    return;
+  } catch (primaryError) {
+    try {
+      await switchChain(config, { chainId: targetChainId });
+      return;
+    } catch (fallbackError) {
+      const primaryMessage = readErrorMessage(primaryError);
+      const fallbackMessage = readErrorMessage(fallbackError);
+      throw new Error(primaryMessage ?? fallbackMessage ?? 'Could not switch wallet network.');
+    }
+  }
+}
+
 export function usePlanCheckout() {
-  const { activeAddress, isConnected, chainId, registerWalletWithBackend } = useWallet();
+  const { activeAddress, isConnected, chainId, registerWalletWithBackend, activeChainFamily } = useWallet();
+  const { connector, status: walletStatus } = useAccount();
   const { dashboardUser } = useDashboardUser();
+  const wagmiConfig = useConfig();
   const { data: walletClient } = useWalletClient();
   const publicClient = usePublicClient();
-  const { switchChainAsync } = useSwitchChain();
   const [checkoutLoadingPlan, setCheckoutLoadingPlan] = useState<SubscriptionPlanKey | null>(null);
   const [billingError, setBillingError] = useState<string | null>(null);
   const [billingSuccess, setBillingSuccess] = useState<string | null>(null);
 
   const handleCheckout = useCallback(
     async (plan: SubscriptionPlanKey, isAnnual: boolean) => {
+      if (activeChainFamily !== 'evm') {
+        setBillingSuccess(null);
+        setBillingError(
+          `Billing currently supports EVM wallets (0x…) on ${getOnchainBillingNetworkLabel()}. Connect an EVM wallet to continue.`,
+        );
+        return;
+      }
+
       const payerAddress = activeAddress?.trim() ?? '';
       if (!isAddress(payerAddress)) {
         setBillingSuccess(null);
-        setBillingError('Connect a valid wallet address before continuing.');
+        setBillingError('Connect a valid EVM wallet address (0x…) before continuing.');
         return;
       }
-      if (!isConnected || !walletClient || !publicClient) {
+      if (!isConnected || walletStatus !== 'connected' || !connector) {
         setBillingSuccess(null);
         setBillingError(
           'Wallet session is not active. Reconnect your wallet to approve and activate billing.',
+        );
+        return;
+      }
+      if (!walletClient || !publicClient) {
+        setBillingSuccess(null);
+        setBillingError(
+          'Wallet provider is unavailable. Refresh the page, reconnect your wallet, and try again.',
         );
         return;
       }
@@ -277,27 +325,35 @@ export function usePlanCheckout() {
           return;
         }
 
-        const wagmiConfig = getWagmiConfig();
-        if (!wagmiConfig) {
+        const config = wagmiConfig ?? getWagmiConfig();
+        if (!config) {
           setBillingError('Wallet configuration is unavailable. Refresh the page and try again.');
           return;
         }
 
         if (chainId !== targetChainId) {
           billingStep = 'network switch';
-          if (!switchChainAsync) {
+          const networkLabel = getWalletChainLabel(targetChainId);
+          try {
+            await ensureBillingNetwork(config, walletClient, targetChainId);
+          } catch (error) {
             setBillingError(
-              `Switch wallet network to ${getOnchainBillingNetworkLabel()} (chain ${targetChainId}) and try again.`,
+              buildBillingError(
+                billingStep,
+                error ??
+                  new Error(
+                    `Switch your wallet to ${networkLabel} (chain ${targetChainId}) and try again.`,
+                  ),
+              ),
             );
             return;
           }
-          await switchChainAsync({ chainId: targetChainId });
         }
 
         const activeWalletClient =
-          (await getWalletClient(wagmiConfig, { chainId: targetChainId })) ?? walletClient;
+          (await getWalletClient(config, { chainId: targetChainId })) ?? walletClient;
         const activePublicClient =
-          getPublicClient(wagmiConfig, { chainId: targetChainId }) ?? publicClient;
+          getPublicClient(config, { chainId: targetChainId }) ?? publicClient;
 
         if (!activeWalletClient || !activePublicClient) {
           setBillingError(
@@ -307,17 +363,19 @@ export function usePlanCheckout() {
         }
 
         billingStep = 'token approval';
+        const tokenContract = normalizeEvmAddress(executionData.tokenContract);
+        const paymentContract = normalizeEvmAddress(executionData.paymentContract);
         const approveHash = await activeWalletClient.writeContract({
-          address: executionData.tokenContract as `0x${string}`,
+          address: tokenContract,
           abi: ERC20_APPROVE_ABI,
           functionName: 'approve',
-          args: [executionData.paymentContract as `0x${string}`, amountPerPeriodRaw],
+          args: [paymentContract, amountPerPeriodRaw],
         });
         await activePublicClient.waitForTransactionReceipt({ hash: approveHash });
 
         billingStep = 'billing activation';
         const upsertHash = await activeWalletClient.writeContract({
-          address: executionData.paymentContract as `0x${string}`,
+          address: paymentContract,
           abi: PAYMENT_UPSERT_BILLING_ABI,
           functionName: 'upsertBilling',
           args: [executionData.subscriptionIdBytes32, maxChargeRaw],
@@ -340,12 +398,14 @@ export function usePlanCheckout() {
     [
       activeAddress,
       chainId,
+      connector,
       dashboardUser?.user_id,
       isConnected,
       publicClient,
       registerWalletWithBackend,
-      switchChainAsync,
+      wagmiConfig,
       walletClient,
+      walletStatus,
     ],
   );
 

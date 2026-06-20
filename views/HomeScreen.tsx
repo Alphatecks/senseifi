@@ -1,6 +1,6 @@
 "use client";
 import FAQSection from "./FAQSection";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import HowItWorksSection from "./HowItWorksSection";
@@ -8,6 +8,7 @@ import WhyTrustSection from "./WhyTrustSection";
 import CenteredAppDownload from "./CenteredAppDownload";
 import { useInView } from "../utils/useInView";
 import TransparentVideo from "./components/TransparentVideo";
+import { useWallet } from "@/hooks/useWallet";
 
 const HERO_VIDEO_SRC = "/videos/hero.mp4";
 
@@ -21,6 +22,17 @@ const PARTNER_LOGOS = [
 ] as const;
 
 export default function HomeScreen() {
+  const [hasMounted, setHasMounted] = useState(false);
+  const { connectedAddress, isConnectedOrRemembered } = useWallet();
+  const showConnectedWallet = hasMounted && isConnectedOrRemembered && Boolean(connectedAddress);
+  const displayAddress = connectedAddress
+    ? `${connectedAddress.slice(0, 6)}...${connectedAddress.slice(-4)}`
+    : "";
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
+
   // Hero Section scroll animation
   const [heroRef, heroInView] = useInView({ threshold: 0.2 });
   // All-in-one hero scroll animation
@@ -84,12 +96,17 @@ export default function HomeScreen() {
               heroInView ? "animate-fade-slide-up delay-300" : "opacity-0"
             }`}
           >
-            <Link href="/connect-wallet" scroll className="min-w-0 flex-1 sm:flex-none sm:w-auto">
+            <Link
+              href={showConnectedWallet ? "/guard" : "/connect-wallet"}
+              scroll
+              className="min-w-0 flex-1 sm:flex-none sm:w-auto"
+            >
               <button
                 type="button"
+                title={showConnectedWallet ? connectedAddress ?? undefined : undefined}
                 className="w-full rounded-xl px-3 py-2.5 text-[11px] font-medium leading-tight bg-[#0026FF] text-white shadow-[0_12px_40px_rgba(0,38,255,0.35)] hover:brightness-110 transition sm:min-w-[180px] sm:px-8 sm:py-3 sm:text-sm md:text-base"
               >
-                Connect Wallet
+                {showConnectedWallet ? displayAddress : "Connect Wallet"}
               </button>
             </Link>
             <Link href="/features" scroll className="min-w-0 flex-1 sm:flex-none sm:w-auto">
