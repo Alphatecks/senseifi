@@ -4,16 +4,12 @@ import React from "react";
 import Image from "next/image";
 import {
   getSubscriptionPlans,
+  parsePlanPricingPayload,
   type SubscriptionPlanKey,
 } from "@/services/subscriptionService";
 import { usePlanCheckout } from "@/hooks/usePlanCheckout";
-import {
-  getOnchainBillingNetworkLabel,
-  isTestnetOnchainBilling,
-} from "@/config/onchainBilling";
 
 type PlanPricing = Record<SubscriptionPlanKey, { monthly: number; annual: number }>;
-type UnknownRecord = Record<string, unknown>;
 
 const DEFAULT_PLAN_PRICING: PlanPricing = {
   pro: { monthly: 30, annual: 300 },
@@ -199,54 +195,6 @@ function ComparisonCheck({ included }: { included?: boolean }) {
       ✓
     </span>
   );
-}
-
-function isRecord(value: unknown): value is UnknownRecord {
-  return typeof value === "object" && value !== null;
-}
-
-function toAmount(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string") {
-    const num = Number(value);
-    if (Number.isFinite(num)) return num;
-  }
-  return null;
-}
-
-function readCycleAmount(value: unknown): number | null {
-  if (typeof value === "number" || typeof value === "string") return toAmount(value);
-  if (!isRecord(value)) return null;
-  return (
-    toAmount(value.amount) ??
-    toAmount(value.price) ??
-    toAmount(value.unit_amount) ??
-    toAmount(value.value)
-  );
-}
-
-function parsePlanPricingPayload(payload: unknown): PlanPricing | null {
-  if (!isRecord(payload)) return null;
-  const source = (isRecord(payload.data) ? payload.data : payload.plans) as unknown;
-  const plans = isRecord(source) ? source : payload;
-
-  const nextPricing: PlanPricing = { ...DEFAULT_PLAN_PRICING };
-  const planKeys: SubscriptionPlanKey[] = ["pro", "pro_plus", "premium"];
-  let foundAtLeastOne = false;
-
-  planKeys.forEach((planKey) => {
-    const rawPlan = plans[planKey];
-    if (!isRecord(rawPlan)) return;
-
-    const monthly = readCycleAmount(rawPlan.monthly);
-    const annual = readCycleAmount(rawPlan.annual);
-    if (monthly && annual) {
-      nextPricing[planKey] = { monthly, annual };
-      foundAtLeastOne = true;
-    }
-  });
-
-  return foundAtLeastOne ? nextPricing : null;
 }
 
 function BillingToggle({
@@ -458,11 +406,6 @@ export default function PricingScreen() {
         {billingSuccess ? (
           <p className="mb-6 w-full max-w-6xl px-4 text-sm text-green-300">{billingSuccess}</p>
         ) : null}
-        {isTestnetOnchainBilling() ? (
-          <p className="mb-6 w-full max-w-6xl px-4 text-sm text-amber-200">
-            Test billing mode: checkout uses {getOnchainBillingNetworkLabel()} with test USDC only.
-          </p>
-        ) : null}
 
         <div className="relative w-full max-w-6xl">
           <div
@@ -550,7 +493,7 @@ export default function PricingScreen() {
                           background: "linear-gradient(135deg, #425EFF 40%, #7F5FFF 100%)",
                         }}
                       >
-                        {checkoutLoadingPlan === plan.id ? "Creating subscription..." : plan.cta}
+                        {checkoutLoadingPlan === plan.id ? "Redirecting to checkout..." : plan.cta}
                       </button>
                     ) : (
                       <button
@@ -564,7 +507,7 @@ export default function PricingScreen() {
                           border: "2px solid transparent",
                         }}
                       >
-                        {checkoutLoadingPlan === plan.id ? "Creating subscription..." : plan.cta}
+                        {checkoutLoadingPlan === plan.id ? "Redirecting to checkout..." : plan.cta}
                       </button>
                     )}
                   </div>

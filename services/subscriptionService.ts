@@ -5,11 +5,120 @@ const SUBSCRIPTIONS_API_BASE_URL = (
 ).replace(/\/$/, "");
 
 export type SubscriptionPlanKey = "pro" | "pro_plus" | "premium";
+export type BillingPlanKey = "basic" | "pro" | "premium";
+export type BillingCycle = "monthly" | "annual";
 
 export interface SubscriptionPlansResponse {
   success?: boolean;
   data?: unknown;
   plans?: unknown;
+}
+
+export type PlanPricing = Record<SubscriptionPlanKey, { monthly: number; annual: number }>;
+
+const DEFAULT_PLAN_PRICING: PlanPricing = {
+  pro: { monthly: 30, annual: 300 },
+  pro_plus: { monthly: 50, annual: 500 },
+  premium: { monthly: 200, annual: 2000 },
+};
+
+const BILLING_PLAN_KEY_BY_FRONTEND: Record<SubscriptionPlanKey, BillingPlanKey> = {
+  pro: "basic",
+  pro_plus: "pro",
+  premium: "premium",
+};
+
+export function toBillingPlanKey(plan: SubscriptionPlanKey): BillingPlanKey {
+  return BILLING_PLAN_KEY_BY_FRONTEND[plan];
+}
+
+type UnknownRecord = Record<string, unknown>;
+
+function isRecord(value: unknown): value is UnknownRecord {
+  return typeof value === "object" && value !== null;
+}
+
+function toAmount(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const num = Number(value);
+    if (Number.isFinite(num)) return num;
+  }
+  return null;
+}
+
+function readCycleAmount(value: unknown): number | null {
+  if (typeof value === "number" || typeof value === "string") return toAmount(value);
+  if (!isRecord(value)) return null;
+  return (
+    toAmount(value.amount) ??
+    toAmount(value.price) ??
+    toAmount(value.unit_amount) ??
+    toAmount(value.value)
+  );
+}
+
+export function parsePlanPricingPayload(payload: unknown): PlanPricing | null {
+  if (!isRecord(payload)) return null;
+  const source = (isRecord(payload.data) ? payload.data : payload.plans) as unknown;
+  const plans = isRecord(source) ? source : payload;
+
+  const nextPricing: PlanPricing = { ...DEFAULT_PLAN_PRICING };
+  const planKeys: SubscriptionPlanKey[] = ["pro", "pro_plus", "premium"];
+  let foundAtLeastOne = false;
+
+  planKeys.forEach((planKey) => {
+    const apiKey = BILLING_PLAN_KEY_BY_FRONTEND[planKey];
+    const rawPlan = plans[apiKey] ?? plans[planKey];
+    if (!isRecord(rawPlan)) return;
+
+    const monthly = readCycleAmount(rawPlan.monthly);
+    const annual = readCycleAmount(rawPlan.annual);
+    if (monthly && annual) {
+      nextPricing[planKey] = { monthly, annual };
+      foundAtLeastOne = true;
+    }
+  });
+
+  return foundAtLeastOne ? nextPricing : null;
+}
+
+function extractErrorMessage(payload: unknown): string | null {
+  if (!isRecord(payload)) return null;
+  const data = isRecord(payload.data) ? payload.data : null;
+  const candidates = [payload.message, payload.error, data?.message, data?.error];
+  const message = candidates.find((item) => typeof item === "string" && item.trim().length > 0);
+  return typeof message === "string" ? message : null;
+}
+
+function readUrlFromPayload(payload: unknown, keys: string[]): string | null {
+  const roots: unknown[] = [payload];
+  if (isRecord(payload) && isRecord(payload.data)) roots.push(payload.data);
+
+  for (const root of roots) {
+    if (!isRecord(root)) continue;
+    for (const key of keys) {
+      const value = root[key];
+      if (typeof value === "string" && value.trim()) return value.trim();
+    }
+  }
+  return null;
+}
+
+export interface SubscriptionCheckoutPayload {
+  user_id: string;
+  plan: BillingPlanKey;
+  billing_cycle: BillingCycle;
+  success_url?: string;
+  cancel_url?: string;
+}
+
+export interface SubscriptionStatus {
+  plan?: string;
+  status?: string;
+  billing_cycle?: string;
+  current_period_end?: string;
+  [key: string]: unknown;
 }
 
 async function subscriptionFetch<T>(
@@ -32,6 +141,65 @@ export async function getSubscriptionPlans(): Promise<SubscriptionPlansResponse 
   const { ok, data } = await subscriptionFetch<SubscriptionPlansResponse>("/subscriptions/plans");
   if (!ok || !data) return null;
   return data;
+}
+
+export async function getSubscriptionStatus(
+  userId: string
+): Promise<{ success: true; data: SubscriptionStatus } | { success: false; error: string }> {
+  const trimmedUserId = userId.trim();
+  if (!trimmedUserId) {
+    return { success: false, error: "Missing user id." };
+  }
+
+  const params = new URLSearchParams({ user_id: trimmedUserId });
+  const { ok, data } = await subscriptionFetch<unknown>(`/subscriptions/status?${params.toString()}`);
+  if (!ok) {
+    return { success: false, error: extractErrorMessage(data) ?? "Failed to load subscription status." };
+  }
+
+  const status = (isRecord(data) && isRecord(data.data) ? data.data : data) as SubscriptionStatus;
+  return { success: true, data: status ?? {} };
+}
+
+export async function startSubscriptionCheckout(
+  payload: SubscriptionCheckoutPayload
+): Promise<{ success: true; checkoutUrl: string } | { success: false; error: string }> {
+  const { ok, data } = await subscriptionFetch<unknown>("/subscriptions/checkout", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  if (!ok) {
+    return { success: false, error: extractErrorMessage(data) ?? "Failed to start checkout." };
+  }
+
+  const checkoutUrl = readUrlFromPayload(data, ["checkout_url", "checkoutUrl", "url"]);
+  if (!checkoutUrl) {
+    return { success: false, error: "Checkout URL was not returned by the billing API." };
+  }
+  return { success: true, checkoutUrl };
+}
+
+export async function openSubscriptionPortal(
+  userId: string
+): Promise<{ success: true; portalUrl: string } | { success: false; error: string }> {
+  const trimmedUserId = userId.trim();
+  if (!trimmedUserId) {
+    return { success: false, error: "Missing user id." };
+  }
+
+  const { ok, data } = await subscriptionFetch<unknown>("/subscriptions/portal", {
+    method: "POST",
+    body: JSON.stringify({ user_id: trimmedUserId }),
+  });
+  if (!ok) {
+    return { success: false, error: extractErrorMessage(data) ?? "Failed to open billing portal." };
+  }
+
+  const portalUrl = readUrlFromPayload(data, ["portal_url", "portalUrl", "url"]);
+  if (!portalUrl) {
+    return { success: false, error: "Portal URL was not returned by the billing API." };
+  }
+  return { success: true, portalUrl };
 }
 
 export interface BillingHistoryFilters {

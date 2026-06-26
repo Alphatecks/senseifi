@@ -9,7 +9,8 @@ import { useConnectNetworksModal } from "@/context/ConnectWalletsModalContext";
 import { getConnectedWallets, getActivityMonitorDapps } from "@/services/dashboardService";
 import type { WalletListItem, ActivityMonitorDappItem } from "@/services/dashboardService";
 import { walletService } from "@/services/walletService";
-import { getBillingHistory, type BillingHistoryItem } from "@/services/subscriptionService";
+import { getBillingHistory, getSubscriptionStatus, type BillingHistoryItem } from "@/services/subscriptionService";
+import { usePlanCheckout } from "@/hooks/usePlanCheckout";
 import RemoveWalletConfirmationModal from "@/app/guard/components/RemoveWalletConfirmationModal";
 import GuardSettingsSubmenu, {
   SETTINGS_NAV_ITEMS,
@@ -163,6 +164,16 @@ function SettingsPageContent() {
   const [billingLoading, setBillingLoading] = useState(false);
   const [billingError, setBillingError] = useState<string | null>(null);
   const [billingTotal, setBillingTotal] = useState<number | null>(null);
+  const [subscriptionStatus, setSubscriptionStatus] = useState<string | null>(null);
+  const [subscriptionPlan, setSubscriptionPlan] = useState<string | null>(null);
+  const [subscriptionStatusLoading, setSubscriptionStatusLoading] = useState(false);
+  const {
+    handleCheckout,
+    openBillingPortal,
+    checkoutLoadingPlan,
+    portalLoading,
+    billingError: checkoutBillingError,
+  } = usePlanCheckout();
 
   const setSection = (nextSection: SettingsSectionId) => {
     router.replace(`/guard/settings?section=${nextSection}`, { scroll: false });
@@ -303,6 +314,45 @@ function SettingsPageContent() {
       window.clearTimeout(timer);
     };
   }, [section, dashboardUser?.user_id, billingPage, billingSearch, billingStatus]);
+
+  useEffect(() => {
+    if (section !== "subscription") return;
+    const userId = dashboardUser?.user_id?.trim();
+    if (!userId) {
+      setSubscriptionStatus(null);
+      setSubscriptionPlan(null);
+      return;
+    }
+
+    let ignore = false;
+    setSubscriptionStatusLoading(true);
+    getSubscriptionStatus(userId)
+      .then((result) => {
+        if (ignore) return;
+        if (!result.success) {
+          setSubscriptionStatus(null);
+          setSubscriptionPlan(null);
+          return;
+        }
+        const status =
+          typeof result.data.status === "string" && result.data.status.trim()
+            ? result.data.status.trim()
+            : null;
+        const plan =
+          typeof result.data.plan === "string" && result.data.plan.trim()
+            ? result.data.plan.trim()
+            : null;
+        setSubscriptionStatus(status);
+        setSubscriptionPlan(plan);
+      })
+      .finally(() => {
+        if (!ignore) setSubscriptionStatusLoading(false);
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [section, dashboardUser?.user_id]);
 
   const dappsTotalPages = Math.max(1, Math.ceil(connectedDapps.length / DAPPS_PER_PAGE));
   const billingHasNextPage =
@@ -669,6 +719,33 @@ function SettingsPageContent() {
                 <h2 className="text-white text-base md:text-lg font-semibold">Subscription & Billing</h2>
               </div>
 
+              <div className="mb-4 flex flex-col gap-3 rounded-xl border border-slate-700/60 bg-[#181C23]/80 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm text-slate-400">Current subscription</p>
+                  {subscriptionStatusLoading ? (
+                    <p className="text-white text-sm mt-1">Loading status…</p>
+                  ) : subscriptionPlan || subscriptionStatus ? (
+                    <p className="text-white text-sm mt-1">
+                      {subscriptionPlan ? subscriptionPlan.toUpperCase() : "—"}
+                      {subscriptionStatus ? ` · ${subscriptionStatus}` : ""}
+                    </p>
+                  ) : (
+                    <p className="text-white text-sm mt-1">No active subscription</p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void openBillingPortal()}
+                  disabled={portalLoading || checkoutLoadingPlan !== null}
+                  className="rounded-lg border border-slate-600/70 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800/60 disabled:opacity-60"
+                >
+                  {portalLoading ? "Opening portal…" : "Manage subscription"}
+                </button>
+              </div>
+              {checkoutBillingError ? (
+                <p className="mb-4 text-sm text-red-300">{checkoutBillingError}</p>
+              ) : null}
+
               <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4 w-full">
                 <div className="bg-[#181C23] rounded-xl flex flex-col w-full min-h-0 md:min-h-[480px] shadow-lg">
                   <div className="flex items-center justify-between mb-0 p-8 pb-0">
@@ -694,10 +771,12 @@ function SettingsPageContent() {
                       </span>
                       <button
                         type="button"
-                        className="w-11/12 py-3 mt-6 mb-6 text-white text-base font-normal rounded-full transition-colors duration-200 border-2 border-transparent bg-gradient-to-r from-indigo-400 via-blue-400 to-purple-400 bg-origin-border hover:from-blue-500 hover:to-indigo-600"
+                        onClick={() => void handleCheckout("pro", false)}
+                        disabled={checkoutLoadingPlan !== null || portalLoading}
+                        className="w-11/12 py-3 mt-6 mb-6 text-white text-base font-normal rounded-full transition-colors duration-200 border-2 border-transparent bg-gradient-to-r from-indigo-400 via-blue-400 to-purple-400 bg-origin-border hover:from-blue-500 hover:to-indigo-600 disabled:opacity-60"
                         style={{ background: "linear-gradient(#181C23, #181C23) padding-box, linear-gradient(90deg, #7F5FFF, #01C8FF, #FFB86C) border-box", border: "2px solid transparent" }}
                       >
-                        Go Pro
+                        {checkoutLoadingPlan === "pro" ? "Redirecting…" : "Go Pro"}
                       </button>
                     </div>
                   </div>
@@ -730,10 +809,12 @@ function SettingsPageContent() {
                       </span>
                       <button
                         type="button"
-                        className="w-11/12 py-3 mt-6 mb-6 text-white text-base font-normal rounded-full shadow-lg transition-colors duration-200 border-none"
+                        onClick={() => void handleCheckout("pro_plus", false)}
+                        disabled={checkoutLoadingPlan !== null || portalLoading}
+                        className="w-11/12 py-3 mt-6 mb-6 text-white text-base font-normal rounded-full shadow-lg transition-colors duration-200 border-none disabled:opacity-60"
                         style={{ background: "linear-gradient(135deg, #425EFF 40%, #7F5FFF 100%)" }}
                       >
-                        Go Pro+
+                        {checkoutLoadingPlan === "pro_plus" ? "Redirecting…" : "Go Pro+"}
                       </button>
                     </div>
                   </div>
@@ -763,10 +844,12 @@ function SettingsPageContent() {
                       </span>
                       <button
                         type="button"
-                        className="w-11/12 py-3 mt-6 mb-6 text-white text-base font-normal rounded-full transition-colors duration-200 border-2 border-transparent bg-gradient-to-r from-indigo-400 via-blue-400 to-purple-400 bg-origin-border hover:from-blue-500 hover:to-indigo-600"
+                        onClick={() => void handleCheckout("premium", false)}
+                        disabled={checkoutLoadingPlan !== null || portalLoading}
+                        className="w-11/12 py-3 mt-6 mb-6 text-white text-base font-normal rounded-full transition-colors duration-200 border-2 border-transparent bg-gradient-to-r from-indigo-400 via-blue-400 to-purple-400 bg-origin-border hover:from-blue-500 hover:to-indigo-600 disabled:opacity-60"
                         style={{ background: "linear-gradient(#181C23, #181C23) padding-box, linear-gradient(90deg, #7F5FFF, #01C8FF, #FFB86C) border-box", border: "2px solid transparent" }}
                       >
-                        Get Premium
+                        {checkoutLoadingPlan === "premium" ? "Redirecting…" : "Get Premium"}
                       </button>
                     </div>
                   </div>

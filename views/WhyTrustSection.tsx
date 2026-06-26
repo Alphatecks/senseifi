@@ -3,67 +3,19 @@ import { useInView } from "../utils/useInView";
 import Image from "next/image";
 import {
   getSubscriptionPlans,
+  parsePlanPricingPayload,
   type SubscriptionPlanKey,
 } from "@/services/subscriptionService";
 import { useWallet } from "@/hooks/useWallet";
 import { usePlanCheckout } from "@/hooks/usePlanCheckout";
 
 type PlanPricing = Record<SubscriptionPlanKey, { monthly: number; annual: number }>;
-type UnknownRecord = Record<string, unknown>;
 
 const DEFAULT_PLAN_PRICING: PlanPricing = {
   pro: { monthly: 30, annual: 300 },
   pro_plus: { monthly: 50, annual: 500 },
   premium: { monthly: 200, annual: 2000 },
 };
-
-function isRecord(value: unknown): value is UnknownRecord {
-  return typeof value === "object" && value !== null;
-}
-
-function toAmount(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string") {
-    const num = Number(value);
-    if (Number.isFinite(num)) return num;
-  }
-  return null;
-}
-
-function readCycleAmount(value: unknown): number | null {
-  if (typeof value === "number" || typeof value === "string") return toAmount(value);
-  if (!isRecord(value)) return null;
-  return (
-    toAmount(value.amount) ??
-    toAmount(value.price) ??
-    toAmount(value.unit_amount) ??
-    toAmount(value.value)
-  );
-}
-
-function parsePlanPricingPayload(payload: unknown): PlanPricing | null {
-  if (!isRecord(payload)) return null;
-  const source = (isRecord(payload.data) ? payload.data : payload.plans) as unknown;
-  const plans = isRecord(source) ? source : payload;
-
-  const nextPricing: PlanPricing = { ...DEFAULT_PLAN_PRICING };
-  const planKeys: SubscriptionPlanKey[] = ["pro", "pro_plus", "premium"];
-  let foundAtLeastOne = false;
-
-  planKeys.forEach((planKey) => {
-    const rawPlan = plans[planKey];
-    if (!isRecord(rawPlan)) return;
-
-    const monthly = readCycleAmount(rawPlan.monthly);
-    const annual = readCycleAmount(rawPlan.annual);
-    if (monthly && annual) {
-      nextPricing[planKey] = { monthly, annual };
-      foundAtLeastOne = true;
-    }
-  });
-
-  return foundAtLeastOne ? nextPricing : null;
-}
 
 type WhyTrustSectionProps = {
   showPricing?: boolean;
@@ -300,7 +252,7 @@ export default function WhyTrustSection({ showPricing = true }: WhyTrustSectionP
                       className="w-11/12 py-3 mt-6 mb-6 text-white text-base font-normal rounded-full transition-colors duration-200 border-2 border-transparent bg-gradient-to-r from-indigo-400 via-blue-400 to-purple-400 bg-origin-border hover:from-blue-500 hover:to-indigo-600 disabled:opacity-60"
                       style={{background: 'linear-gradient(#181C23, #181C23) padding-box, linear-gradient(90deg, #7F5FFF, #01C8FF, #FFB86C) border-box', border: '2px solid transparent'}}
                     >
-                      {checkoutLoadingPlan === "pro" ? "Creating subscription..." : "Go Pro"}
+                      {checkoutLoadingPlan === "pro" ? "Redirecting to checkout..." : "Go Pro"}
                     </button>
                 </div>
               </div>
@@ -349,7 +301,7 @@ export default function WhyTrustSection({ showPricing = true }: WhyTrustSectionP
                           background: 'linear-gradient(135deg, #425EFF 40%, #7F5FFF 100%)',
                         }}
                       >
-                        {checkoutLoadingPlan === "pro_plus" ? "Creating subscription..." : "Go Pro+"}
+                        {checkoutLoadingPlan === "pro_plus" ? "Redirecting to checkout..." : "Go Pro+"}
                       </button>
                     </div>
               </div>
@@ -392,7 +344,7 @@ export default function WhyTrustSection({ showPricing = true }: WhyTrustSectionP
                       className="w-11/12 py-3 mt-6 mb-6 text-white text-base font-normal rounded-full transition-colors duration-200 border-2 border-transparent bg-gradient-to-r from-indigo-400 via-blue-400 to-purple-400 bg-origin-border hover:from-blue-500 hover:to-indigo-600 disabled:opacity-60"
                       style={{background: 'linear-gradient(#181C23, #181C23) padding-box, linear-gradient(90deg, #7F5FFF, #01C8FF, #FFB86C) border-box', border: '2px solid transparent'}}
                     >
-                      {checkoutLoadingPlan === "premium" ? "Creating subscription..." : "Get Premium"}
+                      {checkoutLoadingPlan === "premium" ? "Redirecting to checkout..." : "Get Premium"}
                     </button>
                 </div>
               </div>
